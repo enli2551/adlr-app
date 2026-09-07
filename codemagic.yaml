@@ -1,0 +1,61 @@
+# Codemagic CI — builds the ADLR iOS app on a cloud macOS machine (no Mac needed).
+# Capacitor 8 iOS uses Swift Package Manager (no CocoaPods), so the build target
+# is the Xcode PROJECT (ios/App/App.xcodeproj), scheme "App".
+#
+# One-time setup in the Codemagic UI (codemagic.io):
+#   1. Connect this repo.
+#   2. Integrations → App Store Connect: add an App Store Connect API key
+#      (Apple Developer Program required, $99/yr). Name it e.g. "ADLR_ASC".
+#   3. Register the bundle id com.adlr.app in your Apple Developer account
+#      (Codemagic can auto-create it with automatic code signing).
+# Then push to the repo (or run manually) — the .ipa lands in TestFlight.
+
+workflows:
+  ios-release:
+    name: ADLR iOS (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: 20
+      xcode: latest
+      vars:
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "com.adlr.app"
+      # Set these env groups in the Codemagic UI:
+      #   - "supabase": VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (Vite inlines them at build time)
+      groups:
+        - supabase
+      # App Store Connect API key integration configured in the Codemagic UI:
+      integrations:
+        app_store_connect: ADLR_ASC
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Write .env from CI variables (Supabase)
+        script: |
+          echo "VITE_SUPABASE_URL=$VITE_SUPABASE_URL" > .env
+          echo "VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY" >> .env
+      - name: Build web assets (Vite)
+        script: npx vite build
+      - name: Capacitor sync iOS
+        script: npx cap sync ios
+      - name: Set up automatic code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build .ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
