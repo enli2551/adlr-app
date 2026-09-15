@@ -6,6 +6,7 @@ import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Plus, Award, Camera, TrendingUp, Ruler, BarChart3, ChevronRight } from 'lucide-react';
 import MonthlyReport from '@/components/MonthlyReport';
+import SignedPhoto from '@/components/SignedPhoto';
 
 const MEASUREMENT_FIELDS: Array<{ key: keyof ProgressEntry; label: string; unit: string }> = [
   { key: 'weight_kg', label: 'Gewicht', unit: 'kg' },
@@ -312,10 +313,9 @@ function Measure({ label, value, unit }: { label: string; value: number | null; 
 }
 
 function PhotoThumb({ photo }: { photo: ProgressPhoto }) {
-  const { data } = supabase.storage.from('photos').getPublicUrl(photo.storage_path);
   return (
     <div className="aspect-square rounded-lg overflow-hidden bg-inset">
-      <img src={data.publicUrl} alt="" className="w-full h-full object-cover" />
+      <SignedPhoto path={photo.storage_path} />
     </div>
   );
 }

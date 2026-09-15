@@ -73,6 +73,7 @@ export default function PlanScreen() {
   const [trainingStartAt, setTrainingStartAt] = useState<number | null>(null);
   const [trainingElapsed, setTrainingElapsed] = useState(0);
   const [notifPermissionDenied, setNotifPermissionDenied] = useState(false);
+  const [starterBusy, setStarterBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentRestCtx = useRef<{ exerciseName: string; setNumber: number; totalSets: number; restSeconds: number; reps?: string } | null>(null);
   const notifPromptShown = useRef(false);
@@ -389,12 +390,40 @@ export default function PlanScreen() {
     });
   };
 
+  // Activate the shared beginner starter plan (until the trainer assigns a personal one)
+  const activateStarter = async () => {
+    if (!profile || starterBusy) return;
+    setStarterBusy(true);
+    const { data: sp } = await supabase.from('plans').select('id').eq('is_starter', true).limit(1).maybeSingle();
+    if (sp) {
+      await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id);
+      await supabase.from('client_plans').upsert(
+        { client_id: profile.id, plan_id: sp.id, is_active: true },
+        { onConflict: 'client_id,plan_id' },
+      );
+      await load();
+    }
+    setStarterBusy(false);
+  };
+
   if (loading) return <Loading />;
   if (days.length === 0) {
     return (
       <div className="adlr-fade-in">
         <SectionHeader title="Mein Plan" />
         <EmptyState title="Dein Plan wird vorbereitet." subtitle="Peter ist am Werk. Du trainierst, sobald dein Plan bereit ist." />
+        <div className="adlr-card p-5 mt-4 adlr-gold-border" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.12), rgb(var(--adlr-gold) / 0.03))' }}>
+          <p className="text-sm font-semibold text-white mb-1">Schon mal loslegen? 💪</p>
+          <p className="text-xs text-white/60 mb-4 leading-relaxed">Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald Peter deinen persönlichen Plan fertig hat, wird er automatisch aktiv.</p>
+          <button
+            onClick={activateStarter}
+            disabled={starterBusy}
+            className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}
+          >
+            {starterBusy ? '…' : <><Dumbbell size={16} /> Starter-Plan starten</>}
+          </button>
+        </div>
       </div>
     );
   }

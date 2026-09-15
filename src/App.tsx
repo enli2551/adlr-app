@@ -1,24 +1,27 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { installGlobalTapHaptics } from '@/lib/haptics';
 import AuthScreen from '@/screens/AuthScreen';
-import Onboarding from '@/screens/Onboarding';
 import ClientLayout from '@/screens/client/ClientLayout';
-import PlanScreen from '@/screens/client/PlanScreen';
-import ProgressScreen from '@/screens/client/ProgressScreen';
-import NutritionScreen from '@/screens/client/NutritionScreen';
-import CoachScreen from '@/screens/client/CoachScreen';
-import UpgradesScreen from '@/screens/client/UpgradesScreen';
-import ProfileScreen from '@/screens/client/ProfileScreen';
 import TrainerLayout from '@/screens/trainer/TrainerLayout';
-import OverviewScreen from '@/screens/trainer/OverviewScreen';
-import ClientsHub from '@/screens/trainer/ClientsHub';
-import PlanBuilderScreen from '@/screens/trainer/PlanBuilderScreen';
-import MessagesScreen from '@/screens/trainer/MessagesScreen';
-import BusinessScreen from '@/screens/trainer/BusinessScreen';
 import Logo from '@/components/Logo';
 import { Loading } from '@/components/ui';
+
+// Route screens are code-split so the initial bundle stays small (login paints fast);
+// heavy deps like recharts only load on the screens that actually use them.
+const Onboarding = lazy(() => import('@/screens/Onboarding'));
+const PlanScreen = lazy(() => import('@/screens/client/PlanScreen'));
+const ProgressScreen = lazy(() => import('@/screens/client/ProgressScreen'));
+const NutritionScreen = lazy(() => import('@/screens/client/NutritionScreen'));
+const CoachScreen = lazy(() => import('@/screens/client/CoachScreen'));
+const UpgradesScreen = lazy(() => import('@/screens/client/UpgradesScreen'));
+const ProfileScreen = lazy(() => import('@/screens/client/ProfileScreen'));
+const OverviewScreen = lazy(() => import('@/screens/trainer/OverviewScreen'));
+const ClientsHub = lazy(() => import('@/screens/trainer/ClientsHub'));
+const PlanBuilderScreen = lazy(() => import('@/screens/trainer/PlanBuilderScreen'));
+const MessagesScreen = lazy(() => import('@/screens/trainer/MessagesScreen'));
+const BusinessScreen = lazy(() => import('@/screens/trainer/BusinessScreen'));
 
 function ProtectedClient({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth();
@@ -54,6 +57,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<Splash />}>
         <Routes>
           <Route path="/" element={<Navigate to="/auth" replace />} />
           <Route path="/auth" element={<AuthScreen />} />
@@ -79,6 +83,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

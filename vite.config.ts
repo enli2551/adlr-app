@@ -13,4 +13,15 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react', '@capacitor/core', '@capacitor/local-notifications'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          supabase: ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
 });

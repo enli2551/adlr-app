@@ -2,10 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>ADLR verwendet die Kamera, um Fortschrittsfotos aufzunehmen.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ADLR benötigt Zugriff auf deine Fotos, um Fortschrittsfotos hochzuladen.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ADLR speichert Fortschrittsfotos in deiner Fotomediathek.</string>
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>de</string>
 	<key>CFBundleDisplayName</key>
         <string>ADLR</string>
 	<key>CFBundleExecutable</key>

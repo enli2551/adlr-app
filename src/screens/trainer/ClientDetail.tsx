@@ -4,6 +4,7 @@ import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, Clien
 import { Button, Card, Field, Input, Textarea, Loading, SectionHeader } from '@/components/ui';
 import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight } from 'lucide-react';
 import MonthlyReport from '@/components/MonthlyReport';
+import SignedPhoto from '@/components/SignedPhoto';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const GOAL_LABELS: Record<string, string> = {
@@ -255,10 +256,9 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         <Card className="mb-4">
           <p className="text-sm font-medium text-white/80 mb-3">Fortschrittsfotos</p>
           <div className="grid grid-cols-3 gap-2">
-            {photos.map((ph) => {
-              const { data } = supabase.storage.from('photos').getPublicUrl(ph.storage_path);
-              return <div key={ph.id} className="aspect-square rounded-lg overflow-hidden"><img src={data.publicUrl} alt="" className="w-full h-full object-cover" /></div>;
-            })}
+            {photos.map((ph) => (
+              <div key={ph.id} className="aspect-square rounded-lg overflow-hidden bg-inset"><SignedPhoto path={ph.storage_path} /></div>
+            ))}
           </div>
         </Card>
       )}

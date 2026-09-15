@@ -56,3 +56,6 @@ ios/capacitor-cordova-ios-plugins/
 
 # ── Build outputs ──
 build/ios/
+
+# ── Local asset backups (PNG originals kept out of the repo) ──
+assets-backup/

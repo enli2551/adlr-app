@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 
@@ -17,7 +18,35 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
   const nav = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [msgUnread, setMsgUnread] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Unread indicator for Nachrichten: any client message newer than last-seen.
+  useEffect(() => {
+    if (!profile) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('messages')
+        .select('sent_at')
+        .eq('sender', 'client')
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      let seen = 0;
+      try { seen = Number(localStorage.getItem('adlr_msgs_seen') || 0); } catch { /* ignore */ }
+      if (new Date(data.sent_at).getTime() > seen) setMsgUnread(true);
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname === '/trainer/nachrichten') {
+      try { localStorage.setItem('adlr_msgs_seen', String(Date.now())); } catch { /* ignore */ }
+      setMsgUnread(false);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -30,7 +59,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto">
-      <header className="sticky top-0 z-20 bg-adlr-black/80 backdrop-blur-md safe-top">
+      <header className="sticky top-0 z-20 bg-adlr-black/90 safe-top">
         <div className="flex items-center justify-between px-5 py-3">
           <button onClick={() => nav('/trainer')} className="flex items-center">
             <Logo size={18} />
@@ -72,7 +101,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
         <div key={location.pathname} className="adlr-route">{children}</div>
       </main>
 
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite/95 backdrop-blur-xl border-t border-white/5 safe-bottom z-30">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite border-t border-white/5 safe-bottom z-30">
         <div className="flex justify-around items-center py-2">
           {TABS.map((t) => (
             <NavLink
@@ -83,7 +112,12 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                 `flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-lg transition-all ${isActive ? 'text-adlr-gold' : 'text-white/40'}`
               }
             >
-              <t.icon size={18} strokeWidth={1.8} />
+              <span className="relative">
+                <t.icon size={18} strokeWidth={1.8} />
+                {t.to === '/trainer/nachrichten' && msgUnread && (
+                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-adlr-gold" style={{ border: '1.5px solid rgb(var(--adlr-anthracite))' }} />
+                )}
+              </span>
               <span className="text-[9px] font-medium">{t.label}</span>
             </NavLink>
           ))}

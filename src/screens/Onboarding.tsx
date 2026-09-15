@@ -72,7 +72,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 z-20 bg-adlr-black/80 backdrop-blur-md safe-top">
+      <div className="fixed top-0 left-0 right-0 z-20 bg-adlr-black/90 safe-top">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <button onClick={back} disabled={step === 0} className="text-white/40 text-sm disabled:opacity-0">
             Zurück

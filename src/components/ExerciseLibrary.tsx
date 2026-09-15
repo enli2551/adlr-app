@@ -115,48 +115,48 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
 
 // Locally bundled, self-owned exercise images (by ExerciseDB id) — offline, no API.
 export const LOCAL_DEMO_IMAGES: Record<string, string> = {
-  '0102': 'kniebeuge.png',        // Kniebeugen
-  '0032': 'kreuzheben.png',       // Kreuzheben
-  '0025': 'bankdruecken.png',     // Bankdrücken
-  '0086': 'schulterdruecken.png', // Schulterdrücken
-  '0652': 'klimmzug.png',         // Klimmzüge
-  '0027': 'langhantelrudern.png', // Rudern
-  '0054': 'ausfallschritt.png',   // Ausfallschritte
-  '0031': 'bizeps-curl.png',      // Bizeps Curls
-  '0241': 'trizeps-druecken.png', // Trizepsdrücken
-  '0464': 'plank.png',            // Plank
+  '0102': 'kniebeuge.webp',        // Kniebeugen
+  '0032': 'kreuzheben.webp',       // Kreuzheben
+  '0025': 'bankdruecken.webp',     // Bankdrücken
+  '0086': 'schulterdruecken.webp', // Schulterdrücken
+  '0652': 'klimmzug.webp',         // Klimmzüge
+  '0027': 'langhantelrudern.webp', // Rudern
+  '0054': 'ausfallschritt.webp',   // Ausfallschritte
+  '0031': 'bizeps-curl.webp',      // Bizeps Curls
+  '0241': 'trizeps-druecken.webp', // Trizepsdrücken
+  '0464': 'plank.webp',            // Plank
   // Batch 2
-  '0047': 'schraegbankdruecken.png', // Schrägbankdrücken
-  '0673': 'latzug.png',              // Latzug
-  '0861': 'sitzrudern.png',          // Sitzrudern (Kabel)
-  '0739': 'beinpresse.png',          // Beinpresse
-  '0585': 'beinstrecker.png',        // Beinstrecker
-  '0496': 'beinbeuger.png',          // Beinbeuger
-  '0088': 'wadenheben.png',          // Wadenheben
-  '0417': 'wadenheben.png',          // Stehendes Wadenheben
-  '0178': 'seitheben.png',           // Seitheben
-  '0188': 'kabel-fliegende.png',     // Cable Fly
-  '1269': 'kabel-fliegende.png',     // Cable Crossover
-  '0001': 'crunches.png',            // 3/4 Sit-up (bodyweight ab curl)
+  '0047': 'schraegbankdruecken.webp', // Schrägbankdrücken
+  '0673': 'latzug.webp',              // Latzug
+  '0861': 'sitzrudern.webp',          // Sitzrudern (Kabel)
+  '0739': 'beinpresse.webp',          // Beinpresse
+  '0585': 'beinstrecker.webp',        // Beinstrecker
+  '0496': 'beinbeuger.webp',          // Beinbeuger
+  '0088': 'wadenheben.webp',          // Wadenheben
+  '0417': 'wadenheben.webp',          // Stehendes Wadenheben
+  '0178': 'seitheben.webp',           // Seitheben
+  '0188': 'kabel-fliegende.webp',     // Cable Fly
+  '1269': 'kabel-fliegende.webp',     // Cable Crossover
+  '0001': 'crunches.webp',            // 3/4 Sit-up (bodyweight ab curl)
   // Batch 3
-  '0289': 'kurzhantel-bankdruecken.png',    // Kurzhantel Bankdrücken
-  '0290': 'kurzhantel-schulterdruecken.png',// Kurzhantel Bank Sitz Drücken
-  '0287': 'kurzhantel-schulterdruecken.png',// Arnold Press
-  '0293': 'kurzhantel-rudern.png',          // Kurzhantel Rudern
-  '0085': 'rumaenisches-kreuzheben.png',    // Rumänisches Kreuzheben
-  '1409': 'hip-thrust.png',                 // Hip Thrusts
-  '0484': 'hip-thrust.png',                 // Hüftheben (Knie gebeugt)
-  '0154': 'reverse-fly.png',                // Reverse Fly
-  '0165': 'hammercurls.png',                // Hammer Curls
-  '0814': 'dips.png',                       // Trizeps Dips
+  '0289': 'kurzhantel-bankdruecken.webp',    // Kurzhantel Bankdrücken
+  '0290': 'kurzhantel-schulterdruecken.webp',// Kurzhantel Bank Sitz Drücken
+  '0287': 'kurzhantel-schulterdruecken.webp',// Arnold Press
+  '0293': 'kurzhantel-rudern.webp',          // Kurzhantel Rudern
+  '0085': 'rumaenisches-kreuzheben.webp',    // Rumänisches Kreuzheben
+  '1409': 'hip-thrust.webp',                 // Hip Thrusts
+  '0484': 'hip-thrust.webp',                 // Hüftheben (Knie gebeugt)
+  '0154': 'reverse-fly.webp',                // Reverse Fly
+  '0165': 'hammercurls.webp',                // Hammer Curls
+  '0814': 'dips.webp',                       // Trizeps Dips
   // Batch 4
-  '0576': 'brustpresse-maschine.png',       // Brustpresse (Maschine)
+  '0576': 'brustpresse-maschine.webp',       // Brustpresse (Maschine)
   // Lat-Zug Varianten → gemeinsames Latzug-Bild
-  '0198': 'latzug.png',                     // Kabel Latzug
-  '0150': 'latzug.png',                     // Kabel Latzug (Stange)
-  '0177': 'latzug.png',                     // Kabel Latzug (Seil)
-  '0197': 'latzug.png',                     // Kabel Latzug (Pro Lat Bar)
-  '0007': 'latzug.png',                     // Wechselnder Latzug
+  '0198': 'latzug.webp',                     // Kabel Latzug
+  '0150': 'latzug.webp',                     // Kabel Latzug (Stange)
+  '0177': 'latzug.webp',                     // Kabel Latzug (Seil)
+  '0197': 'latzug.webp',                     // Kabel Latzug (Pro Lat Bar)
+  '0007': 'latzug.webp',                     // Wechselnder Latzug
 };
 
 // Locally bundled animated demos (Vital Animations, licensed) — offline MP4 loops.
