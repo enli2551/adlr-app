@@ -15,6 +15,10 @@ workflows:
     name: ADLR iOS (TestFlight)
     instance_type: mac_mini_m2
     max_build_duration: 60
+    # App Store Connect API key integration configured in the Codemagic UI.
+    # NOTE: `integrations` is a workflow-level key (sibling of `environment`).
+    integrations:
+      app_store_connect: ADLR_ASC
     environment:
       node: 20
       xcode: latest
@@ -22,13 +26,10 @@ workflows:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.adlr.app"
-      # Set these env groups in the Codemagic UI:
+      # Set this env group in the Codemagic UI:
       #   - "supabase": VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (Vite inlines them at build time)
       groups:
         - supabase
-      # App Store Connect API key integration configured in the Codemagic UI:
-      integrations:
-        app_store_connect: ADLR_ASC
     scripts:
       - name: Install npm dependencies
         script: npm ci
