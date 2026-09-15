@@ -20,7 +20,7 @@ workflows:
     integrations:
       app_store_connect: ADLR_ASC
     environment:
-      node: 20
+      node: 22
       xcode: latest
       vars:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
@@ -69,7 +69,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 45
     environment:
-      node: 20
+      node: 22
       xcode: latest
       groups:
         - supabase
