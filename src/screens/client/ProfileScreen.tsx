@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, SectionHeader, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2 } from 'lucide-react';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -31,7 +32,11 @@ interface PlateauAlert {
 }
 
 export default function ProfileScreen() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
+  const nav = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
   const [planDays, setPlanDays] = useState<PlanDay[]>([]);
   const [checkins, setCheckins] = useState<DailyCheckin[]>([]);
@@ -42,6 +47,26 @@ export default function ProfileScreen() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const { data: lib } = useAsyncData(fetchExercises, []);
   const libMap = useMemo(() => lib ? new Map(lib.map((e) => [e.name, e])) : null, [lib]);
+
+  const handleDeleteAccount = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      setDeleteErr(null);
+      setTimeout(() => setConfirmDelete(false), 5000);
+      return;
+    }
+    setDeleting(true);
+    setDeleteErr(null);
+    const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+    if (error) {
+      setDeleting(false);
+      setConfirmDelete(false);
+      setDeleteErr('Löschen fehlgeschlagen. Bitte später erneut versuchen.');
+      return;
+    }
+    await signOut();
+    nav('/auth', { replace: true });
+  };
 
   const load = async () => {
     if (!profile) return;
@@ -495,6 +520,28 @@ export default function ProfileScreen() {
           <p className="text-sm font-medium text-white/80">Erscheinungsbild</p>
         </div>
         <ThemeSwitcher />
+      </Card>
+
+      {/* Danger zone — account deletion (required by App Store & Play) */}
+      <Card className="mb-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
+        <div className="flex items-center gap-3 mb-2">
+          <Trash2 size={18} className="text-red-400" />
+          <p className="text-sm font-medium text-white/80">Konto löschen</p>
+        </div>
+        <p className="text-xs text-white/50 leading-relaxed mb-3">
+          Dein Konto und alle deine Daten (Trainings, Fortschritt, Fotos) werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.
+        </p>
+        {deleteErr && <p className="text-xs text-red-400 mb-2">{deleteErr}</p>}
+        <button
+          onClick={handleDeleteAccount}
+          disabled={deleting}
+          className="adlr-tap w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+          style={confirmDelete
+            ? { background: 'rgb(239,68,68)', color: '#fff' }
+            : { background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.3)' }}
+        >
+          {deleting ? 'Wird gelöscht…' : confirmDelete ? 'Wirklich löschen? Tippe erneut' : 'Konto endgültig löschen'}
+        </button>
       </Card>
 
       {/* Day detail modal */}
