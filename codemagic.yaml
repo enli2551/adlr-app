@@ -20,12 +20,6 @@ workflows:
     integrations:
       app_store_connect: ADLR_ASC
     environment:
-      # The distribution cert + App Store profile now exist (created on a prior
-      # run), so Codemagic's managed signing fetches them and use-profiles wires
-      # them into the Xcode project. The project also carries DEVELOPMENT_TEAM.
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.adlr.app
       node: 22
       xcode: latest
       vars:
@@ -49,7 +43,15 @@ workflows:
         script: npx cap sync ios
       - name: Set up code signing
         script: |
+          set -ex
           keychain initialize
+          # Create a distribution certificate (private key stays on this machine
+          # for the build); tolerate "already exists" so re-runs don't break.
+          app-store-connect create-certificate --type IOS_DISTRIBUTION --save || echo "certificate step non-fatal, continuing"
+          # Create + download the App Store provisioning profile for the bundle id.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          # Wire the downloaded profile into the Xcode project (manual signing).
           xcode-project use-profiles
       - name: Build .ipa
         script: |
