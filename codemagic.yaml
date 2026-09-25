@@ -45,9 +45,10 @@ workflows:
         script: |
           set -ex
           keychain initialize
-          # Create a distribution certificate (private key stays on this machine
-          # for the build); tolerate "already exists" so re-runs don't break.
-          app-store-connect create-certificate --type IOS_DISTRIBUTION --save || echo "certificate step non-fatal, continuing"
+          # Create a distribution certificate (new CLI: `certificates create`,
+          # the old `create-certificate` is deprecated). Private key stays on
+          # this machine for the build.
+          app-store-connect certificates create --type IOS_DISTRIBUTION --save
           # Create + download the App Store provisioning profile for the bundle id.
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
