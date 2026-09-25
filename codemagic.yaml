@@ -67,7 +67,10 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        # Upload to TestFlight only; internal testers get it immediately.
+        # External beta-review submission is done manually in App Store Connect
+        # (avoids post-processing failures while iterating).
+        submit_to_testflight: false
 
   # ── FREE pre-check: compiles the iOS app on a cloud Mac WITHOUT an Apple
   # Developer account or code signing (builds for the simulator). Use this to

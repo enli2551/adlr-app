@@ -44,10 +44,16 @@ export default function AuthScreen() {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const role = isTrainer ? 'trainer' : 'client';
-    const res = mode === 'signup' ? await signUp(email, password, role) : await signIn(email, password);
-    setBusy(false);
-    if (res.error) setError(res.error);
+    try {
+      const role = isTrainer ? 'trainer' : 'client';
+      const res = mode === 'signup' ? await signUp(email, password, role) : await signIn(email, password);
+      if (res.error) setError(res.error);
+    } catch (err) {
+      // Surface the real error instead of an unhandled rejection.
+      setError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Step 1: send a recovery e-mail. Supabase includes a 6-digit code ({{ .Token }}
