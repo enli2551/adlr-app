@@ -58,9 +58,14 @@ workflows:
           xcode-project use-profiles
       - name: Build .ipa
         script: |
+          set -ex
+          # Use a Unix timestamp as the build number so every upload is unique
+          # and strictly increasing (no more "bundle version already used").
+          BUILD_NO=$(date +%s)
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" \
+            --archive-flags "CURRENT_PROJECT_VERSION=$BUILD_NO"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

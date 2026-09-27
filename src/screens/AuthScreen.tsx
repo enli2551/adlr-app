@@ -18,6 +18,31 @@ export default function AuthScreen() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [diag, setDiag] = useState('Diagnose…');
+
+  // One-time connection self-test so we can see whether the failure is network
+  // (WKWebView blocks the fetch) or supabase-js code. Shown in small text below.
+  useEffect(() => {
+    const U = 'https://gzcewdhjlykwqhtjludv.supabase.co';
+    const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
+    (async () => {
+      let raw: string;
+      try {
+        const r = await fetch(`${U}/auth/v1/health`, { headers: { apikey: K } });
+        raw = `fetch=${r.status}`;
+      } catch (e) {
+        raw = `fetch!=${e instanceof Error ? e.message : String(e)}`;
+      }
+      let sb: string;
+      try {
+        const { error: e } = await supabase.auth.signInWithPassword({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
+        sb = e ? `sb-resp=${e.message}` : 'sb=OK';
+      } catch (e) {
+        sb = `sb-throw=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
+      }
+      setDiag(`${raw} | ${sb}`);
+    })();
+  }, []);
 
   // Password reset via in-app OTP code (no website / deep link needed)
   const [resetBusy, setResetBusy] = useState(false);
@@ -170,8 +195,9 @@ export default function AuthScreen() {
               {pwToggle(showPw, setShowPw)}
             </div>
           </Field>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-400 break-words">{error}</p>}
           {resetMsg && <p className="text-sm" style={{ color: '#22c55e' }}>{resetMsg}</p>}
+          <p className="text-[10px] text-white/40 break-words font-mono">DIAG: {diag}</p>
           <Button type="submit" disabled={busy} className="w-full">
             {busy ? 'Lädt...' : mode === 'signup' ? (isTrainer ? 'Trainer Konto erstellen' : 'Jetzt beginnen') : 'Einloggen'}
           </Button>
