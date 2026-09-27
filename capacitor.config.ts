@@ -5,12 +5,11 @@ const config: CapacitorConfig = {
   appName: 'ADLR',
   webDir: 'dist',
   plugins: {
-    // Route fetch/XHR through native HTTP. Fixes Supabase auth/REST calls
-    // failing with "TypeError: Load failed" in the iOS WKWebView (the
-    // capacitor://localhost origin trips WebView CORS/ATS on external requests).
-    CapacitorHttp: {
-      enabled: true,
-    },
+    // NOTE: CapacitorHttp is intentionally NOT enabled. It patches fetch to go
+    // through native HTTP, which returns a non-spec Response that breaks
+    // supabase-js (login returned "Type error" while a raw fetch got 200).
+    // Supabase sends Access-Control-Allow-Origin: *, so the standard WKWebView
+    // fetch works fine from capacitor://localhost.
     LocalNotifications: {
       smallIcon: 'ic_stat_icon',
       iconColor: '#C9A84C',
