@@ -11,6 +11,10 @@ export const supabase = createClient(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    // Native app: there's no OAuth redirect URL to parse from capacitor://.
+    detectSessionInUrl: false,
+    // Bypass the Web Locks API (navigator.locks), which misbehaves in the iOS
+    // WKWebView and can make auth calls fail. Run the operation without locking.
+    lock: (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
   },
 });

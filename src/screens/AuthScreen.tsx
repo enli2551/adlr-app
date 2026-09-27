@@ -26,21 +26,31 @@ export default function AuthScreen() {
     const U = 'https://gzcewdhjlykwqhtjludv.supabase.co';
     const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
     (async () => {
-      let raw: string;
+      const parts: string[] = ['b5'];
       try {
         const r = await fetch(`${U}/auth/v1/health`, { headers: { apikey: K } });
-        raw = `fetch=${r.status}`;
+        parts.push(`get=${r.status}`);
       } catch (e) {
-        raw = `fetch!=${e instanceof Error ? e.message : String(e)}`;
+        parts.push(`get!=${e instanceof Error ? e.message : String(e)}`);
       }
-      let sb: string;
+      // Raw POST replicating what supabase-js does — isolates the WebView from the client.
+      try {
+        const r = await fetch(`${U}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: K },
+          body: JSON.stringify({ email: 'diag@adlr.invalid', password: 'diag-only-xx' }),
+        });
+        parts.push(`post=${r.status}`);
+      } catch (e) {
+        parts.push(`post!=${e instanceof Error ? e.message : String(e)}`);
+      }
       try {
         const { error: e } = await supabase.auth.signInWithPassword({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
-        sb = e ? `sb-resp=${e.message}` : 'sb=OK';
+        parts.push(e ? `sb=${e.name}/${(e as { status?: number }).status}/${e.message}` : 'sb=OK');
       } catch (e) {
-        sb = `sb-throw=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
+        parts.push(`sbthrow=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`);
       }
-      setDiag(`${raw} | ${sb}`);
+      setDiag(parts.join(' '));
     })();
   }, []);
 
