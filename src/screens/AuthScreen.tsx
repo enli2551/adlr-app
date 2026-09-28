@@ -5,22 +5,6 @@ import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
 import { Button, Field, Input } from '@/components/ui';
 import { Eye, EyeOff } from 'lucide-react';
-import { t } from '@/lib/i18n';
-import { LanguagePill } from '@/components/LanguageSwitcher';
-
-// Supabase auth errors arrive in English — map the common ones to a friendly, translated text.
-const AUTH_ERRORS: [RegExp, string][] = [
-  [/invalid login credentials/i, 'E-Mail oder Passwort ist falsch.'],
-  [/email not confirmed/i, 'Bitte bestätige zuerst deine E-Mail-Adresse.'],
-  [/password should be at least/i, 'Passwort: mindestens 6 Zeichen.'],
-  [/unable to validate email|invalid email/i, 'Ungültige E-Mail-Adresse.'],
-  [/for security purposes|rate limit|too many/i, 'Zu viele Versuche. Bitte warte kurz und versuche es erneut.'],
-  [/failed to fetch|network/i, 'Keine Verbindung. Bitte prüfe deine Internetverbindung.'],
-];
-const authError = (msg: string) => {
-  const hit = AUTH_ERRORS.find(([re]) => re.test(msg));
-  return hit ? t(hit[1]) : msg;
-};
 
 export default function AuthScreen() {
   const { signIn, signUp, session, profile, loading } = useAuth();
@@ -100,7 +84,7 @@ export default function AuthScreen() {
     try {
       const role = isTrainer ? 'trainer' : 'client';
       const res = mode === 'signup' ? await signUp(email, password, role) : await signIn(email, password);
-      if (res.error) setError(authError(res.error));
+      if (res.error) setError(res.error);
     } catch (err) {
       // Surface the real error instead of an unhandled rejection.
       setError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
@@ -115,13 +99,13 @@ export default function AuthScreen() {
   const forgotPassword = async () => {
     setError(null);
     setResetMsg(null);
-    if (!email.trim()) { setError(t('Gib zuerst deine E-Mail-Adresse ein.')); return; }
+    if (!email.trim()) { setError('Gib zuerst deine E-Mail-Adresse ein.'); return; }
     setResetBusy(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim());
     setResetBusy(false);
-    if (err) { setError(authError(err.message)); return; }
+    if (err) { setError(err.message); return; }
     setRecovery(true);
-    setResetMsg(t('Wir haben dir einen Code per E-Mail geschickt. Gib ihn unten ein.'));
+    setResetMsg('Wir haben dir einen Code per E-Mail geschickt. Gib ihn unten ein.');
   };
 
   // Step 2: verify the emailed code, then set the new password.
@@ -129,14 +113,14 @@ export default function AuthScreen() {
     e.preventDefault();
     setError(null);
     const code = otpCode.replace(/\s/g, '');
-    if (code.length < 6) { setError(t('Gib den 6-stelligen Code aus der E-Mail ein.')); return; }
-    if (newPw.length < 6) { setError(t('Neues Passwort: mindestens 6 Zeichen.')); return; }
+    if (code.length < 6) { setError('Gib den 6-stelligen Code aus der E-Mail ein.'); return; }
+    if (newPw.length < 6) { setError('Neues Passwort: mindestens 6 Zeichen.'); return; }
     setNewPwBusy(true);
     const { error: vErr } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'recovery' });
-    if (vErr) { setNewPwBusy(false); setError(t('Code ungültig oder abgelaufen. Bitte neu anfordern.')); return; }
+    if (vErr) { setNewPwBusy(false); setError('Code ungültig oder abgelaufen. Bitte neu anfordern.'); return; }
     const { error: uErr } = await supabase.auth.updateUser({ password: newPw });
     setNewPwBusy(false);
-    if (uErr) { setError(authError(uErr.message)); return; }
+    if (uErr) { setError(uErr.message); return; }
     setNewPwDone(true);
     await supabase.auth.signOut();
     setTimeout(() => {
@@ -146,7 +130,7 @@ export default function AuthScreen() {
   };
 
   const pwToggle = (show: boolean, set: (v: boolean) => void) => (
-    <button type="button" onClick={() => set(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 adlr-tap" aria-label={show ? t('Passwort verbergen') : t('Passwort anzeigen')}>
+    <button type="button" onClick={() => set(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 adlr-tap" aria-label={show ? 'Passwort verbergen' : 'Passwort anzeigen'}>
       {show ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>
   );
@@ -157,30 +141,30 @@ export default function AuthScreen() {
       <div className="min-h-screen flex flex-col items-center justify-center px-6 adlr-fade-in">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center mb-10"><Logo size={40} showTagline /></div>
-          <h1 className="text-lg font-bold text-white text-center mb-1">{t('Passwort zurücksetzen')}</h1>
+          <h1 className="text-lg font-bold text-white text-center mb-1">Passwort zurücksetzen</h1>
           <p className="text-sm text-white/50 text-center mb-6">
-            {t('Gib den Code aus der E-Mail an')} <span className="text-white/70">{email}</span> {t('ein und wähle ein neues Passwort.')}
+            Gib den Code aus der E-Mail an <span className="text-white/70">{email}</span> ein und wähle ein neues Passwort.
           </p>
           {newPwDone ? (
-            <p className="text-sm text-center" style={{ color: '#22c55e' }}>{t('Passwort geändert! Du kannst dich jetzt anmelden.')}</p>
+            <p className="text-sm text-center" style={{ color: '#22c55e' }}>Passwort geändert! Du kannst dich jetzt anmelden.</p>
           ) : (
             <form onSubmit={updatePassword} className="space-y-4">
-              <Field label={t('Code aus der E-Mail')}>
+              <Field label="Code aus der E-Mail">
                 <Input type="text" inputMode="numeric" autoComplete="one-time-code" required value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)} placeholder={t('6-stelliger Code')}
+                  onChange={(e) => setOtpCode(e.target.value)} placeholder="6-stelliger Code"
                   className="tracking-[0.3em] text-center" />
               </Field>
-              <Field label={t('Neues Passwort')}>
+              <Field label="Neues Passwort">
                 <div className="relative">
-                  <Input type={showPw ? 'text' : 'password'} required minLength={6} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('Mindestens 6 Zeichen')} className="pr-11" />
+                  <Input type={showPw ? 'text' : 'password'} required minLength={6} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mindestens 6 Zeichen" className="pr-11" />
                   {pwToggle(showPw, setShowPw)}
                 </div>
               </Field>
               {error && <p className="text-sm text-red-400">{error}</p>}
-              <Button type="submit" disabled={newPwBusy} className="w-full">{newPwBusy ? t('Speichert...') : t('Passwort speichern')}</Button>
+              <Button type="submit" disabled={newPwBusy} className="w-full">{newPwBusy ? 'Speichert...' : 'Passwort speichern'}</Button>
               <button type="button" onClick={() => { setRecovery(false); setError(null); setResetMsg(null); setOtpCode(''); }}
                 className="block mx-auto text-xs text-white/40 hover:text-white/70">
-                {t('Zurück zur Anmeldung')}
+                Zurück zur Anmeldung
               </button>
             </form>
           )}
@@ -192,7 +176,6 @@ export default function AuthScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 adlr-fade-in">
       <div className="w-full max-w-sm">
-        <div className="flex justify-end mb-6"><LanguagePill /></div>
         <div className="flex flex-col items-center mb-10">
           <Logo size={40} showTagline />
         </div>
@@ -203,24 +186,24 @@ export default function AuthScreen() {
             className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all"
             style={mode === 'signup' ? { background: 'rgb(var(--adlr-gold))', color: '#000', fontWeight: 600 } : { background: 'transparent', color: 'rgb(var(--text) / 0.55)' }}
           >
-            {isTrainer ? t('Trainer Zugang') : t('Konto erstellen')}
+            {isTrainer ? 'Trainer Zugang' : 'Konto erstellen'}
           </button>
           <button
             onClick={() => { setMode('login'); setResetMsg(null); setError(null); }}
             className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all"
             style={mode === 'login' ? { background: 'rgb(var(--adlr-gold))', color: '#000', fontWeight: 600 } : { background: 'transparent', color: 'rgb(var(--text) / 0.55)' }}
           >
-            {t('Anmelden')}
+            Anmelden
           </button>
         </div>
 
         <form onSubmit={submit} className="space-y-4">
-          <Field label={t('E-Mail')}>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('deine@email.at')} />
+          <Field label="E-Mail">
+            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="deine@email.at" />
           </Field>
-          <Field label={t('Passwort')}>
+          <Field label="Passwort">
             <div className="relative">
-              <Input type={showPw ? 'text' : 'password'} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('Mindestens 6 Zeichen')} className="pr-11" />
+              <Input type={showPw ? 'text' : 'password'} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mindestens 6 Zeichen" className="pr-11" />
               {pwToggle(showPw, setShowPw)}
             </div>
           </Field>
@@ -228,22 +211,22 @@ export default function AuthScreen() {
           {resetMsg && <p className="text-sm" style={{ color: '#22c55e' }}>{resetMsg}</p>}
           <p className="text-[10px] text-white/40 break-words font-mono">DIAG: {diag}</p>
           <Button type="submit" disabled={busy} className="w-full">
-            {busy ? t('Lädt...') : mode === 'signup' ? (isTrainer ? t('Trainer Konto erstellen') : t('Jetzt beginnen')) : t('Einloggen')}
+            {busy ? 'Lädt...' : mode === 'signup' ? (isTrainer ? 'Trainer Konto erstellen' : 'Jetzt beginnen') : 'Einloggen'}
           </Button>
         </form>
 
         {mode === 'login' && (
           <button onClick={forgotPassword} disabled={resetBusy} className="block mx-auto mt-4 text-xs text-adlr-gold/70 hover:text-adlr-gold disabled:opacity-50">
-            {resetBusy ? t('Sende…') : t('Passwort vergessen?')}
+            {resetBusy ? 'Sende…' : 'Passwort vergessen?'}
           </button>
         )}
 
         <p className="text-center text-xs text-white/30 mt-6">
-          {isTrainer ? t('Trainer-Zugang für Peter') : t('Bereit aufzusteigen? Starte jetzt.')}
+          {isTrainer ? 'Trainer-Zugang für Peter' : 'Bereit aufzusteigen? Starte jetzt.'}
         </p>
         <div className="flex justify-center gap-4 mt-3 text-xs">
           <button onClick={() => nav(isTrainer ? '/auth' : '/trainer-auth')} className="text-adlr-gold/60 hover:text-adlr-gold">
-            {isTrainer ? t('Ich bin Klient') : t('Ich bin Trainer')}
+            {isTrainer ? 'Ich bin Klient' : 'Ich bin Trainer'}
           </button>
         </div>
       </div>
