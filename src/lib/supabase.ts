@@ -8,6 +8,13 @@ const url = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://gzcewdhjly
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
 
 export const supabase = createClient(url, anonKey, {
+  global: {
+    // WKWebView (WebKit) throws "TypeError: Type error" when fetch is called
+    // detached from window — which is how supabase-js stores its fetch ref.
+    // Wrapping it guarantees fetch runs in the right context. This is why
+    // login failed only on iOS (a raw fetch worked, supabase-js's did not).
+    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+  },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
