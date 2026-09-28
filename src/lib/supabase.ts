@@ -13,13 +13,25 @@ export const supabase = createClient(url, anonKey, {
     // error) into a global, so the AuthScreen DIAG line can show what
     // supabase-js passes that trips the iOS WKWebView.
     fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+      // WKWebView's fetch throws "TypeError: Type error" if any header value is
+      // not a valid string (undefined/null/non-string). supabase-js adds several
+      // headers, one of which trips this on iOS. Coerce values to strings and
+      // drop empty ones before calling fetch.
+      let safeInit = init;
+      const h = init?.headers;
+      if (h && !(h instanceof Headers) && !Array.isArray(h)) {
+        const clean: Record<string, string> = {};
+        for (const [k, v] of Object.entries(h as Record<string, unknown>)) {
+          if (v !== undefined && v !== null) clean[k] = String(v);
+        }
+        safeInit = { ...init, headers: clean };
+      }
       try {
-        return await fetch(input, init);
+        return await fetch(input, safeInit);
       } catch (e) {
         try {
-          const h = init?.headers;
           (globalThis as Record<string, unknown>).__adlrFetchDiag =
-            `in=${input instanceof Request ? 'Request' : typeof input} keys=${init ? Object.keys(init).join('|') : '-'} hdr=${h ? (h instanceof Headers ? 'Headers' : Array.isArray(h) ? 'array' : typeof h) : '-'} err=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
+            `hdrs=${JSON.stringify(init?.headers)} err=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
         } catch { /* ignore */ }
         throw e;
       }
