@@ -26,7 +26,7 @@ export default function AuthScreen() {
     const U = 'https://gzcewdhjlykwqhtjludv.supabase.co';
     const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
     (async () => {
-      const parts: string[] = ['b6'];
+      const parts: string[] = ['b7'];
       try {
         const r = await fetch(`${U}/auth/v1/health`, { headers: { apikey: K } });
         parts.push(`get=${r.status}`);
@@ -50,6 +50,8 @@ export default function AuthScreen() {
       } catch (e) {
         parts.push(`sbthrow=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`);
       }
+      const cap = (globalThis as Record<string, unknown>).__adlrFetchDiag;
+      if (cap) parts.push(`CAP[${cap}]`);
       setDiag(parts.join(' '));
     })();
   }, []);

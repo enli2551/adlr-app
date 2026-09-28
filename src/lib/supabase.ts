@@ -9,11 +9,21 @@ const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || 'eyJhbGciO
 
 export const supabase = createClient(url, anonKey, {
   global: {
-    // WKWebView (WebKit) throws "TypeError: Type error" when fetch is called
-    // detached from window — which is how supabase-js stores its fetch ref.
-    // Wrapping it guarantees fetch runs in the right context. This is why
-    // login failed only on iOS (a raw fetch worked, supabase-js's did not).
-    fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+    // Wrapped fetch that also captures the exact failing call (arguments +
+    // error) into a global, so the AuthScreen DIAG line can show what
+    // supabase-js passes that trips the iOS WKWebView.
+    fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+      try {
+        return await fetch(input, init);
+      } catch (e) {
+        try {
+          const h = init?.headers;
+          (globalThis as Record<string, unknown>).__adlrFetchDiag =
+            `in=${input instanceof Request ? 'Request' : typeof input} keys=${init ? Object.keys(init).join('|') : '-'} hdr=${h ? (h instanceof Headers ? 'Headers' : Array.isArray(h) ? 'array' : typeof h) : '-'} err=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
+        } catch { /* ignore */ }
+        throw e;
+      }
+    },
   },
   auth: {
     persistSession: true,
