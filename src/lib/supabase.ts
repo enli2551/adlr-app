@@ -20,6 +20,10 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
     const xhr = new XMLHttpRequest();
     xhr.open(method, urlStr, true);
 
+    const applied: string[] = [];
+    const setH = (k: string, v: string) => {
+      try { xhr.setRequestHeader(k, v); applied.push(k); } catch { /* forbidden header — skip */ }
+    };
     const h = init?.headers;
     if (h) {
       const entries: [string, string][] = h instanceof Headers
@@ -28,10 +32,14 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
           ? (h as [string, string][])
           : Object.entries(h as Record<string, string>);
       for (const [k, v] of entries) {
-        if (v == null) continue;
-        try { xhr.setRequestHeader(k, String(v)); } catch { /* forbidden header — skip */ }
+        // Skip apikey here — set it explicitly below so it's always present exactly once.
+        if (v == null || k.toLowerCase() === 'apikey') continue;
+        setH(k, String(v));
       }
     }
+    // Supabase requires the apikey header on every request; guarantee it.
+    setH('apikey', anonKey);
+    try { (globalThis as Record<string, unknown>).__adlrFetchDiag = `xhr-hdrs=${applied.join(',')}`; } catch { /* ignore */ }
 
     xhr.onload = () => {
       const respHeaders = new Headers();
