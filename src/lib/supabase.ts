@@ -17,12 +17,21 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
   return new Promise((resolve, reject) => {
     const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : String(input);
     const method = (init?.method ?? 'GET').toUpperCase();
+    // WKWebView's XHR refuses to set some long-value headers (apikey/Authorization).
+    // Supabase accepts the apikey as a URL query param (it's the public anon key),
+    // which reliably authenticates the gateway regardless of the header issue.
+    const finalUrl = /[?&]apikey=/.test(urlStr)
+      ? urlStr
+      : urlStr + (urlStr.includes('?') ? '&' : '?') + 'apikey=' + encodeURIComponent(anonKey);
+
     const xhr = new XMLHttpRequest();
-    xhr.open(method, urlStr, true);
+    xhr.open(method, finalUrl, true);
 
     const applied: string[] = [];
+    const failed: string[] = [];
     const setH = (k: string, v: string) => {
-      try { xhr.setRequestHeader(k, v); applied.push(k); } catch { /* forbidden header — skip */ }
+      try { xhr.setRequestHeader(k, v); applied.push(k); }
+      catch (e) { failed.push(`${k}(${e instanceof Error ? e.name : 'e'})`); }
     };
     const h = init?.headers;
     if (h) {
@@ -32,14 +41,12 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
           ? (h as [string, string][])
           : Object.entries(h as Record<string, string>);
       for (const [k, v] of entries) {
-        // Skip apikey here — set it explicitly below so it's always present exactly once.
         if (v == null || k.toLowerCase() === 'apikey') continue;
         setH(k, String(v));
       }
     }
-    // Supabase requires the apikey header on every request; guarantee it.
     setH('apikey', anonKey);
-    try { (globalThis as Record<string, unknown>).__adlrFetchDiag = `xhr-hdrs=${applied.join(',')}`; } catch { /* ignore */ }
+    try { (globalThis as Record<string, unknown>).__adlrFetchDiag = `ok=${applied.join(',')} fail=${failed.join(',')}`; } catch { /* ignore */ }
 
     xhr.onload = () => {
       const respHeaders = new Headers();
