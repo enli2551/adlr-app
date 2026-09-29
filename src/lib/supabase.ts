@@ -30,8 +30,12 @@ export const supabase = createClient(url, anonKey, {
         return await fetch(input, safeInit);
       } catch (e) {
         try {
+          const b = safeInit?.body as unknown;
+          const bt = b === undefined || b === null ? 'none'
+            : typeof b === 'string' ? 'string'
+            : (b as { constructor?: { name?: string } })?.constructor?.name ?? typeof b;
           (globalThis as Record<string, unknown>).__adlrFetchDiag =
-            `hdrs=${JSON.stringify(init?.headers)} err=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
+            `m=${safeInit?.method} url=…${String(input).slice(-34)} bt=${bt} body=${typeof b === 'string' ? (b as string).slice(0, 90) : ''} err=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`;
         } catch { /* ignore */ }
         throw e;
       }

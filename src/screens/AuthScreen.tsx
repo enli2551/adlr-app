@@ -42,15 +42,18 @@ export default function AuthScreen() {
       }
     };
     (async () => {
-      const parts: string[] = ['b9'];
-      // Full = exactly what supabase-js sends. Then drop each extra header to
-      // find which one makes WKWebView's fetch throw "Type error".
+      const parts: string[] = ['b10'];
+      // Raw POST with the exact supabase-js headers works (b9: full=400), so run
+      // the real supabase-js call and capture the failing request's BODY.
       parts.push(await tryPost('full', full));
-      for (const drop of ['Authorization', 'X-Client-Info', 'X-Supabase-Api-Version']) {
-        const h = { ...full };
-        delete h[drop];
-        parts.push(await tryPost(`no-${drop.slice(0, 4)}`, h));
+      try {
+        const { error: e } = await supabase.auth.signInWithPassword({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
+        parts.push(e ? `sb=${e.message}` : 'sb=OK');
+      } catch (e) {
+        parts.push(`sbthrow=${e instanceof Error ? e.message : String(e)}`);
       }
+      const cap = (globalThis as Record<string, unknown>).__adlrFetchDiag;
+      if (cap) parts.push(`CAP[${cap}]`);
       setDiag(parts.join(' '));
     })();
   }, []);
