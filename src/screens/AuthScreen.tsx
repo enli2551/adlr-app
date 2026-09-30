@@ -42,7 +42,7 @@ export default function AuthScreen() {
       }
     };
     (async () => {
-      const parts: string[] = ['b13'];
+      const parts: string[] = ['b14'];
       // Raw POST with the exact supabase-js headers works (b9: full=400), so run
       // the real supabase-js call and capture the failing request's BODY.
       parts.push(await tryPost('full', full));
