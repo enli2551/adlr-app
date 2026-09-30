@@ -240,7 +240,6 @@ const dict: Record<string, string> = {
   "Freies Training": "Szabad edzés",
   "Außerhalb des Plans — Übungen selbst wählen": "Terven kívül — te választod a gyakorlatokat",
   "Trainingstag {n}": "{n}. edzésnap",
-  "Als nächstes": "Következő",
   "Ruhetag": "Pihenőnap",
   "Training abgeschlossen": "Edzés teljesítve",
   "Training beenden": "Edzés befejezése",
@@ -629,7 +628,6 @@ const dict: Record<string, string> = {
   "verbunden": "összekapcsolva",
   "nicht verbunden": "nincs összekapcsolva",
   "Neu": "Új",
-  "Streak {n} Tage": "{n} napos széria",
   "Trainings-Compliance": "Edzéstartás",
   "Ziel {n}/Woche": "cél: heti {n}",
   "Kein aktiver Plan — kein Wochenziel.": "Nincs aktív terv — nincs heti cél.",
@@ -917,6 +915,9 @@ const dict: Record<string, string> = {
   "Trainings": "edzés",
   "bis {m} Trainings": "a(z) {m}. edzésig",
   "Alle Meilensteine": "Minden mérföldkő",
+
+  // ── Next-up label ──
+  "Als Nächstes dran": "ez jön most",
 };
 
 export default dict;

@@ -7,11 +7,13 @@ import { Search } from 'lucide-react';
 import ClientDetail from './ClientDetail';
 import { useSearchParams } from 'react-router-dom';
 import { t, fmtDate } from '@/lib/i18n';
+import { loadWeeklyStreaks } from '@/lib/streak';
 
 export default function ClientsScreen() {
   const { profile } = useAuth();
   const [clients, setClients] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [streaks, setStreaks] = useState<Map<string, number>>(new Map());
   const [query, setQuery] = useState('');
   const [goalFilter, setGoalFilter] = useState('Alle');
   const [params, setParams] = useSearchParams();
@@ -21,8 +23,10 @@ export default function ClientsScreen() {
     if (!profile) return;
     setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('created_at', { ascending: false });
-    setClients((data ?? []) as Profile[]);
+    const list = (data ?? []) as Profile[];
+    setClients(list);
     setLoading(false);
+    loadWeeklyStreaks(list.map((c) => c.id)).then(setStreaks).catch(() => {});
   };
 
   useEffect(() => { load(); }, [profile?.id]);
@@ -80,8 +84,8 @@ export default function ClientsScreen() {
                     <p className="text-xs text-white/30">{t('Zuletzt aktiv')}: {lastActive}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-white/40">{t('Streak')}</p>
-                    <p className="text-adlr-gold font-bold">{c.streak}</p>
+                    <p className="text-adlr-gold font-bold leading-none">{streaks.get(c.id) ?? '–'}</p>
+                    <p className="text-[10px] text-white/40 mt-1">{(streaks.get(c.id) ?? 0) === 1 ? t('Woche in Folge') : t('Wochen in Folge')}</p>
                   </div>
                 </div>
               </Card>

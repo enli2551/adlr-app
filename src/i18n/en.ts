@@ -239,7 +239,6 @@ const dict: Record<string, string> = {
   "Freies Training": "Free workout",
   "Außerhalb des Plans — Übungen selbst wählen": "Outside the plan — pick your own exercises",
   "Trainingstag {n}": "Training day {n}",
-  "Als nächstes": "Up next",
   "Ruhetag": "Rest day",
   "Training abgeschlossen": "Workout completed",
   "Training beenden": "Finish workout",
@@ -628,7 +627,6 @@ const dict: Record<string, string> = {
   "verbunden": "connected",
   "nicht verbunden": "not connected",
   "Neu": "New",
-  "Streak {n} Tage": "Streak {n} days",
   "Trainings-Compliance": "Training compliance",
   "Ziel {n}/Woche": "goal {n}/week",
   "Kein aktiver Plan — kein Wochenziel.": "No active plan — no weekly goal.",
@@ -916,6 +914,9 @@ const dict: Record<string, string> = {
   "Trainings": "workouts",
   "bis {m} Trainings": "to {m} workouts",
   "Alle Meilensteine": "All milestones",
+
+  // ── Next-up label ──
+  "Als Nächstes dran": "up next",
 };
 
 export default dict;

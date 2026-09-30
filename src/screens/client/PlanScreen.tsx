@@ -921,7 +921,7 @@ export default function PlanScreen() {
                     {!day.is_rest_day && (
                       <div className="flex items-center gap-1.5">
                         <p className={`text-sm font-medium ${isNext ? 'text-adlr-gold' : 'text-white/60'}`}>{dayLabels.get(day.id)}</p>
-                        {isNext && <span className="text-xs text-adlr-gold font-medium">· {t('Als nächstes')}</span>}
+                        {isNext && <span className="text-xs text-adlr-gold font-medium">· {t('Als Nächstes dran')}</span>}
                       </div>
                     )}
                     <p className={`text-base font-semibold truncate ${isNext ? 'text-white' : 'text-white/90'}`}>{day.is_rest_day ? t('Ruhetag') : t(workoutLabel)}</p>

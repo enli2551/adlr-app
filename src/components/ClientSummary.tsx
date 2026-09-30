@@ -6,6 +6,7 @@ import { localDateKey } from '@/lib/dates';
 import { computeAttention, type AttentionItem } from '@/lib/attention';
 import type { Profile, WorkoutCompletion, ExerciseSetLog, ProgressEntry, ClientPlan } from '@/lib/types';
 import { t, fmtDate } from '@/lib/i18n';
+import { weeklyStreak } from '@/lib/streak';
 
 interface Props {
   client: Profile;
@@ -107,6 +108,7 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
     return { pure, mixed, minutesThisWeek: Math.round(minutesThisWeek) };
   }, [setLogs, muscleOf]);
 
+  const weekStreak = weeklyStreak(completions.map((c) => c.completed_at), target);
   const lastTraining = completions.reduce<string | null>((m, c) => (!m || c.completed_at > m ? c.completed_at : m), null);
 
   const weights = entries.filter((e) => e.weight_kg != null).sort((a, b) => a.logged_at.localeCompare(b.logged_at));
@@ -168,7 +170,7 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
             </span>
           ))}
           {isNew && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 text-white/60">{t('Neu')} · {ago(client.created_at)}</span>}
-          {client.streak > 1 && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 text-white/60">{t('Streak {n} Tage', { n: client.streak })}</span>}
+          {weekStreak > 0 && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 text-white/60">🔥 {weekStreak === 1 ? t('1 Woche in Folge') : t('{n} Wochen in Folge', { n: weekStreak })}</span>}
           {tags.length === 0 && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>{t('Alles im grünen Bereich')}</span>}
         </div>
 
