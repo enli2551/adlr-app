@@ -34,45 +34,6 @@ export default function AuthScreen() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [diag, setDiag] = useState('Diagnose…');
-
-  // One-time connection self-test so we can see whether the failure is network
-  // (WKWebView blocks the fetch) or supabase-js code. Shown in small text below.
-  useEffect(() => {
-    const U = 'https://gzcewdhjlykwqhtjludv.supabase.co';
-    const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
-    const full: Record<string, string> = {
-      'Content-Type': 'application/json;charset=UTF-8',
-      Authorization: `Bearer ${K}`,
-      apikey: K,
-      'X-Client-Info': 'supabase-js-web/2.57.4',
-      'X-Supabase-Api-Version': '2024-01-01',
-    };
-    const body = JSON.stringify({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
-    const tryPost = async (label: string, headers: Record<string, string>) => {
-      try {
-        const r = await fetch(`${U}/auth/v1/token?grant_type=password`, { method: 'POST', headers, body });
-        return `${label}=${r.status}`;
-      } catch (e) {
-        return `${label}!${e instanceof Error ? e.message : String(e)}`;
-      }
-    };
-    (async () => {
-      const parts: string[] = ['b14'];
-      // Raw POST with the exact supabase-js headers works (b9: full=400), so run
-      // the real supabase-js call and capture the failing request's BODY.
-      parts.push(await tryPost('full', full));
-      try {
-        const { error: e } = await supabase.auth.signInWithPassword({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
-        parts.push(e ? `sb=${e.message}` : 'sb=OK');
-      } catch (e) {
-        parts.push(`sbthrow=${e instanceof Error ? e.message : String(e)}`);
-      }
-      const cap = (globalThis as Record<string, unknown>).__adlrFetchDiag;
-      if (cap) parts.push(`CAP[${cap}]`);
-      setDiag(parts.join(' '));
-    })();
-  }, []);
 
   // Password reset via in-app OTP code (no website / deep link needed)
   const [resetBusy, setResetBusy] = useState(false);
@@ -228,7 +189,6 @@ export default function AuthScreen() {
           </Field>
           {error && <p className="text-sm text-red-400 break-words">{error}</p>}
           {resetMsg && <p className="text-sm" style={{ color: '#22c55e' }}>{resetMsg}</p>}
-          <p className="text-[10px] text-white/40 break-words font-mono">DIAG: {diag}</p>
           <Button type="submit" disabled={busy} className="w-full">
             {busy ? t('Lädt...') : mode === 'signup' ? (isTrainer ? t('Trainer Konto erstellen') : t('Jetzt beginnen')) : t('Einloggen')}
           </Button>
