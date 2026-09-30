@@ -1,7 +1,9 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
+import { t } from '@/lib/i18n';
 
 const REST_TIMER_NOTIF_ID = 8001;
+const REST_TIMER_CHANNEL_ID = 'rest-timer-alert';
 const ACTION_START_NEXT = 'START_NEXT_SET';
 const ACTION_ADD_30 = 'ADD_30S';
 
@@ -115,20 +117,20 @@ export async function scheduleRestTimerNotification(opts: ScheduleOptions): Prom
   };
   persistState(state);
 
-  const repsSuffix = opts.reps ? ` · ${opts.reps} Wdh.` : '';
+  const repsSuffix = opts.reps ? ` · ${opts.reps} ${t('Wdh.')}` : '';
 
   let title: string;
   let body: string;
 
   if (opts.isWorkoutComplete) {
-    title = 'Workout complete!';
-    body = 'Alle Übungen erledigt — stark! 🎉';
+    title = t('Training abgeschlossen!');
+    body = t('Alle Übungen erledigt — stark! 🎉');
   } else if (opts.isLastSet) {
-    title = 'Pause vorbei — letzter Satz!';
-    body = `${opts.exerciseName} — Satz ${opts.setNumber}/${opts.totalSets}${repsSuffix}`;
+    title = t('Pause vorbei — letzter Satz!');
+    body = `${t(opts.exerciseName)} — ${t('Satz {n}/{total}', { n: opts.setNumber, total: opts.totalSets })}${repsSuffix}`;
   } else {
-    title = 'Pause vorbei — nächster Satz!';
-    body = `${opts.exerciseName} — Satz ${opts.setNumber}/${opts.totalSets}${repsSuffix}`;
+    title = t('Pause vorbei — nächster Satz!');
+    body = `${t(opts.exerciseName)} — ${t('Satz {n}/{total}', { n: opts.setNumber, total: opts.totalSets })}${repsSuffix}`;
   }
 
   try {
@@ -139,6 +141,7 @@ export async function scheduleRestTimerNotification(opts: ScheduleOptions): Prom
           title,
           body,
           schedule: { at: fireAt },
+          channelId: REST_TIMER_CHANNEL_ID,
           actionTypeId: 'REST_TIMER_ACTIONS',
           extra: { actionStartNext: ACTION_START_NEXT, actionAdd30: ACTION_ADD_30 },
         },
@@ -182,10 +185,16 @@ export async function registerRestTimerActionListener(): Promise<void> {
   listenerRegistered = true;
 
   try {
+    // A fresh channel id, not "rest-timer": on devices that ran an earlier build, the
+    // native RestChrono plugin used to create a channel with that exact id at LOW
+    // importance (it loads before this JS code ever runs), and Android permanently
+    // locks a channel's importance at first creation — reusing that id here would
+    // silently inherit the LOW importance forever. A new id guarantees this alert
+    // channel actually gets created at HIGH importance on every device.
     await LocalNotifications.createChannel({
-      id: 'rest-timer',
-      name: 'Trainings-Pausen-Timer',
-      description: 'Benachrichtigungen für Pausen zwischen Sätzen',
+      id: REST_TIMER_CHANNEL_ID,
+      name: t('Trainings-Pausen-Timer'),
+      description: t('Benachrichtigungen für Pausen zwischen Sätzen'),
       importance: 4,
       visibility: 1,
       sound: 'rest_done.wav',
@@ -198,7 +207,7 @@ export async function registerRestTimerActionListener(): Promise<void> {
         {
           id: 'REST_TIMER_ACTIONS',
           actions: [
-            { id: ACTION_START_NEXT, title: 'Nächster Satz', destructive: false, foreground: false },
+            { id: ACTION_START_NEXT, title: t('Nächster Satz'), destructive: false, foreground: false },
             { id: ACTION_ADD_30, title: '+30s', destructive: false, foreground: false },
           ],
         },

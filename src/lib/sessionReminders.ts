@@ -1,5 +1,6 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
+import { t, fmtDate, fmtTime } from '@/lib/i18n';
 
 export interface SessionLite {
   id: string;
@@ -45,8 +46,8 @@ export async function syncSessionReminders(sessions: SessionLite[]): Promise<voi
   try {
     await LocalNotifications.createChannel({
       id: CHANNEL,
-      name: 'Termin-Erinnerungen',
-      description: 'Erinnerungen an geplante Trainings-Sessions',
+      name: t('Termin-Erinnerungen'),
+      description: t('Erinnerungen an geplante Trainings-Sessions'),
       importance: 4,
     });
   } catch { /* channel may already exist */ }
@@ -63,14 +64,14 @@ export async function syncSessionReminders(sessions: SessionLite[]): Promise<voi
   for (const s of sessions) {
     const at = new Date(s.scheduled_at).getTime();
     if (Number.isNaN(at)) continue;
-    const timeStr = new Date(s.scheduled_at).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = fmtTime(s.scheduled_at);
 
     const oneH = at - 60 * 60 * 1000;
     if (oneH > now) {
       toSchedule.push({
         id: notifId(s.id, 1),
-        title: 'Training in 1 Stunde',
-        body: `${timeStr} · ${s.location} (${s.duration_min} Min)`,
+        title: t('Training in 1 Stunde'),
+        body: `${timeStr} · ${t(s.location)} (${s.duration_min} ${t('Min')})`,
         schedule: { at: new Date(oneH) },
         channelId: CHANNEL,
       });
@@ -83,8 +84,8 @@ export async function syncSessionReminders(sessions: SessionLite[]): Promise<voi
     if (evening.getTime() > now && evening.getTime() < at) {
       toSchedule.push({
         id: notifId(s.id, 0),
-        title: 'Termin morgen',
-        body: `${day.toLocaleDateString('de-AT', { weekday: 'long' })} ${timeStr} · ${s.location}`,
+        title: t('Termin morgen'),
+        body: `${fmtDate(day, { weekday: 'long' })} ${timeStr} · ${t(s.location)}`,
         schedule: { at: evening },
         channelId: CHANNEL,
       });

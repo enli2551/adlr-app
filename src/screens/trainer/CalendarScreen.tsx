@@ -4,13 +4,14 @@ import { supabase } from '@/lib/supabase';
 import type { Session, Profile } from '@/lib/types';
 import { SectionHeader, Loading, Card, Button, Input, Field } from '@/components/ui';
 import { Plus, X, MapPin, Clock } from 'lucide-react';
+import { t, fmtDate, fmtTime } from '@/lib/i18n';
 
 const LOCATIONS = ['Powergym Kottingbrunn', 'Online', 'Sonstiges'];
 const CLIENT_COLORS = ['rgb(var(--adlr-gold))', '#8B0000', '#3a7a5a', '#5a5a8a', '#8a6a3a'];
 
 function getWeekStart(d: Date) {
   const x = new Date(d);
-  x.setDate(x.getDate() - x.getDay() + 1);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // Monday (Sunday belongs to the week before)
   x.setHours(0, 0, 0, 0);
   return x;
 }
@@ -72,22 +73,22 @@ export default function CalendarScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Kalender" subtitle="Deine Woche." />
+      <SectionHeader title={t('Kalender')} subtitle={t('Deine Woche.')} />
 
       {/* Week nav */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); }} className="adlr-tap px-3 py-2 rounded-lg bg-white/5 text-white/60 text-sm">‹</button>
-        <p className="text-sm text-white/70">{weekStart.toLocaleDateString('de-AT', { day: '2-digit', month: 'short' })} — {new Date(weekStart.getTime() + 6 * 86400000).toLocaleDateString('de-AT', { day: '2-digit', month: 'short' })}</p>
+        <p className="text-sm text-white/70">{fmtDate(weekStart, { day: '2-digit', month: 'short' })} — {fmtDate(weekStart.getTime() + 6 * 86400000, { day: '2-digit', month: 'short' })}</p>
         <button onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); }} className="adlr-tap px-3 py-2 rounded-lg bg-white/5 text-white/60 text-sm">›</button>
       </div>
 
-      <Button onClick={() => setShowAdd(!showAdd)} className="w-full mb-4"><Plus size={16} className="inline mr-1" /> Session hinzufügen</Button>
+      <Button onClick={() => setShowAdd(!showAdd)} className="w-full mb-4"><Plus size={16} className="inline mr-1" /> {t('Session hinzufügen')}</Button>
 
       {showAdd && (
         <Card className="mb-4 space-y-3 adlr-fade-in">
-          <Field label="Klient">
+          <Field label={t('Klient')}>
             {clients.length === 0 ? (
-              <p className="text-xs text-white/40 py-1">Noch keine Klienten vorhanden.</p>
+              <p className="text-xs text-white/40 py-1">{t('Noch keine Klienten vorhanden.')}</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {clients.map((c) => {
@@ -110,13 +111,13 @@ export default function CalendarScreen() {
             )}
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Datum"><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
-            <Field label="Uhrzeit"><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></Field>
+            <Field label={t('Datum')}><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
+            <Field label={t('Uhrzeit')}><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Dauer (Min)"><Input type="number" value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} /></Field>
+            <Field label={t('Dauer (Min)')}><Input type="number" value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} /></Field>
           </div>
-          <Field label="Ort">
+          <Field label={t('Ort')}>
               <div className="flex flex-wrap gap-2">
                 {LOCATIONS.map((l) => {
                   const on = form.location === l;
@@ -130,13 +131,13 @@ export default function CalendarScreen() {
                         ? { background: 'rgb(var(--adlr-gold))', color: '#000', borderColor: 'rgb(var(--adlr-gold))', fontWeight: 600 }
                         : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.8)', borderColor: 'rgb(var(--text) / 0.12)' }}
                     >
-                      {l}
+                      {t(l)}
                     </button>
                   );
                 })}
               </div>
             </Field>
-          <Button onClick={addSession} className="w-full">Speichern</Button>
+          <Button onClick={addSession} className="w-full">{t('Speichern')}</Button>
         </Card>
       )}
 
@@ -147,8 +148,8 @@ export default function CalendarScreen() {
           return (
             <div key={i}>
               <div className="flex items-center gap-2 mb-2">
-                <p className="text-sm font-medium text-white/70">{d.toLocaleDateString('de-AT', { weekday: 'long' })}</p>
-                <span className="text-xs text-white/30">{d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' })}</span>
+                <p className="text-sm font-medium text-white/70">{fmtDate(d, { weekday: 'long' })}</p>
+                <span className="text-xs text-white/30">{fmtDate(d, { day: '2-digit', month: '2-digit' })}</span>
               </div>
               {daySessions.length === 0 ? (
                 <div className="h-10 rounded-lg border border-dashed border-white/5" />
@@ -159,18 +160,18 @@ export default function CalendarScreen() {
                       <div className="flex-1">
                         <p className="text-sm font-medium text-white">{clientName(s.client_id)}</p>
                         <div className="flex items-center gap-3 text-xs text-white/40 mt-0.5">
-                          <span className="flex items-center gap-1"><Clock size={11} /> {new Date(s.scheduled_at).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span className="flex items-center gap-1"><MapPin size={11} /> {s.location}</span>
+                          <span className="flex items-center gap-1"><Clock size={11} /> {fmtTime(s.scheduled_at)}</span>
+                          <span className="flex items-center gap-1"><MapPin size={11} /> {t(s.location)}</span>
                         </div>
                       </div>
                       {s.status === 'scheduled' && (
                         <div className="flex gap-1">
-                          <button onClick={() => completeSession(s.id)} className="adlr-tap text-xs px-2 py-1 rounded-md bg-adlr-gold/10 text-adlr-gold border border-adlr-gold/30">Fertig</button>
-                          <button onClick={() => cancelSession(s.id)} className="adlr-tap text-xs px-2 py-1 rounded-md bg-white/5 text-white/40">Abbrechen</button>
+                          <button onClick={() => completeSession(s.id)} className="adlr-tap text-xs px-2 py-1 rounded-md bg-adlr-gold/10 text-adlr-gold border border-adlr-gold/30">{t('Fertig')}</button>
+                          <button onClick={() => cancelSession(s.id)} className="adlr-tap text-xs px-2 py-1 rounded-md bg-white/5 text-white/40">{t('Abbrechen')}</button>
                         </div>
                       )}
-                      {s.status === 'completed' && <span className="text-xs text-adlr-gold">Erledigt</span>}
-                      {s.status === 'cancelled' && <span className="text-xs text-red-400/60">Abgesagt</span>}
+                      {s.status === 'completed' && <span className="text-xs text-adlr-gold">{t('Erledigt')}</span>}
+                      {s.status === 'cancelled' && <span className="text-xs text-red-400/60">{t('Abgesagt')}</span>}
                     </div>
                   ))}
                 </div>

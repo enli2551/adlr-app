@@ -1,12 +1,16 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { PlanDay, WorkoutCompletion, ExerciseSetLog, PersonalRecord, Exercise, Session } from '@/lib/types';
 import Celebration from '@/components/Celebration';
-import { Card, SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin } from 'lucide-react';
-import { ExerciseDemoModal as LibDemoModal, hasDemo } from '@/components/ExerciseLibrary';
-import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
+import WorkoutSummary from '@/components/WorkoutSummary';
+import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
+import { useNavigate } from 'react-router-dom';
+import { SectionHeader, EmptyState, Loading } from '@/components/ui';
+import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle } from 'lucide-react';
+import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/components/ExerciseLibrary';
+import { fetchExercises, isGymDependent, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { haptic } from '@/lib/haptics';
 import { localDateKey } from '@/lib/dates';
@@ -28,14 +32,24 @@ import {
   registerRestChronoActionListener,
   removeRestChronoActionListener,
 } from '@/lib/restChrono';
+import { t, fmtDate, fmtTime } from '@/lib/i18n';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
+const ACTIVE_TRAINING_KEY = 'adlr_active_training';
+// A training session shouldn't realistically span longer than this — guards against
+// resuming a stale session from days ago if the app was never properly closed out.
+const ACTIVE_TRAINING_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
-const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+type SetType = 'warmup' | 'working' | 'dropset';
+const SET_TYPE_CYCLE: SetType[] = ['working', 'warmup', 'dropset'];
+const SET_TYPE_LABEL: Record<SetType, string> = { working: '', warmup: 'WU', dropset: 'DS' };
 
 interface SetInput {
   weight: string;
   reps: string;
+  type: SetType;
+  min?: string; // cardio: duration in minutes
+  km?: string;  // cardio: distance
 }
 
 // Resolve an exercise's per-set prescription (falls back to uniform sets×reps@weight).
@@ -48,25 +62,81 @@ function setsVary(arr: { weight_kg?: number; reps?: number }[]): boolean {
   return arr.some((s, i) => i > 0 && (s.weight_kg !== arr[0].weight_kg || s.reps !== arr[0].reps));
 }
 
+interface PersistedTraining {
+  dayId: string;
+  freeDay?: PlanDay; // ad-hoc free workout (not part of the plan)
+  checkedSets: string[];
+  setInputs: Record<string, SetInput[]>;
+  trainingStartAt: number;
+}
+
+// Composite key for the per-set checked state, e.g. "Kniebeugen#0" for the first set.
+// Selected Studio (gym) — remembered per device; known gyms = this list + gyms from history.
+const GYM_KEY = 'adlr_gym';
+const GYMS_KEY = 'adlr_gyms';
+function readLS<T>(key: string, fallback: T): T {
+  try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : fallback; } catch { return fallback; }
+}
+function writeLS(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage blocked */ }
+}
+
+function setKey(exerciseName: string, setIdx: number): string {
+  return `${exerciseName}#${setIdx}`;
+}
+
+function persistActiveTraining(state: PersistedTraining | null): void {
+  try {
+    if (state) localStorage.setItem(ACTIVE_TRAINING_KEY, JSON.stringify(state));
+    else localStorage.removeItem(ACTIVE_TRAINING_KEY);
+  } catch { /* ignore quota errors */ }
+}
+
+function getPersistedActiveTraining(): PersistedTraining | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_TRAINING_KEY);
+    return raw ? (JSON.parse(raw) as PersistedTraining) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function PlanScreen() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [days, setDays] = useState<PlanDay[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
   const [setLogs, setSetLogs] = useState<ExerciseSetLog[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [celebrate, setCelebrate] = useState(false);
-  const [newPRs, setNewPRs] = useState<{ exercise_name: string; weight_kg: number; reps: number }[]>([]);
+  const [newPRs, setNewPRs] = useState<{ exercise_name: string; weight_kg: number; reps: number; gym?: string | null }[]>([]);
+  const [milestoneMsg, setMilestoneMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [justCompleted, setJustCompleted] = useState<number | null>(null);
+  // Post-workout recap (swipeable summary cards) shown after 'Training beenden'.
+  const [finished, setFinished] = useState<{ summary: SessionSummary; all: WorkoutCompletion[] } | null>(null);
+  const nav = useNavigate();
   const [demoEx, setDemoEx] = useState<ExerciseRow | null>(null);
   const { data: lib } = useAsyncData(fetchExercises, []);
+  // Cardio exercises log time/distance instead of kg × reps.
+  const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const libMap = lib ? new Map(lib.map((e) => [e.name, e])) : null;
 
   // Active training session state
   const [activeDayIdx, setActiveDayIdx] = useState<number | null>(null);
-  const [checkedExercises, setCheckedExercises] = useState<Set<string>>(new Set());
+  const [checkedSets, setCheckedSets] = useState<Set<string>>(new Set());
+  const [gym, setGymState] = useState<string | null>(() => readLS<string | null>(GYM_KEY, null));
+  const [savedGyms, setSavedGyms] = useState<string[]>(() => readLS<string[]>(GYMS_KEY, []));
+  const [addingGym, setAddingGym] = useState(false);
+  const [newGym, setNewGym] = useState('');
+  const setGym = (g: string | null) => { setGymState(g); writeLS(GYM_KEY, g); };
+  // Safety dialog before finishing with un-ticked sets, or before discarding a session.
+  const [confirm, setConfirm] = useState<
+    | { kind: 'finish'; dayIdx: number; open: { name: string; missing: number }[] }
+    | { kind: 'cancel' }
+    | null
+  >(null);
   const [setInputs, setSetInputs] = useState<Record<string, SetInput[]>>({});
   const [restTimer, setRestTimer] = useState<number | null>(null);
   const [restTotal, setRestTotal] = useState(0);
@@ -89,7 +159,27 @@ export default function PlanScreen() {
       .maybeSingle();
     if (cp) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week');
-      setDays((pd ?? []) as PlanDay[]);
+      const planDays = (pd ?? []) as PlanDay[];
+      // Resume a training session that was active when the app got closed/killed —
+      // only on the initial load (activeDayIdx is still null at that point).
+      const persisted = activeDayIdx === null ? getPersistedActiveTraining() : null;
+      const loadedDays = persisted?.freeDay ? [...planDays, persisted.freeDay] : planDays;
+      setDays(loadedDays);
+      if (activeDayIdx === null) {
+        if (persisted) {
+          const isStale = Date.now() - persisted.trainingStartAt > ACTIVE_TRAINING_MAX_AGE_MS;
+          const idx = loadedDays.findIndex((d) => d.id === persisted.dayId);
+          if (!isStale && idx !== -1) {
+            setActiveDayIdx(idx);
+            setCheckedSets(new Set(persisted.checkedSets));
+            setSetInputs(persisted.setInputs);
+            setTrainingStartAt(persisted.trainingStartAt);
+            setExpanded(idx);
+          } else {
+            persistActiveTraining(null);
+          }
+        }
+      }
     }
     const { data: wc } = await supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false });
     setCompletions((wc ?? []) as WorkoutCompletion[]);
@@ -113,6 +203,21 @@ export default function PlanScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+
+  // Keep the active training session persisted so it survives the app being
+  // backgrounded/killed and reopened (Android may kill the WebView process).
+  useEffect(() => {
+    if (activeDayIdx === null || trainingStartAt === null) return;
+    const day = days[activeDayIdx];
+    if (!day) return;
+    persistActiveTraining({
+      dayId: day.id,
+      freeDay: day.is_free ? day : undefined,
+      checkedSets: Array.from(checkedSets),
+      setInputs,
+      trainingStartAt,
+    });
+  }, [activeDayIdx, checkedSets, setInputs, trainingStartAt, days]);
 
   // Live elapsed-time counter while a training session is active
   useEffect(() => {
@@ -147,11 +252,11 @@ export default function PlanScreen() {
       snoozeRestTimerNotification(30);
       const state = getPersistedState();
       if (state) {
-        const repsSuffix = state.reps ? ` · ${state.reps} Wdh.` : '';
+        const repsSuffix = state.reps ? ` · ${state.reps} ${t('Wdh.')}` : '';
         startRestChrono({
           endTime: Date.now() + 30 * 1000,
-          title: 'Pause läuft',
-          body: `${state.exerciseName} — Satz ${state.setNumber}/${state.totalSets}${repsSuffix}`,
+          title: t('Pause läuft'),
+          body: `${t(state.exerciseName)} — ${t('Satz {n}/{total}', { n: state.setNumber, total: state.totalSets })}${repsSuffix}`,
         });
       }
       return;
@@ -181,11 +286,11 @@ export default function PlanScreen() {
         isWorkoutComplete: false,
         reps: state.reps,
       });
-      const repsSuffix = state.reps ? ` · ${state.reps} Wdh.` : '';
+      const repsSuffix = state.reps ? ` · ${state.reps} ${t('Wdh.')}` : '';
       startRestChrono({
         endTime: Date.now() + state.restSeconds * 1000,
-        title: 'Pause läuft',
-        body: `${state.exerciseName} — Satz ${nextSet}/${state.totalSets}${repsSuffix}`,
+        title: t('Pause läuft'),
+        body: `${t(state.exerciseName)} — ${t('Satz {n}/{total}', { n: nextSet, total: state.totalSets })}${repsSuffix}`,
       });
     }
   }, []);
@@ -233,11 +338,11 @@ export default function PlanScreen() {
           isWorkoutComplete: false,
           reps,
         });
-        const repsSuffix = reps ? ` · ${reps} Wdh.` : '';
+        const repsSuffix = reps ? ` · ${reps} ${t('Wdh.')}` : '';
         await startRestChrono({
           endTime: Date.now() + seconds * 1000,
-          title: 'Pause läuft',
-          body: `${exerciseName} — Satz ${setNumber}/${totalSets}${repsSuffix}`,
+          title: t('Pause läuft'),
+          body: `${t(exerciseName)} — ${t('Satz {n}/{total}', { n: setNumber, total: totalSets })}${repsSuffix}`,
         });
       }
     }
@@ -260,16 +365,62 @@ export default function PlanScreen() {
   };
 
   // Get last session's logs for a specific exercise on a specific plan day
-  const getLastSessionLogs = useCallback((planDayId: string, exerciseName: string): ExerciseSetLog[] => {
-    const dayCompletions = completions
-      .filter((c) => c.plan_day_id === planDayId)
-      .sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime());
-    if (dayCompletions.length === 0) return [];
-    const lastCompletion = dayCompletions[0];
-    return setLogs
-      .filter((l) => l.workout_completion_id === lastCompletion.id && l.exercise_name === exerciseName)
-      .sort((a, b) => a.set_number - b.set_number);
-  }, [completions, setLogs]);
+  // Last logged sets for an exercise — preferably from the SAME Studio (machine weights
+  // differ between gyms), from any plan day. Falls back to the latest session anywhere.
+  const getLastSessionLogs = useCallback((exerciseName: string): { logs: ExerciseSetLog[]; gym: string | null; otherGym: boolean } => {
+    const byTime = [...completions].sort((x, y) => new Date(y.completed_at).getTime() - new Date(x.completed_at).getTime());
+    const logsFor = (cId: string) => setLogs
+      .filter((l) => l.workout_completion_id === cId && l.exercise_name === exerciseName)
+      .sort((x, y) => x.set_number - y.set_number);
+    for (const c of byTime) {
+      if ((c.gym ?? null) !== gym) continue;
+      const ls = logsFor(c.id);
+      if (ls.length > 0) return { logs: ls, gym: c.gym ?? null, otherGym: false };
+    }
+    for (const c of byTime) {
+      const ls = logsFor(c.id);
+      if (ls.length > 0) return { logs: ls, gym: c.gym ?? null, otherGym: true };
+    }
+    return { logs: [], gym: null, otherGym: false };
+  }, [completions, setLogs, gym]);
+
+  // "Freies Training": an ad-hoc session with exercises picked from the library.
+  const startFreeTraining = () => {
+    const fd: PlanDay = {
+      id: `free-${Date.now()}`, plan_id: '', day_of_week: 99, workout_name: 'Freies Training', focus: null,
+      difficulty: 1, duration_min: null, notes: null, exercises: [], is_rest_day: false, is_free: true,
+    };
+    ensureNotificationPermission();
+    const idx = days.filter((d) => !d.is_free).length;
+    setDays((prev) => [...prev.filter((d) => !d.is_free), fd]);
+    setSetInputs({});
+    setCheckedSets(new Set());
+    setActiveDayIdx(idx);
+    setExpanded(idx);
+    setTrainingStartAt(Date.now());
+    setPickerOpen(true);
+    haptic.medium();
+  };
+  const addFreeExercise = (row: ExerciseRow) => {
+    const free = days.find((d) => d.is_free);
+    if (!free || free.exercises.some((e) => e.name === row.name)) return;
+    const sets = row.default_sets || 3;
+    setDays((prev) => prev.map((d) => (d.is_free
+      ? { ...d, exercises: [...d.exercises, { name: row.name, sets, reps: row.default_reps || undefined, rest_sec: row.default_rest_sec || undefined }] }
+      : d)));
+    const lastLogs = getLastSessionLogs(row.name).logs;
+    setSetInputs((prev) => ({
+      ...prev,
+      [row.name]: Array.from({ length: sets }, (_, i) => ({
+        weight: lastLogs[i]?.weight_kg?.toString() ?? '',
+        reps: lastLogs[i]?.reps?.toString() ?? (row.default_reps ? String(row.default_reps) : ''),
+        type: 'working' as SetType,
+        min: lastLogs[i]?.duration_sec ? String(Math.round(lastLogs[i].duration_sec! / 60)) : '',
+        km: lastLogs[i]?.distance_km?.toString() ?? '',
+      })),
+    }));
+    haptic.light();
+  };
 
   // Initialize set inputs when training starts
   const startTraining = (dayIdx: number) => {
@@ -278,15 +429,18 @@ export default function PlanScreen() {
     if (!day || !day.exercises) return;
     const inputs: Record<string, SetInput[]> = {};
     for (const ex of day.exercises) {
-      const lastLogs = getLastSessionLogs(day.id, ex.name);
+      const lastLogs = getLastSessionLogs(ex.name).logs;
       const presc = effectiveSets(ex);
       inputs[ex.name] = Array.from({ length: ex.sets ?? 1 }, (_, i) => ({
         weight: lastLogs[i]?.weight_kg?.toString() ?? presc[i]?.weight_kg?.toString() ?? '',
         reps: lastLogs[i]?.reps?.toString() ?? presc[i]?.reps?.toString() ?? '',
+        type: 'working' as SetType,
+        min: lastLogs[i]?.duration_sec ? String(Math.round(lastLogs[i].duration_sec! / 60)) : '',
+        km: lastLogs[i]?.distance_km?.toString() ?? '',
       }));
     }
     setSetInputs(inputs);
-    setCheckedExercises(new Set());
+    setCheckedSets(new Set());
     setActiveDayIdx(dayIdx);
     setTrainingStartAt(Date.now());
     haptic.medium();
@@ -294,10 +448,12 @@ export default function PlanScreen() {
 
   const stopTraining = () => {
     setActiveDayIdx(null);
-    setCheckedExercises(new Set());
+    setDays((prev) => prev.filter((d) => !d.is_free));
+    setCheckedSets(new Set());
     setSetInputs({});
     setTrainingStartAt(null);
     stopRestTimer();
+    persistActiveTraining(null);
   };
 
   const finishTraining = async (dayIdx: number) => {
@@ -317,75 +473,171 @@ export default function PlanScreen() {
       });
     }
     // Create workout completion
-    const { data: wc, error } = await supabase.from('workout_completions').insert({ client_id: profile.id, plan_day_id: day.id }).select('*').single();
+    const { data: wc, error } = await supabase.from('workout_completions').insert({ client_id: profile.id, plan_day_id: day.is_free ? null : day.id }).select('*').single();
     if (error || !wc) return;
+    if (day.is_free) await supabase.from('workout_completions').update({ title: day.workout_name }).eq('id', wc.id); // best-effort
+    // Studio tag (best-effort — no-op if the gym column isn't migrated yet)
+    if (gym) await supabase.from('workout_completions').update({ gym }).eq('id', wc.id);
     // Record session duration (best-effort — no-op if the duration_sec column isn't there yet)
     const durationSec = trainingStartAt ? Math.floor((Date.now() - trainingStartAt) / 1000) : null;
     if (durationSec != null) {
       await supabase.from('workout_completions').update({ duration_sec: durationSec }).eq('id', wc.id);
     }
     // Save set logs
-    const logsToInsert: Array<{ client_id: string; workout_completion_id: string; plan_day_id: string; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null }> = [];
+    const logsToInsert: Array<{ client_id: string; workout_completion_id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null }> = [];
     for (const ex of day.exercises ?? []) {
       const inputs = setInputs[ex.name] ?? [];
       for (let i = 0; i < inputs.length; i++) {
         const w = inputs[i]?.weight ? Number(inputs[i].weight) : null;
         const r = inputs[i]?.reps ? Number(inputs[i].reps) : null;
-        if (w !== null || r !== null) {
+        const dur = inputs[i]?.min ? Math.round(Number(inputs[i].min) * 60) : null;
+        const km = inputs[i]?.km ? Number(inputs[i].km) : null;
+        if (w !== null || r !== null || dur !== null || km !== null) {
           logsToInsert.push({
             client_id: profile.id,
             workout_completion_id: wc.id,
-            plan_day_id: day.id,
+            plan_day_id: day.is_free ? null : day.id,
             exercise_name: ex.name,
             set_number: i + 1,
             weight_kg: w,
             reps: r,
+            set_type: inputs[i]?.type ?? 'working',
+            duration_sec: dur,
+            distance_km: km,
           });
         }
       }
     }
     if (logsToInsert.length > 0) {
-      await supabase.from('exercise_set_logs').insert(logsToInsert);
+      const { error: logsErr } = await supabase.from('exercise_set_logs').insert(logsToInsert);
+      if (logsErr) {
+        // set_type column not migrated on this Supabase project yet — retry without it
+        // so weight/reps are never lost while the migration is pending.
+        const withoutType = logsToInsert.map((l) => ({
+          client_id: l.client_id,
+          workout_completion_id: l.workout_completion_id,
+          plan_day_id: l.plan_day_id,
+          exercise_name: l.exercise_name,
+          set_number: l.set_number,
+          weight_kg: l.weight_kg,
+          reps: l.reps,
+        }));
+        await supabase.from('exercise_set_logs').insert(withoutType);
+      }
     }
-    // Auto-detect new personal records from this session's heaviest sets
+    // Auto-detect new personal records from this session's heaviest working/dropset sets
+    // (warm-up sets are intentionally lighter and shouldn't trigger a false PR).
     const bestByExercise = new Map<string, { weight_kg: number; reps: number }>();
     for (const l of logsToInsert) {
-      if (l.weight_kg == null) continue;
+      if (l.weight_kg == null || l.set_type === 'warmup') continue;
       const cur = bestByExercise.get(l.exercise_name);
       if (!cur || l.weight_kg > cur.weight_kg) bestByExercise.set(l.exercise_name, { weight_kg: l.weight_kg, reps: l.reps ?? 0 });
     }
-    const detected: { exercise_name: string; weight_kg: number; reps: number }[] = [];
+    // Machine/cable PRs are compared within the current Studio only (loads differ per gym).
+    const equipmentByName = new Map((lib ?? []).map((e) => [e.name, e.equipment]));
+    const detected: { exercise_name: string; weight_kg: number; reps: number; gym: string | null }[] = [];
     for (const [name, best] of bestByExercise) {
-      const prevMax = prs.filter((p) => p.exercise_name === name).reduce((m, p) => Math.max(m, p.weight_kg), 0);
-      if (best.weight_kg > prevMax) detected.push({ exercise_name: name, weight_kg: best.weight_kg, reps: best.reps });
+      const prGym = gym && isGymDependent(equipmentByName.get(name)) ? gym : null;
+      const prevMax = prs
+        .filter((p) => p.exercise_name === name && (prGym ? p.gym === prGym : true))
+        .reduce((m, p) => Math.max(m, p.weight_kg), 0);
+      if (best.weight_kg > prevMax) detected.push({ exercise_name: name, weight_kg: best.weight_kg, reps: best.reps, gym: prGym });
     }
     if (detected.length > 0) {
-      await supabase.from('personal_records').insert(detected.map((d) => ({ client_id: profile.id, exercise_name: d.exercise_name, weight_kg: d.weight_kg, reps: d.reps })));
+      const rows = detected.map((d) => ({ client_id: profile.id, exercise_name: d.exercise_name, weight_kg: d.weight_kg, reps: d.reps, gym: d.gym }));
+      const { error: prErr } = await supabase.from('personal_records').insert(rows);
+      // gym column not migrated yet — retry without it so the PR itself is never lost
+      if (prErr) await supabase.from('personal_records').insert(rows.map(({ gym: _g, ...r }) => r));
       setNewPRs(detected);
     }
+    // Recompute the consistency streak (consecutive calendar days with a completed
+    // workout) from scratch each time — self-healing, no separate reset job needed:
+    // a gap in training history naturally shortens it next time this runs.
+    const doneDateKeys = new Set(completions.map((c) => localDateKey(c.completed_at)));
+    doneDateKeys.add(localDateKey(new Date()));
+    let streak = 0;
+    const cursor = new Date();
+    while (doneDateKeys.has(localDateKey(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    if (streak !== profile.streak) {
+      await supabase.from('profiles').update({ streak }).eq('id', profile.id);
+      await refreshProfile();
+    }
+    // Milestone celebration — total completed workouts including this one.
+    const totalWorkouts = completions.length + 1;
+    if (totalWorkouts === 1) setMilestoneMsg(t('Dein erstes Training! Der Anfang von etwas Großem.'));
+    else if (totalWorkouts % 100 === 0) setMilestoneMsg(t('{n}. Training! Unglaublich stark.', { n: totalWorkouts }));
+    else if (totalWorkouts % 50 === 0) setMilestoneMsg(t('{n}. Training! Absolute Konstanz.', { n: totalWorkouts }));
+    else if (totalWorkouts % 10 === 0) setMilestoneMsg(t('{n}. Training! Weiter so.', { n: totalWorkouts }));
+    else setMilestoneMsg(null);
     haptic.success();
     setCelebrate(true);
-    setJustCompleted(dayIdx);
-    setTimeout(() => { setJustCompleted(null); setCelebrate(false); setNewPRs([]); }, 2800);
+    const doneComp: WorkoutCompletion = { ...(wc as WorkoutCompletion), duration_sec: durationSec, gym, title: day.is_free ? day.workout_name : null };
+    const now = new Date().toISOString();
+    const sessionLogs: ExerciseSetLog[] = logsToInsert.map((l, i) => ({ ...l, id: `local-${i}`, created_at: now }));
+    const muscleByName = new Map((lib ?? []).map((e) => [e.name, e.muscle_group]));
+    setFinished({
+      summary: summarizeSession(doneComp, sessionLogs, day.workout_name ?? t('Training'), (n) => muscleByName.get(n) ?? 'Sonstige'),
+      all: [...completions, doneComp],
+    });
+    setTimeout(() => setCelebrate(false), 2800);
     stopTraining();
     await load();
   };
 
-  const updateSetInput = (exerciseName: string, setIdx: number, field: 'weight' | 'reps', value: string) => {
+  const updateSetInput = (exerciseName: string, setIdx: number, field: 'weight' | 'reps' | 'min' | 'km', value: string) => {
     setSetInputs((prev) => {
       const arr = [...(prev[exerciseName] ?? [])];
-      if (!arr[setIdx]) arr[setIdx] = { weight: '', reps: '' };
+      if (!arr[setIdx]) arr[setIdx] = { weight: '', reps: '', type: 'working' };
       arr[setIdx] = { ...arr[setIdx], [field]: value };
       return { ...prev, [exerciseName]: arr };
     });
   };
 
-  const toggleExerciseCheck = (exerciseName: string) => {
+  const cycleSetType = (exerciseName: string, setIdx: number) => {
+    setSetInputs((prev) => {
+      const arr = [...(prev[exerciseName] ?? [])];
+      if (!arr[setIdx]) arr[setIdx] = { weight: '', reps: '', type: 'working' };
+      const cur = arr[setIdx].type ?? 'working';
+      const next = SET_TYPE_CYCLE[(SET_TYPE_CYCLE.indexOf(cur) + 1) % SET_TYPE_CYCLE.length];
+      arr[setIdx] = { ...arr[setIdx], type: next };
+      return { ...prev, [exerciseName]: arr };
+    });
+  };
+
+  // Checking a set off also starts the rest timer automatically (for every set, not
+  // just the exercise's last one) — no separate button tap needed.
+  const toggleSetCheck = (ex: Exercise, setIdx: number) => {
     if (activeDayIdx === null) return;
-    setCheckedExercises((prev) => {
+    const key = setKey(ex.name, setIdx);
+    const wasChecked = checkedSets.has(key);
+    setCheckedSets((prev) => {
       const next = new Set(prev);
-      if (next.has(exerciseName)) next.delete(exerciseName);
-      else next.add(exerciseName);
+      if (wasChecked) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    if (!wasChecked && ex.rest_sec) {
+      const exSets = ex.sets ?? 1;
+      const reps = setInputs[ex.name]?.[setIdx]?.reps;
+      startRestTimer(ex.rest_sec, ex.name, setIdx + 1, exSets, reps);
+    }
+  };
+
+  // Leading checkbox on the exercise row: toggles all of its sets together (all done
+  // -> all undone, otherwise -> all done), as a shortcut alongside per-set checking.
+  const toggleAllSetsForExercise = (exerciseName: string, totalSets: number) => {
+    if (activeDayIdx === null) return;
+    setCheckedSets((prev) => {
+      const next = new Set(prev);
+      const allChecked = Array.from({ length: totalSets }, (_, i) => setKey(exerciseName, i)).every((k) => next.has(k));
+      for (let i = 0; i < totalSets; i++) {
+        const k = setKey(exerciseName, i);
+        if (allChecked) next.delete(k);
+        else next.add(k);
+      }
       return next;
     });
   };
@@ -410,25 +662,24 @@ export default function PlanScreen() {
   if (days.length === 0) {
     return (
       <div className="adlr-fade-in">
-        <SectionHeader title="Mein Plan" />
-        <EmptyState title="Dein Plan wird vorbereitet." subtitle="Peter ist am Werk. Du trainierst, sobald dein Plan bereit ist." />
+        <SectionHeader title={t('Mein Plan')} />
+        <EmptyState title={t('Dein Plan wird vorbereitet.')} subtitle={t('Peter ist am Werk. Du trainierst, sobald dein Plan bereit ist.')} />
         <div className="adlr-card p-5 mt-4 adlr-gold-border" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.12), rgb(var(--adlr-gold) / 0.03))' }}>
-          <p className="text-sm font-semibold text-white mb-1">Schon mal loslegen? 💪</p>
-          <p className="text-xs text-white/60 mb-4 leading-relaxed">Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald Peter deinen persönlichen Plan fertig hat, wird er automatisch aktiv.</p>
+          <p className="text-sm font-semibold text-white mb-1">{t('Schon mal loslegen? 💪')}</p>
+          <p className="text-xs text-white/60 mb-4 leading-relaxed">{t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald Peter deinen persönlichen Plan fertig hat, wird er automatisch aktiv.')}</p>
           <button
             onClick={activateStarter}
             disabled={starterBusy}
             className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}
           >
-            {starterBusy ? '…' : <><Dumbbell size={16} /> Starter-Plan starten</>}
+            {starterBusy ? '…' : <><Dumbbell size={16} /> {t('Starter-Plan starten')}</>}
           </button>
         </div>
       </div>
     );
   }
 
-  const today = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1; // Mon=0
   const weekDateForDay = (dayOfWeek: number) => {
     const now = new Date();
     const currentDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
@@ -446,14 +697,36 @@ export default function PlanScreen() {
       const k = localDateKey(c.completed_at);
       return k >= weekStartKey && k <= weekEndKey;
     });
-  const plannedDays = days.filter((day) => !day.is_rest_day);
-  const completedThisWeek = plannedDays.filter((day) => planDayDoneThisWeek(day.id)).length;
-  const weeklyProgress = plannedDays.length > 0 ? (completedThisWeek / plannedDays.length) * 100 : 0;
+  const plannedDays = days.filter((day) => !day.is_rest_day && !day.is_free);
+  // Weekly TARGET = number of training days in the plan; every logged training this
+  // week counts (extra sessions too), independent of which plan day it was.
+  const completedThisWeek = completions.filter((c) => {
+    const k = localDateKey(c.completed_at);
+    return k >= weekStartKey && k <= weekEndKey;
+  }).length;
+  const weeklyProgress = plannedDays.length > 0 ? Math.min(100, (completedThisWeek / plannedDays.length) * 100) : 0;
+  // Flexible rotation, not a calendar weekday: sequential "Trainingstag N" labels
+  // (rest days keep their own label), and a single "Als nächstes" recommendation —
+  // the earliest not-yet-done-this-week training day — instead of a rigid "Heute".
+  let trainingDayCounter = 0;
+  const dayLabels = new Map<string, string>();
+  for (const d of days) {
+    if (d.is_rest_day || d.is_free) continue;
+    trainingDayCounter++;
+    dayLabels.set(d.id, t('Trainingstag {n}', { n: trainingDayCounter }));
+  }
+  // Rotation: recommend the plan day after the most recently completed one (wraps
+  // around), so a 3-day plan simply continues 1→2→3→1… regardless of the calendar.
+  const lastDone = completions
+    .filter((c) => plannedDays.some((d) => d.id === c.plan_day_id))
+    .reduce<typeof completions[number] | null>((a, c) => (!a || c.completed_at > a.completed_at ? c : a), null);
+  const lastIdx = lastDone ? plannedDays.findIndex((d) => d.id === lastDone.plan_day_id) : -1;
+  const nextRecommendedDayId = plannedDays.length > 0 ? plannedDays[(lastIdx + 1) % plannedDays.length].id : null;
 
   return (
     <div className="adlr-fade-in">
-      {celebrate && <Celebration />}
-      <SectionHeader title="Mein Plan" subtitle="Diese Woche" />
+      {celebrate && <Celebration count={milestoneMsg ? 120 : 56} />}
+      <SectionHeader title={t('Mein Plan')} subtitle={t('Diese Woche')} />
 
       {/* Active training banner with live elapsed timer */}
       {activeDayIdx !== null && (
@@ -467,8 +740,8 @@ export default function PlanScreen() {
               <span className="relative inline-flex rounded-full h-3 w-3 bg-adlr-gold" />
             </span>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-adlr-gold/80 uppercase tracking-widest">Training läuft</p>
-              <p className="text-sm font-semibold text-white truncate">{days[activeDayIdx]?.workout_name ?? 'Training'}</p>
+              <p className="text-[10px] text-adlr-gold/80 uppercase tracking-widest">{t('Training läuft')}</p>
+              <p className="text-sm font-semibold text-white truncate">{t(days[activeDayIdx]?.workout_name ?? 'Training')}{gym ? <span className="text-white/50 font-normal"> · {gym}</span> : null}</p>
             </div>
             <span className="text-2xl font-bold text-adlr-gold tabular-nums">
               {String(Math.floor(trainingElapsed / 60)).padStart(2, '0')}:{String(trainingElapsed % 60).padStart(2, '0')}
@@ -480,7 +753,7 @@ export default function PlanScreen() {
       {activeDayIdx === null && profile && profile.streak > 0 && (
         <div className="adlr-card p-4 mb-5 flex items-center gap-3 adlr-gold-border">
           <Flame size={22} className="text-adlr-gold" />
-          <p className="text-sm text-white/80">Du trainierst seit <span className="adlr-gold-text font-bold">{profile.streak}</span> Tagen. Bleib stark.</p>
+          <p className="text-sm text-white/80">{t('Du trainierst seit')} <span className="adlr-gold-text font-bold">{profile.streak}</span> {t('Tagen. Bleib stark.')}</p>
         </div>
       )}
 
@@ -489,7 +762,7 @@ export default function PlanScreen() {
         <div className="adlr-card p-4 mb-5">
           <div className="flex items-center gap-2 mb-3">
             <Calendar size={16} className="text-adlr-gold" />
-            <p className="text-sm font-medium text-white/80">Nächste Termine</p>
+            <p className="text-sm font-medium text-white/80">{t('Nächste Termine')}</p>
           </div>
           <div className="space-y-2">
             {sessions.slice(0, 3).map((s) => {
@@ -497,13 +770,13 @@ export default function PlanScreen() {
               return (
                 <div key={s.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.07)' }}>
                   <div className="flex flex-col items-center justify-center w-11 shrink-0">
-                    <span className="text-[10px] uppercase tracking-wide text-adlr-gold/70">{d.toLocaleDateString('de-AT', { weekday: 'short' })}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-adlr-gold/70">{fmtDate(d, { weekday: 'short' })}</span>
                     <span className="text-lg font-bold text-white leading-none">{d.getDate()}</span>
-                    <span className="text-[10px] text-white/40">{d.toLocaleDateString('de-AT', { month: 'short' })}</span>
+                    <span className="text-[10px] text-white/40">{fmtDate(d, { month: 'short' })}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white flex items-center gap-1.5"><Clock size={12} className="text-adlr-gold" /> {d.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} · {s.duration_min} Min</p>
-                    <p className="text-xs text-white/40 flex items-center gap-1.5 mt-0.5"><MapPin size={11} /> {s.location}</p>
+                    <p className="text-sm font-medium text-white flex items-center gap-1.5"><Clock size={12} className="text-adlr-gold" /> {fmtTime(d)} · {s.duration_min} {t('Min')}</p>
+                    <p className="text-xs text-white/40 flex items-center gap-1.5 mt-0.5"><MapPin size={11} /> {t(s.location)}</p>
                   </div>
                 </div>
               );
@@ -512,8 +785,12 @@ export default function PlanScreen() {
         </div>
       )}
 
-      {/* Rest timer overlay */}
-      {restTimer !== null && (
+      {/* Rest timer overlay — portaled to <body>: a plain fixed div nested inside the
+          .adlr-route/.adlr-fade-in ancestors would be pinned to THEIR transform (which
+          lingers after the route/fade animation ends) instead of the viewport, making
+          it float in the wrong spot and need scrolling to reach. Same fix already used
+          for ExerciseDemoModal/MonthlyReport. */}
+      {restTimer !== null && createPortal(
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 adlr-fade-in">
           <div className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl" style={{ background: 'rgba(30,26,16,0.96)', border: '1px solid rgb(var(--adlr-gold) / 0.45)', backdropFilter: 'blur(12px)' }}>
             <Timer size={18} className="text-adlr-gold" />
@@ -530,61 +807,141 @@ export default function PlanScreen() {
               <Square size={14} />
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Notification permission hint */}
-      {notifPermissionDenied && restTimer !== null && (
+      {notifPermissionDenied && restTimer !== null && createPortal(
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 adlr-fade-in max-w-xs">
           <div className="px-4 py-2.5 rounded-xl text-center" style={{ background: 'rgb(var(--text) / 0.06)', border: '1px solid rgb(var(--text) / 0.12)' }}>
-            <p className="text-xs text-white/50">Aktiviere Benachrichtigungen in den Einstellungen für Pausen-Erinnerungen beim nächsten Satz.</p>
+            <p className="text-xs text-white/50">{t('Aktiviere Benachrichtigungen in den Einstellungen für Pausen-Erinnerungen beim nächsten Satz.')}</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {activeDayIdx === null && (
         <div className="adlr-card p-4 mb-4">
           <div className="flex items-center justify-between mb-2.5">
-            <p className="text-sm font-medium text-white/80">Wochenziel</p>
-            <p className="text-sm font-semibold text-adlr-gold">{completedThisWeek}/{plannedDays.length} Trainings</p>
+            <p className="text-sm font-medium text-white/80">{t('Wochenziel')}</p>
+            <p className="text-sm font-semibold text-adlr-gold">{t('{n}/{total} Trainings', { n: completedThisWeek, total: plannedDays.length })}</p>
           </div>
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full bg-adlr-gold transition-all duration-500" style={{ width: `${weeklyProgress}%` }} />
           </div>
+          <button
+            onClick={() => nav('/app/verlauf')}
+            className="adlr-tap w-full mt-3.5 pt-3 flex items-center justify-between text-sm"
+            style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}
+          >
+            <span className="flex items-center gap-2 text-white/80"><History size={15} className="text-adlr-gold" /> {t('Trainings-Verlauf')}</span>
+            <span className="flex items-center gap-1 text-xs text-white/40">{t('{n} gesamt', { n: completions.length })} <ChevronRight size={14} /></span>
+          </button>
         </div>
+      )}
+
+      {activeDayIdx === null && (() => {
+        const known = [...new Set([...savedGyms, ...completions.map((c) => c.gym).filter((g): g is string => !!g)])];
+        const addGym = () => {
+          const name = newGym.trim();
+          if (!name) return;
+          const next = [...new Set([...savedGyms, name])];
+          setSavedGyms(next); writeLS(GYMS_KEY, next);
+          setGym(name); setNewGym(''); setAddingGym(false);
+        };
+        return (
+          <div className="adlr-card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-sm font-medium text-white/80 flex items-center gap-2"><MapPin size={15} className="text-adlr-gold" /> {t('Studio')}</p>
+              {known.length > 0 && <p className="text-[11px] text-white/35">{t('Gewichte pro Studio')}</p>}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {known.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGym(gym === g ? null : g)}
+                  className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                  style={gym === g
+                    ? { background: 'rgb(var(--adlr-gold))', color: '#000', borderColor: 'rgb(var(--adlr-gold))' }
+                    : { background: 'transparent', color: 'rgb(var(--text) / 0.6)', borderColor: 'rgb(var(--text) / 0.12)' }}
+                >
+                  {g}
+                </button>
+              ))}
+              {addingGym ? (
+                <div className="flex gap-1.5 w-full mt-1">
+                  <input
+                    autoFocus
+                    value={newGym}
+                    onChange={(e) => setNewGym(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addGym(); }}
+                    placeholder={t('z.B. FitInn Mitte')}
+                    className="flex-1 bg-inset border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/25 outline-none"
+                  />
+                  <button onClick={addGym} className="adlr-tap px-3 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
+                  <button onClick={() => { setAddingGym(false); setNewGym(''); }} className="adlr-tap px-2 rounded-lg text-xs text-white/50">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setAddingGym(true)} className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed text-white/45" style={{ borderColor: 'rgb(var(--text) / 0.18)' }}>
+                  + {t('Studio')}
+                </button>
+              )}
+            </div>
+            {known.length === 0 && !addingGym && (
+              <p className="text-[11px] text-white/35 mt-2">{t('Trainierst du in mehreren Studios? Lege sie an — Gewichte werden dann pro Studio gemerkt.')}</p>
+            )}
+          </div>
+        );
+      })()}
+
+      {activeDayIdx === null && (
+        <button
+          onClick={startFreeTraining}
+          className="adlr-tap w-full mb-4 px-4 py-3.5 rounded-2xl flex items-center gap-3 text-left border border-dashed"
+          style={{ borderColor: 'rgb(var(--text) / 0.15)', background: 'rgb(var(--text) / 0.02)' }}
+        >
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white/5 text-adlr-gold"><Shuffle size={19} /></div>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-white/90">{t('Freies Training')}</p>
+            <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
+          </div>
+        </button>
       )}
 
       <div className="space-y-2.5 adlr-stagger">
         {days.map((day, idx) => {
           if (activeDayIdx !== null && idx !== activeDayIdx) return null;
           const isOpen = expanded === idx || activeDayIdx === idx;
-          const isToday = day.day_of_week === today;
-          const isFuture = day.day_of_week > today;
+          const isNext = day.id === nextRecommendedDayId;
           const completed = !day.is_rest_day && planDayDoneThisWeek(day.id);
           const isTrainingThisDay = activeDayIdx === idx;
-          const allExercisesChecked = (day.exercises?.length ?? 0) > 0 && checkedExercises.size >= (day.exercises?.length ?? 0);
+          const totalSetsForDay = day.exercises?.reduce((sum, ex) => sum + (ex.sets ?? 1), 0) ?? 0;
+          const allExercisesChecked = totalSetsForDay > 0 && checkedSets.size >= totalSetsForDay;
           const workoutLabel = day.workout_name ?? 'Training';
-          const isCardio = /cardio|zone\s*2|laufen|lauf/i.test(`${workoutLabel} ${day.focus ?? ''}`);
+          const isCardio = /cardio|zone\s*2|laufen|lauf/i.test(workoutLabel);
           const DayIcon = day.is_rest_day ? Moon : isCardio ? Footprints : Dumbbell;
           return (
             <div
               key={day.id}
-              className={`adlr-card overflow-hidden transition-all ${isToday ? 'ring-2 ring-adlr-gold bg-adlr-gold/10' : ''} ${completed ? 'ring-1 ring-green-500/30' : ''} ${isFuture ? 'opacity-75' : ''}`}
+              className={`adlr-card overflow-hidden transition-all ${isNext ? 'ring-2 ring-adlr-gold bg-adlr-gold/10' : ''} ${completed ? 'ring-1 ring-green-500/30' : ''}`}
             >
               <button
                 onClick={() => setExpanded(isOpen ? null : idx)}
                 className="w-full px-4 py-3.5 text-left flex items-center justify-between"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isToday ? 'bg-adlr-gold text-black' : 'bg-white/5 text-white/50'}`}>
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${isNext ? 'bg-adlr-gold text-black' : 'bg-white/5 text-white/50'}`}>
                     <DayIcon size={20} strokeWidth={1.8} />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`text-sm font-medium ${isToday ? 'text-adlr-gold' : 'text-white/60'}`}>{DAY_NAMES[day.day_of_week]}</p>
-                      {isToday && <span className="text-xs text-adlr-gold font-medium">· Heute</span>}
-                    </div>
-                    <p className={`text-base font-semibold truncate ${isToday ? 'text-white' : 'text-white/90'}`}>{day.is_rest_day ? 'Ruhetag' : workoutLabel}</p>
+                    {!day.is_rest_day && (
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-sm font-medium ${isNext ? 'text-adlr-gold' : 'text-white/60'}`}>{dayLabels.get(day.id)}</p>
+                        {isNext && <span className="text-xs text-adlr-gold font-medium">· {t('Als nächstes')}</span>}
+                      </div>
+                    )}
+                    <p className={`text-base font-semibold truncate ${isNext ? 'text-white' : 'text-white/90'}`}>{day.is_rest_day ? t('Ruhetag') : t(workoutLabel)}</p>
                   </div>
                 </div>
                 {!day.is_rest_day && (
@@ -603,38 +960,35 @@ export default function PlanScreen() {
               {isOpen && !day.is_rest_day && (
                 <div className="px-5 pb-5 adlr-fade-in">
                   <div className="flex gap-4 mb-4 text-xs text-white/40">
-                    {day.focus && <span className="flex items-center gap-1"><Target size={12} /> {day.focus}</span>}
-                    {day.duration_min && <span className="flex items-center gap-1"><Clock size={12} /> {day.duration_min} Min</span>}
-                    <span className="flex items-center gap-1">
-                      <span className="flex gap-0.5">
-                        {[1,2,3].map((d) => (
-                          <span key={d} className={`w-1.5 h-1.5 rounded-full ${d <= day.difficulty ? 'bg-adlr-gold' : 'bg-white/10'}`} />
-                        ))}
-                      </span>
-                      {['Leicht','Mittel','Hart'][day.difficulty - 1]}
-                    </span>
+                    {day.duration_min && <span className="flex items-center gap-1"><Clock size={12} /> {day.duration_min} {t('Min')}</span>}
                   </div>
 
                   {/* Training session controls */}
-                  {!completed && (
+                  {(
                     <div className="mb-4">
                       {isTrainingThisDay ? (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => finishTraining(idx)}
+                            onClick={() => {
+                              const open = (day.exercises ?? [])
+                                .map((ex) => ({ name: ex.name, missing: Array.from({ length: ex.sets ?? 1 }, (_, si) => checkedSets.has(setKey(ex.name, si))).filter((c) => !c).length }))
+                                .filter((o) => o.missing > 0);
+                              if (open.length > 0) setConfirm({ kind: 'finish', dayIdx: idx, open });
+                              else finishTraining(idx);
+                            }}
                             className={`adlr-tap flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
                               allExercisesChecked
                                 ? 'bg-green-500 text-white'
                                 : 'bg-adlr-gold text-black'
                             }`}
                           >
-                            <Check size={16} /> {allExercisesChecked ? 'Training abgeschlossen' : 'Training beenden'}
+                            <Check size={16} /> {allExercisesChecked ? t('Training abgeschlossen') : t('Training beenden')}
                           </button>
                           <button
-                            onClick={stopTraining}
+                            onClick={() => setConfirm({ kind: 'cancel' })}
                             className="adlr-tap px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm flex items-center justify-center gap-1.5"
                           >
-                            <Square size={14} /> Abbrechen
+                            <Square size={14} /> {t('Abbrechen')}
                           </button>
                         </div>
                       ) : (
@@ -643,7 +997,7 @@ export default function PlanScreen() {
                           className="adlr-tap w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
                           style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
                         >
-                          <Dumbbell size={16} /> Training starten
+                          <Dumbbell size={16} /> {completed ? t('Nochmal trainieren') : t('Training starten')}
                         </button>
                       )}
                     </div>
@@ -652,8 +1006,10 @@ export default function PlanScreen() {
                   {day.exercises && day.exercises.length > 0 ? (
                     <div className="space-y-2 mb-4">
                       {day.exercises.map((ex, i) => {
-                        const lastLogs = getLastSessionLogs(day.id, ex.name);
-                        const isChecked = checkedExercises.has(ex.name);
+                        const last = getLastSessionLogs(ex.name);
+                        const lastLogs = last.logs;
+                        const exSets = ex.sets ?? 1;
+                        const isChecked = Array.from({ length: exSets }, (_, si) => checkedSets.has(setKey(ex.name, si))).every(Boolean);
                         const isTraining = isTrainingThisDay;
                         const inputs = setInputs[ex.name] ?? [];
                         const hasLastData = lastLogs.length > 0;
@@ -663,9 +1019,9 @@ export default function PlanScreen() {
                           <div key={i} className={`rounded-xl p-3 transition-all ${isChecked ? 'bg-green-500/5 border border-green-500/20' : 'border border-white/5'}`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                                {/* Checkbox */}
+                                {/* Checkbox — shortcut to check/uncheck all of this exercise's sets at once */}
                                 <button
-                                  onClick={() => isTraining && toggleExerciseCheck(ex.name)}
+                                  onClick={() => isTraining && toggleAllSetsForExercise(ex.name, exSets)}
                                   disabled={!isTraining}
                                   className={`adlr-tap shrink-0 mt-0.5 w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
                                     isTraining
@@ -678,12 +1034,12 @@ export default function PlanScreen() {
                                   {isChecked && <Check size={14} className="text-white" />}
                                 </button>
                                 <div className="flex-1 min-w-0">
-                                  <p className={`text-sm font-medium ${isChecked ? 'text-white/60 line-through' : 'text-white/90'}`}>{ex.name}</p>
+                                  <p className={`text-sm font-medium ${isChecked ? 'text-white/60 line-through' : 'text-white/90'}`}>{t(ex.name)}</p>
                                   <p className="text-xs text-white/40 mt-0.5">
-                                    {ex.sets && `${ex.sets} Sätze`}
-                                    {!vary && prescribed[0]?.reps ? ` · ${prescribed[0].reps} Wdh` : ''}
+                                    {ex.sets && t('{n} Sätze', { n: ex.sets })}
+                                    {!vary && prescribed[0]?.reps ? ` · ${prescribed[0].reps} ${t('Wdh')}` : ''}
                                     {!vary && prescribed[0]?.weight_kg ? <span className="text-adlr-gold/70"> · {prescribed[0].weight_kg} kg</span> : ''}
-                                    {ex.rest_sec ? ` · ${ex.rest_sec}s Pause` : ''}
+                                    {ex.rest_sec ? ` · ${t('{n}s Pause', { n: ex.rest_sec })}` : ''}
                                   </p>
                                   {vary && (
                                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
@@ -698,12 +1054,12 @@ export default function PlanScreen() {
                                   {ex.alternatives?.some((a) => a) && (
                                     <details className="mt-1.5">
                                       <summary className="text-xs text-adlr-gold/70 cursor-pointer flex items-center gap-1.5 list-none [&::-webkit-details-marker]:hidden">
-                                        <Repeat size={12} /> Alternativen
+                                        <Repeat size={12} /> {t('Alternativen')}
                                       </summary>
                                       <div className="mt-1.5 space-y-1 pl-1">
                                         {ex.alternatives.filter((a) => a).map((a, ai) => (
                                           <p key={ai} className="text-xs text-white/60 flex items-center gap-1.5">
-                                            <span className="w-1 h-1 rounded-full bg-adlr-gold/50" /> {a}
+                                            <span className="w-1 h-1 rounded-full bg-adlr-gold/50" /> {t(a)}
                                           </p>
                                         ))}
                                       </div>
@@ -713,46 +1069,83 @@ export default function PlanScreen() {
                                   {/* Last session data */}
                                   {hasLastData && (
                                     <p className="text-xs text-adlr-gold/70 mt-1.5">
-                                      Letztes Mal: {lastLogs.map((l, li) => `${l.weight_kg ?? '—'} kg × ${l.reps ?? '—'} Wdh`).join(' · ')}
+                                      {t('Letztes Mal')}{last.otherGym ? (last.gym ? ` (${last.gym})` : ` (${t('anderes Studio')})`) : ''}: {lastLogs.map((l) => (cardioNames.has(ex.name) ? `${l.duration_sec ? Math.round(l.duration_sec / 60) : '—'} min${l.distance_km != null ? ` · ${l.distance_km} km` : ''}` : `${l.weight_kg ?? '—'} kg × ${l.reps ?? '—'} ${t('Wdh')}`)).join(' · ')}
                                     </p>
                                   )}
                                   {/* Set inputs during active training */}
                                   {isTraining && (
                                     <div className="mt-2.5 space-y-1.5">
-                                      {Array.from({ length: ex.sets ?? 1 }, (_, setIdx) => (
-                                        <div key={setIdx} className="flex items-center gap-2">
-                                          <span className="text-[10px] text-white/30 w-12 shrink-0">Satz {setIdx + 1}</span>
-                                          <input
-                                            type="number"
-                                            value={inputs[setIdx]?.weight ?? ''}
-                                            onChange={(e) => updateSetInput(ex.name, setIdx, 'weight', e.target.value)}
-                                            placeholder="kg"
-                                            className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
-                                          />
-                                          <span className="text-xs text-white/30">×</span>
-                                          <input
-                                            type="number"
-                                            value={inputs[setIdx]?.reps ?? ''}
-                                            onChange={(e) => updateSetInput(ex.name, setIdx, 'reps', e.target.value)}
-                                            placeholder="Wdh"
-                                            className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
-                                          />
-                                          {setIdx === (ex.sets ?? 1) - 1 && ex.rest_sec && (
+                                      {Array.from({ length: exSets }, (_, setIdx) => {
+                                        const setChecked = checkedSets.has(setKey(ex.name, setIdx));
+                                        const setType = inputs[setIdx]?.type ?? 'working';
+                                        return (
+                                          <div key={setIdx} className={`flex items-center gap-2 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors ${setChecked ? 'bg-green-500/10' : ''}`}>
                                             <button
-                                              onClick={() => startRestTimer(ex.rest_sec!, ex.name, setIdx + 1, ex.sets ?? 1, inputs[setIdx]?.reps)}
-                                              className="adlr-tap ml-auto text-xs text-adlr-gold/60 hover:text-adlr-gold flex items-center gap-1"
+                                              onClick={() => toggleSetCheck(ex, setIdx)}
+                                              className={`adlr-tap shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                                                setChecked ? 'bg-green-500 border-green-500' : 'border-white/25 hover:border-adlr-gold'
+                                              }`}
                                             >
-                                              <Timer size={12} /> {ex.rest_sec}s
+                                              {setChecked && <Check size={11} className="text-white" />}
                                             </button>
-                                          )}
-                                        </div>
-                                      ))}
+                                            {/* Tap to cycle: Arbeitssatz -> Aufwärmen -> Dropset */}
+                                            <button
+                                              onClick={() => cycleSetType(ex.name, setIdx)}
+                                              className={`adlr-tap shrink-0 w-9 text-center text-[10px] font-semibold rounded px-0.5 py-0.5 ${
+                                                setType === 'warmup' ? 'text-amber-400' : setType === 'dropset' ? 'text-red-400' : setChecked ? 'text-white/50 line-through' : 'text-white/30'
+                                              }`}
+                                              title={t('Aufwärmen / Arbeitssatz / Dropset')}
+                                            >
+                                              {setType === 'working' ? t('Satz {n}', { n: setIdx + 1 }) : t(SET_TYPE_LABEL[setType])}
+                                            </button>
+                                            {cardioNames.has(ex.name) ? (
+                                              <>
+                                                <input
+                                                  type="number"
+                                                  inputMode="decimal"
+                                                  value={inputs[setIdx]?.min ?? ''}
+                                                  onChange={(e) => updateSetInput(ex.name, setIdx, 'min', e.target.value)}
+                                                  placeholder={t('Min')}
+                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                />
+                                                <span className="text-xs text-white/30">·</span>
+                                                <input
+                                                  type="number"
+                                                  inputMode="decimal"
+                                                  value={inputs[setIdx]?.km ?? ''}
+                                                  onChange={(e) => updateSetInput(ex.name, setIdx, 'km', e.target.value)}
+                                                  placeholder="km"
+                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                />
+                                              </>
+                                            ) : (
+                                              <>
+                                                <input
+                                                  type="number"
+                                                  value={inputs[setIdx]?.weight ?? ''}
+                                                  onChange={(e) => updateSetInput(ex.name, setIdx, 'weight', e.target.value)}
+                                                  placeholder="kg"
+                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                />
+                                                <span className="text-xs text-white/30">×</span>
+                                                <input
+                                                  type="number"
+                                                  value={inputs[setIdx]?.reps ?? ''}
+                                                  onChange={(e) => updateSetInput(ex.name, setIdx, 'reps', e.target.value)}
+                                                  placeholder={t('Wdh')}
+                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                />
+                                              </>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
                               </div>
                               {(() => { const r = libMap?.get(ex.name); return r?.exercise_id && hasDemo(r.exercise_id) ? r : null; })() && (
-                                <button onClick={() => setDemoEx(libMap!.get(ex.name)!)} className="adlr-tap shrink-0 ml-1" style={{ color: 'rgb(var(--adlr-gold))' }} title="Demo anzeigen">
+                                <button onClick={() => setDemoEx(libMap!.get(ex.name)!)} className="adlr-tap shrink-0 ml-1" style={{ color: 'rgb(var(--adlr-gold))' }} title={t('Demo anzeigen')}>
                                   <Play size={16} />
                                 </button>
                               )}
@@ -762,31 +1155,21 @@ export default function PlanScreen() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-sm text-white/30 mb-4">Keine Übungen hinterlegt.</p>
+                    <p className="text-sm text-white/30 mb-4">{day.is_free ? t('Noch keine Übungen — füge deine erste hinzu.') : t('Keine Übungen hinterlegt.')}</p>
+                  )}
+                  {day.is_free && isTrainingThisDay && (
+                    <button
+                      onClick={() => setPickerOpen(true)}
+                      className="adlr-tap w-full mb-4 py-3 rounded-xl text-sm font-medium border border-dashed text-adlr-gold flex items-center justify-center gap-1.5"
+                      style={{ borderColor: 'rgb(var(--adlr-gold) / 0.4)' }}
+                    >
+                      <Plus size={15} /> {t('Übung hinzufügen')}
+                    </button>
                   )}
                   {day.notes && (
                     <div className="bg-adlr-gold/5 border border-adlr-gold/20 rounded-xl p-3 mb-4">
-                      <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-1">Notiz von Peter</p>
+                      <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-1">{t('Notiz von Peter')}</p>
                       <p className="text-sm text-white/70">{day.notes}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-              {justCompleted === idx && (
-                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm px-6 pointer-events-none">
-                  <div className="adlr-pop">
-                    <svg width="100" height="100" viewBox="0 0 100 100" fill="none">
-                      <circle cx="50" cy="50" r="46" stroke="rgb(var(--adlr-gold))" strokeWidth="3" />
-                      <path d="M30 52 L45 66 L70 36" stroke="rgb(var(--adlr-gold))" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="70" style={{ animation: 'adlr-check 0.6s ease forwards', strokeDashoffset: 70 }} />
-                    </svg>
-                  </div>
-                  <p className="adlr-pop mt-4 text-xl font-bold adlr-gold-text">Stark! Training abgeschlossen.</p>
-                  {newPRs.length > 0 && (
-                    <div className="adlr-pop mt-5 px-5 py-4 rounded-2xl adlr-gold-border text-center max-w-xs" style={{ background: 'rgb(var(--adlr-gold) / 0.14)' }}>
-                      <p className="text-xs text-adlr-gold uppercase tracking-[0.2em] mb-2">🎉 Neuer Rekord!</p>
-                      {newPRs.map((pr, i) => (
-                        <p key={i} className="text-sm text-white font-semibold">{pr.exercise_name}: {pr.weight_kg} kg × {pr.reps}</p>
-                      ))}
                     </div>
                   )}
                 </div>
@@ -795,7 +1178,77 @@ export default function PlanScreen() {
           );
         })}
       </div>
+      {pickerOpen && createPortal(
+        <div className="fixed inset-0 z-[65] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">
+            <div className="flex items-center justify-between py-4">
+              <p className="text-lg font-semibold text-white">{t('Übung hinzufügen')}</p>
+              <button onClick={() => setPickerOpen(false)} className="adlr-tap px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
+                {t('Fertig')}{(() => { const n = days.find((d) => d.is_free)?.exercises.length ?? 0; return n > 0 ? ` (${n})` : ''; })()}
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4">
+              <ExerciseLibrary onAdd={addFreeExercise} onDemo={setDemoEx} canAdd />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {demoEx && <LibDemoModal ex={demoEx} onClose={() => setDemoEx(null)} />}
+      {confirm && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => setConfirm(null)}>
+          <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>
+            {confirm.kind === 'finish' ? (
+              <>
+                <p className="text-base font-semibold text-white">{t('Noch nicht alles abgehakt')}</p>
+                <p className="text-sm text-white/55 mt-1 mb-3">
+                  {t(confirm.open.length === 1 ? '{sets} Sätze in {n} Übung sind offen:' : '{sets} Sätze in {n} Übungen sind offen:', { sets: confirm.open.reduce((n, o) => n + o.missing, 0), n: confirm.open.length })}
+                </p>
+                <div className="space-y-1.5 mb-5 max-h-48 overflow-y-auto">
+                  {confirm.open.map((o) => (
+                    <div key={o.name} className="flex items-center justify-between text-sm rounded-lg px-3 py-2" style={{ background: 'rgb(var(--text) / 0.04)' }}>
+                      <span className="text-white/85 truncate">{t(o.name)}</span>
+                      <span className="text-adlr-gold text-xs font-semibold shrink-0 ml-3">{t('{n} offen', { n: o.missing })}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirm(null)} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}>
+                    {t('Weiter trainieren')}
+                  </button>
+                  <button onClick={() => { const i = confirm.dayIdx; setConfirm(null); finishTraining(i); }} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-white/70">
+                    {t('Trotzdem beenden')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-base font-semibold text-white">{t('Training abbrechen?')}</p>
+                <p className="text-sm text-white/55 mt-1 mb-5">{t('Alle Eingaben dieses Trainings gehen verloren und es wird nicht gespeichert.')}</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setConfirm(null)} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}>
+                    {t('Weiter trainieren')}
+                  </button>
+                  <button onClick={() => { setConfirm(null); stopTraining(); }} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-medium bg-red-500/10 border border-red-500/30 text-red-400">
+                    {t('Verwerfen')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+      {finished && (
+        <WorkoutSummary
+          summary={finished.summary}
+          allCompletions={finished.all}
+          mode="finished"
+          newPRs={newPRs}
+          milestoneMsg={milestoneMsg}
+          onClose={() => { setFinished(null); setNewPRs([]); setMilestoneMsg(null); }}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { SectionHeader, Button } from '@/components/ui';
 import { Check } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 interface Upgrade {
   key: string;
@@ -36,17 +37,17 @@ export default function UpgradesScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Geh weiter." subtitle="Für die, die mehr wollen." />
+      <SectionHeader title={t('Geh weiter.')} subtitle={t('Für die, die mehr wollen.')} />
       <div className="space-y-4">
         {UPGRADES.map((u) => {
           const isRequested = requested === u.key;
           return (
             <div key={u.key} className="adlr-card adlr-gold-border p-5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-adlr-gold/5 rounded-full blur-3xl -mr-16 -mt-16" />
-              <p className="text-xs adlr-gold-text font-bold tracking-widest mb-2">{u.title}</p>
-              <p className="text-sm text-white/60 mb-4 leading-relaxed">{u.desc}</p>
+              <p className="text-xs adlr-gold-text font-bold tracking-widest mb-2">{t(u.title)}</p>
+              <p className="text-sm text-white/60 mb-4 leading-relaxed">{t(u.desc)}</p>
               <div className="flex items-center justify-between">
-                <p className="text-lg font-bold text-white">{u.price}</p>
+                <p className="text-lg font-bold text-white">{t(u.price)}</p>
                 <Button
                   variant={isRequested ? 'ghost' : 'gold-outline'}
                   onClick={() => request(u)}
@@ -54,15 +55,15 @@ export default function UpgradesScreen() {
                   className="text-sm"
                 >
                   {isRequested ? (
-                    <span className="flex items-center gap-1.5"><Check size={14} /> An Peter gesendet</span>
-                  ) : u.cta}
+                    <span className="flex items-center gap-1.5"><Check size={14} /> {t('An Peter gesendet')}</span>
+                  ) : t(u.cta)}
                 </Button>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="text-center text-xs text-white/30 mt-8">Bereit für mehr? Peter wartet.</p>
+      <p className="text-center text-xs text-white/30 mt-8">{t('Bereit für mehr? Peter wartet.')}</p>
     </div>
   );
 }

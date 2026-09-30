@@ -1,6 +1,7 @@
 import type { IntakeData } from '@/lib/types';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui';
+import { t } from '@/lib/i18n';
 
 export default function Completion({ data, onContinue }: { data: IntakeData; onContinue: () => void }) {
   const goals = data.goals ?? [];
@@ -12,8 +13,8 @@ export default function Completion({ data, onContinue }: { data: IntakeData; onC
           <path d="M24 42 L36 54 L56 28" stroke="rgb(var(--adlr-gold))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="60" style={{ animation: 'adlr-check 0.6s ease 0.3s forwards', strokeDashoffset: 60 }} />
         </svg>
       </div>
-      <h1 className="text-3xl font-bold tracking-tight mb-2">Willkommen bei ADLR.</h1>
-      <p className="text-white/40 mb-10 max-w-xs">Peter wird deinen Plan vorbereiten.</p>
+      <h1 className="text-3xl font-bold tracking-tight mb-2">{t('Willkommen bei ADLR.')}</h1>
+      <p className="text-white/40 mb-10 max-w-xs">{t('Peter wird deinen Plan vorbereiten.')}</p>
 
       <div className="adlr-card p-6 w-full max-w-sm text-left mb-8">
         <div className="flex items-center gap-4 mb-4">
@@ -22,21 +23,21 @@ export default function Completion({ data, onContinue }: { data: IntakeData; onC
           </div>
           <div>
             <p className="font-semibold">{data.firstName} {data.lastName}</p>
-            <p className="text-xs text-white/40">{data.age} Jahre · {data.heightCm}cm · {data.weightKg}kg</p>
+            <p className="text-xs text-white/40">{t('{n} Jahre', { n: data.age ?? '' })} · {data.heightCm}cm · {data.weightKg}kg</p>
           </div>
         </div>
         <div className="space-y-2 text-sm">
           {goals.length > 0 && (
-            <Row label="Ziele" value={goals.join(', ')} />
+            <Row label={t('Ziele')} value={goals.map((g) => t(g)).join(', ')} />
           )}
-          <Row label="Erfahrung" value={data.experience ?? '—'} />
-          <Row label="Trainingstage" value={(data.trainingDays ?? []).length + ' Tage/Woche'} />
-          <Row label="Commitment" value={`${data.commitmentLevel ?? 3}/5`} />
+          <Row label={t('Erfahrung')} value={data.experience ? t(`exp|${data.experience}`) : '—'} />
+          <Row label={t('Trainingstage')} value={t('{n} Tage/Woche', { n: (data.trainingDays ?? []).length })} />
+          <Row label={t('Commitment')} value={`${data.commitmentLevel ?? 3}/5`} />
         </div>
       </div>
 
-      <Button onClick={onContinue} className="w-full max-w-sm">Zum Dashboard</Button>
-      <p className="text-xs text-white/30 mt-6">Steig auf. Bleib stark.</p>
+      <Button onClick={onContinue} className="w-full max-w-sm">{t('Zum Dashboard')}</Button>
+      <p className="text-xs text-white/30 mt-6">{t('Steig auf. Bleib stark.')}</p>
     </div>
   );
 }

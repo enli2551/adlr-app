@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { THEMES, getTheme, setTheme, type Theme } from '@/lib/theme';
+import { t as tr } from '@/lib/i18n';
 
 // Fixed preview swatches — each shows its own theme's colors regardless of the active theme.
 const SWATCHES: Record<Theme, { bg: string; surface: string; accent: string }> = {
@@ -34,7 +35,7 @@ export default function ThemeSwitcher() {
             </div>
             <div className="flex-1 text-left">
               <p className="text-sm font-medium text-white">{t.label}</p>
-              <p className="text-xs text-white/40">{t.hint}</p>
+              <p className="text-xs text-white/40">{tr(t.hint)}</p>
             </div>
             {on && <Check size={16} className="text-adlr-gold shrink-0" />}
           </button>

@@ -1,34 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import type { Profile, WorkoutCompletion } from '@/lib/types';
+import type { Profile } from '@/lib/types';
 import { SectionHeader, Loading, Card, Input } from '@/components/ui';
 import { Search } from 'lucide-react';
 import ClientDetail from './ClientDetail';
+import { useSearchParams } from 'react-router-dom';
+import { t, fmtDate } from '@/lib/i18n';
 
 export default function ClientsScreen() {
   const { profile } = useAuth();
   const [clients, setClients] = useState<Profile[]>([]);
-  const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [goalFilter, setGoalFilter] = useState('Alle');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(() => params.get('client'));
 
   const load = async () => {
     if (!profile) return;
     setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('created_at', { ascending: false });
     setClients((data ?? []) as Profile[]);
-    const { data: wc } = await supabase.from('workout_completions').select('*');
-    setCompletions((wc ?? []) as WorkoutCompletion[]);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [profile?.id]);
 
   if (loading) return <Loading />;
-  if (selected) return <ClientDetail clientId={selected} onBack={() => { setSelected(null); load(); }} />;
+  if (selected) return <ClientDetail clientId={selected} onBack={() => { setSelected(null); if (params.get('client')) setParams({}, { replace: true }); load(); }} />;
 
   const goals = ['Alle', 'Gewicht reduzieren', 'Muskeln aufbauen', 'Allgemeine Fitness & Energie'];
   const filtered = clients.filter((c) => {
@@ -40,11 +40,11 @@ export default function ClientsScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Klienten" subtitle={`${clients.length} aktiv`} />
+      <SectionHeader title={t('Klienten')} subtitle={t('{n} aktiv', { n: clients.length })} />
 
       <div className="relative mb-3">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Suchen..." className="pl-10" />
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Suchen...')} className="pl-10" />
       </div>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
@@ -56,18 +56,17 @@ export default function ClientsScreen() {
               goalFilter === g ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'
             }`}
           >
-            {g}
+            {t(g)}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-white/30 text-center py-12">Keine Klienten gefunden.</p>
+        <p className="text-sm text-white/30 text-center py-12">{t('Keine Klienten gefunden.')}</p>
       ) : (
         <div className="space-y-3 adlr-stagger">
           {filtered.map((c) => {
-            const clientCompletions = completions.filter((wc) => wc.client_id === c.id);
-            const lastActive = c.last_active ? new Date(c.last_active).toLocaleDateString('de-AT') : '—';
+            const lastActive = c.last_active ? fmtDate(c.last_active) : '—';
             const goal = c.intake?.goals?.[0] ?? '—';
             return (
               <Card key={c.id} onClick={() => setSelected(c.id)}>
@@ -77,11 +76,11 @@ export default function ClientsScreen() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-white text-sm">{c.first_name} {c.last_name}</p>
-                    <p className="text-xs text-white/40 truncate">{goal}</p>
-                    <p className="text-xs text-white/30">Zuletzt aktiv: {lastActive}</p>
+                    <p className="text-xs text-white/40 truncate">{goal === '—' ? goal : t(goal)}</p>
+                    <p className="text-xs text-white/30">{t('Zuletzt aktiv')}: {lastActive}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-white/40">Streak</p>
+                    <p className="text-xs text-white/40">{t('Streak')}</p>
                     <p className="text-adlr-gold font-bold">{c.streak}</p>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import type { IntakeData } from '@/lib/types';
 import { Chip } from '@/components/ui';
+import { t } from '@/lib/i18n';
 
 function Slider({ value, onChange, labels }: { value: number; onChange: (n: number) => void; labels: string[] }) {
   return (
@@ -9,7 +10,7 @@ function Slider({ value, onChange, labels }: { value: number; onChange: (n: numb
       </div>
       <input type="range" min={1} max={5} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
       <div className="flex justify-between text-[10px] text-white/30 mt-1.5">
-        {labels.map((l, i) => <span key={i} className="flex-1 text-center">{l}</span>)}
+        {labels.map((l, i) => <span key={i} className="flex-1 text-center">{t(l)}</span>)}
       </div>
     </div>
   );
@@ -27,30 +28,30 @@ export default function StepNutrition({ data, update }: { data: IntakeData; upda
   return (
     <div className="space-y-7">
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Aktuelle Essgewohnheiten</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Aktuelle Essgewohnheiten')}</p>
         <Slider value={data.eatingHabits ?? 3} onChange={(n) => update({ eatingHabits: n })} labels={['Sehr schlecht', 'Schlecht', 'Okay', 'Gut', 'Sehr clean']} />
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Einschränkungen</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Einschränkungen')}</p>
         <div className="flex gap-2 flex-wrap">
           {RESTRICTIONS.map((r) => (
-            <Chip key={r} active={(data.dietRestrictions ?? []).includes(r)} onClick={() => toggle(r)}>{r}</Chip>
+            <Chip key={r} active={(data.dietRestrictions ?? []).includes(r)} onClick={() => toggle(r)}>{t(r)}</Chip>
           ))}
         </div>
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Wasseraufnahme täglich</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Wasseraufnahme täglich')}</p>
         <div className="flex gap-2">
           {WATER.map((w) => (
-            <Chip key={w} active={data.waterIntake === w} onClick={() => update({ waterIntake: w })}>{w}</Chip>
+            <Chip key={w} active={data.waterIntake === w} onClick={() => update({ waterIntake: w })}>{t(w)}</Chip>
           ))}
         </div>
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Alkohol</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Alkohol')}</p>
         <div className="flex gap-2">
           {ALCOHOL.map((a) => (
-            <Chip key={a} active={data.alcohol === a} onClick={() => update({ alcohol: a })}>{a}</Chip>
+            <Chip key={a} active={data.alcohol === a} onClick={() => update({ alcohol: a })}>{t(a)}</Chip>
           ))}
         </div>
       </div>

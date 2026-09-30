@@ -11,6 +11,7 @@ export interface Profile {
   height_cm: number | null;
   weight_kg: number | null;
   gender: string | null;
+  kcal_target?: number | null; // daily calorie target (set by the trainer)
   email: string | null;
   phone: string | null;
   avatar_url: string | null;
@@ -75,6 +76,7 @@ export interface PlanDay {
   notes: string | null;
   exercises: Exercise[];
   is_rest_day: boolean;
+  is_free?: boolean; // client-side only: ad-hoc "Freies Training" (never stored as a plan day)
 }
 
 export interface Exercise {
@@ -103,6 +105,8 @@ export interface WorkoutCompletion {
   plan_day_id: string | null;
   completed_at: string;
   duration_sec?: number | null;
+  gym?: string | null; // Studio the session was done in (machine weights differ per gym)
+  title?: string | null; // name of a free workout (plan_day_id is null then)
 }
 
 export interface ProgressEntry {
@@ -132,6 +136,7 @@ export interface PersonalRecord {
   weight_kg: number;
   reps: number;
   achieved_at: string;
+  gym?: string | null; // set for machine/cable PRs (gym-specific weights)
 }
 
 export interface DailyCheckin {
@@ -228,6 +233,9 @@ export interface ExerciseSetLog {
   set_number: number;
   weight_kg: number | null;
   reps: number | null;
+  set_type?: 'warmup' | 'working' | 'dropset' | null;
+  duration_sec?: number | null; // cardio
+  distance_km?: number | null;  // cardio
   created_at: string;
 }
 

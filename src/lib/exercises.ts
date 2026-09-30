@@ -21,7 +21,7 @@ export const MUSCLE_GROUPS = [
 // it on every app cold-start was the main driver of Supabase egress, so we persist it
 // in localStorage and only hit the network once per device (until CACHE_VERSION bumps).
 // BUMP CACHE_VERSION whenever the exercises table changes (new exercises via migration).
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 7;
 const CACHE_KEY = 'adlr_exercises_cache';
 const COLUMNS = 'id, name, muscle_group, equipment, tempo, default_sets, default_reps, default_rest_sec, exercise_id, cues';
 
@@ -57,4 +57,11 @@ export async function fetchExercises(): Promise<ExerciseRow[]> {
 export function clearExerciseCache() {
   cache = null;
   try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+}
+
+// Equipment whose load isn't comparable between gyms (different machines/pulley ratios).
+// PRs for these are tracked per Studio; free weights stay global.
+const GYM_DEPENDENT_EQUIPMENT = new Set(['Maschine', 'Kabelzug', 'Smith Machine']);
+export function isGymDependent(equipment: string | undefined | null): boolean {
+  return !!equipment && GYM_DEPENDENT_EQUIPMENT.has(equipment);
 }

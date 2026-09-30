@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { installGlobalTapHaptics } from '@/lib/haptics';
@@ -7,6 +7,7 @@ import ClientLayout from '@/screens/client/ClientLayout';
 import TrainerLayout from '@/screens/trainer/TrainerLayout';
 import Logo from '@/components/Logo';
 import { Loading } from '@/components/ui';
+import { useLang } from '@/lib/i18n';
 
 // Route screens are code-split so the initial bundle stays small (login paints fast);
 // heavy deps like recharts only load on the screens that actually use them.
@@ -17,6 +18,7 @@ const NutritionScreen = lazy(() => import('@/screens/client/NutritionScreen'));
 const CoachScreen = lazy(() => import('@/screens/client/CoachScreen'));
 const UpgradesScreen = lazy(() => import('@/screens/client/UpgradesScreen'));
 const ProfileScreen = lazy(() => import('@/screens/client/ProfileScreen'));
+const HistoryScreen = lazy(() => import('@/screens/client/HistoryScreen'));
 const OverviewScreen = lazy(() => import('@/screens/trainer/OverviewScreen'));
 const ClientsHub = lazy(() => import('@/screens/trainer/ClientsHub'));
 const PlanBuilderScreen = lazy(() => import('@/screens/trainer/PlanBuilderScreen'));
@@ -54,9 +56,12 @@ function Splash() {
 
 export default function App() {
   useEffect(() => { installGlobalTapHaptics(); }, []);
+  // Remount the routed tree on language change so every screen re-renders its strings.
+  const lang = useLang();
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Fragment key={lang}>
         <Suspense fallback={<Splash />}>
         <Routes>
           <Route path="/" element={<Navigate to="/auth" replace />} />
@@ -72,6 +77,7 @@ export default function App() {
           <Route path="/app/coach" element={<ProtectedClient><CoachScreen /></ProtectedClient>} />
           <Route path="/app/upgrades" element={<ProtectedClient><UpgradesScreen /></ProtectedClient>} />
           <Route path="/app/profil" element={<ProtectedClient><ProfileScreen /></ProtectedClient>} />
+          <Route path="/app/verlauf" element={<ProtectedClient><HistoryScreen /></ProtectedClient>} />
 
           {/* Trainer */}
           <Route path="/trainer" element={<ProtectedTrainer><OverviewScreen /></ProtectedTrainer>} />
@@ -84,6 +90,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>
         </Suspense>
+        </Fragment>
       </BrowserRouter>
     </AuthProvider>
   );

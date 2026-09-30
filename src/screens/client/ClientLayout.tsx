@@ -4,6 +4,8 @@ import { CalendarDays, Dumbbell, Apple, MessageSquare, Gem, User } from 'lucide-
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
+import { syncHealth } from '@/lib/health';
+import { t } from '@/lib/i18n';
 
 // Coach (messaging) lives in the header as a chat icon — underused, kept out of the bottom bar.
 const TABS = [
@@ -21,6 +23,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [coachUnread, setCoachUnread] = useState(false);
 
   // Unread indicator for the Coach chat: any trainer message newer than last-seen.
+  // Background health sync (throttled inside syncHealth) on open and when the app returns.
+  useEffect(() => {
+    if (!profile?.id) return;
+    const run = () => { if (document.visibilityState === 'visible') syncHealth(profile.id).catch(() => {}); };
+    run();
+    document.addEventListener('visibilitychange', run);
+    return () => document.removeEventListener('visibilitychange', run);
+  }, [profile?.id]);
+
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
@@ -61,7 +72,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <button
               onClick={() => nav('/app/coach')}
               className="relative w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 adlr-tap"
-              aria-label="Coach / Nachrichten"
+              aria-label={t('Coach / Nachrichten')}
             >
               <MessageSquare size={17} />
               {coachUnread && (
@@ -69,8 +80,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               )}
             </button>
             <div className="text-right">
-              <p className="text-xs font-medium text-white/80">{profile?.first_name ?? 'Klient'}</p>
-              <p className="text-[10px] text-adlr-gold/70">Klient</p>
+              <p className="text-xs font-medium text-white/80">{profile?.first_name ?? t('Klient')}</p>
+              <p className="text-[10px] text-adlr-gold/70">{t('Klient')}</p>
             </div>
             <button
               onClick={() => { signOut(); nav('/auth'); }}
@@ -89,17 +100,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite border-t border-white/5 safe-bottom z-30">
         <div className="flex justify-around items-center py-2">
-          {TABS.map((t) => (
+          {TABS.map((tab) => (
             <NavLink
-              key={t.to}
-              to={t.to}
-              end={t.end}
+              key={tab.to}
+              to={tab.to}
+              end={tab.end}
               className={({ isActive }) =>
                 `flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all ${isActive ? 'text-adlr-gold' : 'text-white/40'}`
               }
             >
-              <t.icon size={20} strokeWidth={1.8} />
-              <span className="text-[10px] font-medium">{t.label}</span>
+              <tab.icon size={20} strokeWidth={1.8} />
+              <span className="text-[10px] font-medium">{t(tab.label)}</span>
             </NavLink>
           ))}
         </div>

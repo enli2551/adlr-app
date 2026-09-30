@@ -1,4 +1,5 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import { t } from '@/lib/i18n';
 
 /**
  * Live rest countdown shown as an ongoing notification with a native ticking
@@ -7,7 +8,7 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
  * On web / non-native platforms every call is a no-op.
  */
 export interface RestChronoPlugin {
-  start(options: { endTime: number; title: string; body: string; ongoing?: boolean }): Promise<void>;
+  start(options: { endTime: number; title: string; body: string; ongoing?: boolean; doneLabel?: string }): Promise<void>;
   stop(): Promise<void>;
   addListener(
     eventName: 'restAction',
@@ -36,7 +37,7 @@ export interface StartRestChronoOptions {
 export async function startRestChrono(opts: StartRestChronoOptions): Promise<void> {
   if (!isNative()) return;
   try {
-    await RestChrono.start({ ongoing: true, ...opts });
+    await RestChrono.start({ ongoing: true, doneLabel: t('✓ Erledigt'), ...opts });
   } catch {
     /* plugin unavailable or notifications not permitted */
   }

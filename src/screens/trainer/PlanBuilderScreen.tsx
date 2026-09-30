@@ -7,8 +7,7 @@ import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, 
 import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
-
-const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+import { t } from '@/lib/i18n';
 
 type Mode = 'list' | 'edit';
 
@@ -70,7 +69,7 @@ export default function PlanBuilderScreen() {
     setCreateError(null);
     const { data, error } = await supabase.from('plans').insert({ trainer_id: profile.id, name }).select().single();
     if (error || !data) {
-      setCreateError(error?.message ?? 'Plan konnte nicht erstellt werden');
+      setCreateError(error?.message ?? t('Plan konnte nicht erstellt werden'));
       setCreating(false);
       return;
     }
@@ -97,7 +96,7 @@ export default function PlanBuilderScreen() {
     setCreateError(null);
     const { data, error } = await supabase.from('plans').insert({ trainer_id: profile.id, name, is_template: true }).select().single();
     if (error || !data) {
-      setCreateError(error?.message ?? 'Vorlage konnte nicht erstellt werden');
+      setCreateError(error?.message ?? t('Vorlage konnte nicht erstellt werden'));
       setCreating(false);
       return;
     }
@@ -267,10 +266,10 @@ export default function PlanBuilderScreen() {
     if (!profile || !activePlan) return;
     const baseName = activePlan.name.replace(/\s*\(Vorlage\)\s*$/, '');
     const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: `${baseName} (Vorlage)`, is_template: true }).select().single();
-    if (!data) { setTemplateMsg('Fehler beim Speichern'); setTimeout(() => setTemplateMsg(null), 2500); return; }
+    if (!data) { setTemplateMsg(t('Fehler beim Speichern')); setTimeout(() => setTemplateMsg(null), 2500); return; }
     await clonePlanDays(activePlan.id, data.id);
     await load();
-    setTemplateMsg('Als Vorlage gespeichert');
+    setTemplateMsg(t('Als Vorlage gespeichert'));
     setTimeout(() => setTemplateMsg(null), 2500);
   };
 
@@ -293,16 +292,16 @@ export default function PlanBuilderScreen() {
       <div className="adlr-fade-in pb-6">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white">Plan Builder</h1>
-            <p className="text-sm text-white/40 mt-0.5">Baue Wochenpläne für deine Klienten</p>
+            <h1 className="text-2xl font-bold text-white">{t('Plan Builder')}</h1>
+            <p className="text-sm text-white/40 mt-0.5">{t('Baue Wochenpläne für deine Klienten')}</p>
           </div>
           <button
-            onClick={async () => { setNewPlanName('Neuer Plan'); await createPlan('Neuer Plan'); }}
+            onClick={async () => { setNewPlanName(t('Neuer Plan')); await createPlan(t('Neuer Plan')); }}
             disabled={creating}
             className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50"
             style={{ background: 'rgb(var(--adlr-gold) / 0.08)', borderColor: 'rgb(var(--adlr-gold) / 0.3)', color: 'rgb(var(--adlr-gold))' }}
           >
-            {creating ? <span className="animate-pulse">…</span> : <Plus size={15} />} Neuer Plan
+            {creating ? <span className="animate-pulse">…</span> : <Plus size={15} />} {t('Neuer Plan')}
           </button>
         </div>
 
@@ -310,7 +309,7 @@ export default function PlanBuilderScreen() {
           <input
             value={newPlanName}
             onChange={(e) => setNewPlanName(e.target.value)}
-            placeholder="Plan Name (z.B. Push/Pull/Legs Woche 1)"
+            placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
             className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
           />
           <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
@@ -320,7 +319,7 @@ export default function PlanBuilderScreen() {
             className="w-full bg-transparent text-sm outline-none mb-3"
             style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
           >
-            <option value="">Klient wählen...</option>
+            <option value="">{t('Klient wählen...')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
             ))}
@@ -328,27 +327,27 @@ export default function PlanBuilderScreen() {
           <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
           <div className="flex items-center gap-3">
             <button
-              onClick={createPlan}
+              onClick={() => createPlan()}
               disabled={!newPlanName.trim()}
               className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
               style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
             >
-              Plan zuweisen
+              {t('Plan zuweisen')}
             </button>
             <button
-              onClick={saveAsTemplate}
+              onClick={() => saveAsTemplate()}
               disabled={!newPlanName.trim()}
               className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
               style={{ color: 'rgb(var(--text) / 0.5)' }}
             >
-              <Copy size={13} /> Als Vorlage
+              <Copy size={13} /> {t('Als Vorlage')}
             </button>
           </div>
         </div>
 
         {plans.some((p) => p.is_template) && (
           <div className="space-y-2 mb-5">
-            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">Vorlagen</p>
+            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Vorlagen')}</p>
             {plans.filter((p) => p.is_template).map((p) => (
               <div
                 key={p.id}
@@ -373,22 +372,22 @@ export default function PlanBuilderScreen() {
                   <>
                     <button onClick={() => selectPlan(p)} className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium text-white">{p.name.replace(/\s*\(Vorlage\)\s*$/, '')}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--adlr-gold) / 0.7)' }}>Vorlage</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--adlr-gold) / 0.7)' }}>{t('Vorlage')}</p>
                     </button>
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); createFromTemplate(p); }}
                         className="adlr-tap flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
                         style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}
-                        title="Plan aus Vorlage erstellen"
+                        title={t('Plan aus Vorlage erstellen')}
                       >
-                        <Plus size={13} /> Plan
+                        <Plus size={13} /> {t('Plan')}
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setRenameValue(p.name.replace(/\s*\(Vorlage\)\s*$/, '')); setRenamingPlanId(p.id); }}
                         className="adlr-tap p-1.5 rounded-lg"
                         style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title="Umbenennen"
+                        title={t('Umbenennen')}
                       >
                         <Pencil size={14} />
                       </button>
@@ -396,7 +395,7 @@ export default function PlanBuilderScreen() {
                         onClick={(e) => { e.stopPropagation(); requestDelete(p); }}
                         className="adlr-tap p-1.5 rounded-lg"
                         style={{ color: pendingDelete === p.id ? '#f87171' : 'rgba(248,113,113,0.4)' }}
-                        title={pendingDelete === p.id ? 'Nochmal tippen zum Löschen' : 'Löschen'}
+                        title={pendingDelete === p.id ? t('Nochmal tippen zum Löschen') : t('Löschen')}
                       >
                         {pendingDelete === p.id ? <Check size={14} /> : <Trash2 size={14} />}
                       </button>
@@ -410,7 +409,7 @@ export default function PlanBuilderScreen() {
 
         {plans.some((p) => !p.is_template) && (
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">Bestehende Pläne</p>
+            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Bestehende Pläne')}</p>
             {plans.filter((p) => !p.is_template).map((p) => (
               <div
                 key={p.id}
@@ -439,14 +438,14 @@ export default function PlanBuilderScreen() {
                   <>
                     <button onClick={() => selectPlan(p)} className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-medium text-white">{p.name}</p>
-                      <p className="text-xs text-white/30 mt-0.5">{p.is_template ? 'Vorlage' : '7-Tage Plan'}</p>
+                      <p className="text-xs text-white/30 mt-0.5">{p.is_template ? t('Vorlage') : t('7-Tage Plan')}</p>
                     </button>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); copyPlan(p); }}
                         className="adlr-tap p-1.5 rounded-lg"
                         style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title="Duplizieren"
+                        title={t('Duplizieren')}
                       >
                         <Copy size={14} />
                       </button>
@@ -454,7 +453,7 @@ export default function PlanBuilderScreen() {
                         onClick={(e) => { e.stopPropagation(); setRenameValue(p.name); setRenamingPlanId(p.id); }}
                         className="adlr-tap p-1.5 rounded-lg"
                         style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title="Umbenennen"
+                        title={t('Umbenennen')}
                       >
                         <Pencil size={14} />
                       </button>
@@ -462,7 +461,7 @@ export default function PlanBuilderScreen() {
                         onClick={(e) => { e.stopPropagation(); requestDelete(p); }}
                         className="adlr-tap p-1.5 rounded-lg"
                         style={{ color: pendingDelete === p.id ? '#f87171' : 'rgba(248,113,113,0.4)' }}
-                        title={pendingDelete === p.id ? 'Nochmal tippen zum Löschen' : 'Löschen'}
+                        title={pendingDelete === p.id ? t('Nochmal tippen zum Löschen') : t('Löschen')}
                       >
                         {pendingDelete === p.id ? <Check size={14} /> : <Trash2 size={14} />}
                       </button>
@@ -484,7 +483,7 @@ export default function PlanBuilderScreen() {
         {plans.length === 0 && !createError && (
           <div className="text-center py-16">
             <Dumbbell size={32} className="mx-auto mb-3 text-white/15" />
-            <p className="text-sm text-white/30">Noch keine Pläne. Erstelle deinen ersten.</p>
+            <p className="text-sm text-white/30">{t('Noch keine Pläne. Erstelle deinen ersten.')}</p>
           </div>
         )}
       </div>
@@ -495,6 +494,15 @@ export default function PlanBuilderScreen() {
   const activeDay = expandedDay !== null ? days[expandedDay] : null;
   const canAdd = expandedDay !== null && days[expandedDay] && !days[expandedDay].is_rest_day;
   void canAdd;
+  // Sequential "Trainingstag N" labels, not literal weekdays — the client no longer
+  // treats these as fixed calendar days, they're just slots in the rotation.
+  let trainingDayCounter = 0;
+  const dayLabels = new Map<string, string>();
+  for (const d of days) {
+    if (d.is_rest_day) continue;
+    trainingDayCounter++;
+    dayLabels.set(d.id, t('Trainingstag {n}', { n: trainingDayCounter }));
+  }
 
   return (
     <div className="adlr-fade-in pb-6">
@@ -513,25 +521,25 @@ export default function PlanBuilderScreen() {
               className="w-full bg-inset border border-white/15 rounded-lg px-2 py-1 text-lg font-bold text-white outline-none"
             />
           ) : (
-            <h1 className="text-lg font-bold text-white truncate">{activePlan?.name ?? 'Neuer Plan'}</h1>
+            <h1 className="text-lg font-bold text-white truncate">{activePlan?.name ?? t('Neuer Plan')}</h1>
           )}
           <p className="text-xs flex items-center gap-1">
             {savingDay !== null ? (
-              <span className="text-adlr-gold/80">Speichern…</span>
+              <span className="text-adlr-gold/80">{t('Speichern…')}</span>
             ) : (
-              <span className="text-green-500/70 flex items-center gap-1"><Check size={11} /> Automatisch gespeichert</span>
+              <span className="text-green-500/70 flex items-center gap-1"><Check size={11} /> {t('Automatisch gespeichert')}</span>
             )}
           </p>
         </div>
         {activePlan && (
           <>
-            <button onClick={() => { setRenameValue(activePlan.name); setRenaming(true); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title="Umbenennen">
+            <button onClick={() => { setRenameValue(activePlan.name); setRenaming(true); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Umbenennen')}>
               <Pencil size={16} />
             </button>
-            <button onClick={() => copyPlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title="Duplizieren">
+            <button onClick={() => copyPlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Duplizieren')}>
               <Copy size={16} />
             </button>
-            <button onClick={() => deletePlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgba(248,113,113,0.4)' }} title="Plan löschen">
+            <button onClick={() => deletePlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgba(248,113,113,0.4)' }} title={t('Plan löschen')}>
               <Trash2 size={16} />
             </button>
           </>
@@ -546,7 +554,7 @@ export default function PlanBuilderScreen() {
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
           >
-            <option value="">Klient wählen...</option>
+            <option value="">{t('Klient wählen...')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
             ))}
@@ -561,14 +569,14 @@ export default function PlanBuilderScreen() {
               ? { background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
               : { background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
           >
-            {assignError ? 'Fehler' : assignSuccess ? <><Check size={12} /> Zugewiesen</> : 'Zuweisen'}
+            {assignError ? t('Fehler') : assignSuccess ? <><Check size={12} /> {t('Zugewiesen')}</> : t('Zuweisen')}
           </button>
         </div>
       )}
 
       {days.length > 0 && (
         <div className="mb-2">
-          <p className="text-xs uppercase tracking-wider text-white/30 mb-2">Trainingstage · tippe einen Tag an, um Übungen hinzuzufügen</p>
+          <p className="text-xs uppercase tracking-wider text-white/30 mb-2">{t('Trainingstage · tippe einen Tag an, um Übungen hinzuzufügen')}</p>
         </div>
       )}
       {days.length > 0 && (
@@ -588,14 +596,14 @@ export default function PlanBuilderScreen() {
                 >
                   <div className="text-left">
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: isOpen ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.4)' }}>
-                      {DAY_NAMES[day.day_of_week]}
+                      {day.is_rest_day ? t('Ruhetag') : dayLabels.get(day.id)}
                     </p>
                     <p className="text-sm font-semibold text-white mt-0.5">
-                      {day.is_rest_day ? 'Ruhetag' : (day.workout_name || 'Training')}
+                      {day.is_rest_day ? t('Ruhetag') : (day.workout_name || t('Training'))}
                     </p>
                     {!day.is_rest_day && (
                       <p className="text-xs text-white/30 mt-0.5">
-                        {exCount > 0 ? `${exCount} ${exCount === 1 ? 'Übung' : 'Übungen'}` : 'Tippen zum Hinzufügen'}
+                        {exCount > 0 ? t(exCount === 1 ? '{n} Übung' : '{n} Übungen', { n: exCount }) : t('Tippen zum Hinzufügen')}
                       </p>
                     )}
                   </div>
@@ -607,7 +615,7 @@ export default function PlanBuilderScreen() {
                         ? { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.4)', borderColor: 'rgb(var(--text) / 0.1)' }
                         : { background: 'rgb(var(--adlr-gold) / 0.1)', color: 'rgb(var(--adlr-gold))', borderColor: 'rgb(var(--adlr-gold) / 0.25)' }}
                     >
-                      {day.is_rest_day ? 'Ruhe' : 'Aktiv'}
+                      {day.is_rest_day ? t('Ruhe') : t('Aktiv')}
                     </button>
                     {isOpen ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
                   </div>
@@ -615,20 +623,12 @@ export default function PlanBuilderScreen() {
 
                 {isOpen && !day.is_rest_day && (
                   <div className="px-4 pb-4 space-y-3 adlr-fade-in">
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        value={day.workout_name ?? ''}
-                        onChange={(e) => updateDay(idx, { workout_name: e.target.value })}
-                        placeholder="Workout Name"
-                        className="bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
-                      />
-                      <input
-                        value={day.focus ?? ''}
-                        onChange={(e) => updateDay(idx, { focus: e.target.value })}
-                        placeholder="Fokus (z.B. Rücken)"
-                        className="bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
-                      />
-                    </div>
+                    <input
+                      value={day.workout_name ?? ''}
+                      onChange={(e) => updateDay(idx, { workout_name: e.target.value })}
+                      placeholder={t('Workout Name')}
+                      className="w-full bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
+                    />
 
                     {(day.exercises ?? []).length > 0 && (
                       <div className="space-y-1.5">
@@ -642,11 +642,11 @@ export default function PlanBuilderScreen() {
                               <Dumbbell size={14} style={{ color: 'rgb(var(--adlr-gold))' }} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white mb-2">{ex.name}</p>
+                              <p className="text-sm font-medium text-white mb-2">{t(ex.name)}</p>
                               <div className="space-y-2">
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
-                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">Sätze</p>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Sätze')}</p>
                                     <input
                                       type="number"
                                       value={ex.sets ?? ''}
@@ -655,7 +655,7 @@ export default function PlanBuilderScreen() {
                                     />
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">Pause (s)</p>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Pause (s)')}</p>
                                     <input
                                       type="number"
                                       value={ex.rest_sec ?? ''}
@@ -668,13 +668,13 @@ export default function PlanBuilderScreen() {
                                 <div className="space-y-1.5 pt-0.5">
                                   <div className="flex items-center gap-2 px-0.5">
                                     <span className="w-11 shrink-0" />
-                                    <span className="w-16 text-[9px] text-adlr-gold/60 uppercase tracking-wide text-center">Gewicht</span>
+                                    <span className="w-16 text-[9px] text-adlr-gold/60 uppercase tracking-wide text-center">{t('Gewicht')}</span>
                                     <span className="w-4" />
-                                    <span className="w-16 text-[9px] text-white/40 uppercase tracking-wide text-center">Wdh</span>
+                                    <span className="w-16 text-[9px] text-white/40 uppercase tracking-wide text-center">{t('Wdh')}</span>
                                   </div>
                                   {setDetailsOf(ex).map((sd, si) => (
                                     <div key={si} className="flex items-center gap-2">
-                                      <span className="text-[10px] text-white/40 w-11 shrink-0">Satz {si + 1}</span>
+                                      <span className="text-[10px] text-white/40 w-11 shrink-0">{t('Satz {n}', { n: si + 1 })}</span>
                                       <input
                                         type="number"
                                         value={sd.weight_kg ?? ''}
@@ -687,7 +687,7 @@ export default function PlanBuilderScreen() {
                                         type="number"
                                         value={sd.reps ?? ''}
                                         onChange={(e) => updateSetDetail(idx, exIdx, si, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
-                                        placeholder="Wdh"
+                                        placeholder={t('Wdh')}
                                         className="w-16 bg-inset border border-white/10 rounded-md px-1 py-1.5 text-sm text-white placeholder-white/25 outline-none text-center"
                                       />
                                     </div>
@@ -696,7 +696,7 @@ export default function PlanBuilderScreen() {
                               </div>
                               {/* Alternatives — searchable picker, for when a machine is occupied */}
                               <div className="mt-2.5">
-                                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">Alternativen · bei besetztem Gerät</p>
+                                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">{t('Alternativen · bei besetztem Gerät')}</p>
                                 <div className="space-y-1.5">
                                   {[0, 1].map((ai) => {
                                     const val = ex.alternatives?.[ai] ?? '';
@@ -710,7 +710,7 @@ export default function PlanBuilderScreen() {
                                             : { background: 'rgb(var(--text) / 0.03)', borderColor: 'rgb(var(--text) / 0.1)', color: 'rgb(var(--text) / 0.4)' }}
                                         >
                                           <Search size={13} className="shrink-0 opacity-60" />
-                                          <span className="truncate">{val || `Alternative ${ai + 1} wählen…`}</span>
+                                          <span className="truncate">{val ? t(val) : t('Alternative {n} wählen…', { n: ai + 1 })}</span>
                                         </button>
                                         {val && (
                                           <button
@@ -733,7 +733,7 @@ export default function PlanBuilderScreen() {
                                   onClick={() => setDemoEx(libByName.get(ex.name)!)}
                                   className="adlr-tap p-1.5 rounded-lg"
                                   style={{ color: 'rgb(var(--adlr-gold))' }}
-                                  title="Vorschau"
+                                  title={t('Vorschau')}
                                 >
                                   <Play size={13} />
                                 </button>
@@ -777,13 +777,13 @@ export default function PlanBuilderScreen() {
                     {showAddEx && expandedDay === idx ? (
                       <div className="rounded-xl p-3 space-y-2 adlr-fade-in" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgb(var(--text) / 0.1)' }}>
                         <div className="flex justify-between items-center">
-                          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>Eigene Übung</p>
+                          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Eigene Übung')}</p>
                           <button onClick={() => setShowAddEx(false)}><X size={14} className="text-white/40" /></button>
                         </div>
                         <input
                           value={exForm.name}
                           onChange={(e) => setExForm({ ...exForm, name: e.target.value })}
-                          placeholder="Übungsname"
+                          placeholder={t('Übungsname')}
                           className="w-full bg-inset border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
                         />
                         <div className="grid grid-cols-2 gap-2">
@@ -798,7 +798,7 @@ export default function PlanBuilderScreen() {
                               type="number"
                               value={exForm[key] ?? ''}
                               onChange={(e) => setExForm({ ...exForm, [key]: Number(e.target.value) })}
-                              placeholder={label}
+                              placeholder={t(label)}
                               className="bg-inset border border-white/10 rounded-lg px-2 py-2.5 text-sm text-white placeholder-white/25 outline-none text-center"
                             />
                           ))}
@@ -809,7 +809,7 @@ export default function PlanBuilderScreen() {
                           className="adlr-tap w-full py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40"
                           style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
                         >
-                          Zum Tag hinzufügen
+                          {t('Zum Tag hinzufügen')}
                         </button>
                       </div>
                     ) : (
@@ -818,7 +818,7 @@ export default function PlanBuilderScreen() {
                         className="adlr-tap w-full py-2.5 rounded-xl text-sm border border-dashed flex items-center justify-center gap-2"
                         style={{ borderColor: 'rgb(var(--text) / 0.12)', color: 'rgb(var(--text) / 0.35)' }}
                       >
-                        <Plus size={14} /> Eigene Übung hinzufügen
+                        <Plus size={14} /> {t('Eigene Übung hinzufügen')}
                       </button>
                     )}
                   </div>
@@ -834,7 +834,7 @@ export default function PlanBuilderScreen() {
           <input
             value={newPlanName}
             onChange={(e) => setNewPlanName(e.target.value)}
-            placeholder="Plan Name (z.B. Push/Pull/Legs Woche 1)"
+            placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
             className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
             autoFocus
           />
@@ -845,7 +845,7 @@ export default function PlanBuilderScreen() {
             className="w-full bg-transparent text-sm outline-none mb-3"
             style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
           >
-            <option value="">Klient wählen...</option>
+            <option value="">{t('Klient wählen...')}</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
             ))}
@@ -853,20 +853,20 @@ export default function PlanBuilderScreen() {
           <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
           <div className="flex items-center gap-3">
             <button
-              onClick={createPlan}
+              onClick={() => createPlan()}
               disabled={!newPlanName.trim()}
               className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
               style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
             >
-              Plan zuweisen
+              {t('Plan zuweisen')}
             </button>
             <button
-              onClick={saveAsTemplate}
+              onClick={() => saveAsTemplate()}
               disabled={!newPlanName.trim()}
               className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
               style={{ color: 'rgb(var(--text) / 0.5)' }}
             >
-              <Copy size={13} /> Als Vorlage
+              <Copy size={13} /> {t('Als Vorlage')}
             </button>
           </div>
         </div>
@@ -874,12 +874,12 @@ export default function PlanBuilderScreen() {
 
       {days.length > 0 && expandedDay === null && (
         <div className="mb-4 px-4 py-3 rounded-xl text-center adlr-fade-in" style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px dashed rgb(var(--adlr-gold) / 0.25)' }}>
-          <p className="text-sm" style={{ color: 'rgb(var(--adlr-gold))' }}>Tippe oben auf einen Trainingstag (z.B. Montag), um Übungen hinzuzufügen</p>
+          <p className="text-sm" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Tippe oben auf einen Trainingstag (z.B. Montag), um Übungen hinzuzufügen')}</p>
         </div>
       )}
       {days.length === 0 && (
         <div className="mb-4 px-4 py-3 rounded-xl text-center" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
-          <p className="text-sm text-white/40">Erstelle zuerst einen Plan, um Trainingstage zu sehen.</p>
+          <p className="text-sm text-white/40">{t('Erstelle zuerst einen Plan, um Trainingstage zu sehen.')}</p>
         </div>
       )}
       {activePlan && days.length > 0 && (
@@ -890,7 +890,7 @@ export default function PlanBuilderScreen() {
               className="adlr-tap w-full py-3 rounded-xl text-sm font-medium mb-3 flex items-center justify-center gap-2"
               style={{ background: 'rgb(var(--adlr-gold) / 0.08)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.3)' }}
             >
-              <Copy size={15} /> {templateMsg ?? 'Als Vorlage speichern'}
+              <Copy size={15} /> {templateMsg ?? t('Als Vorlage speichern')}
             </button>
           )}
           <button
@@ -898,7 +898,7 @@ export default function PlanBuilderScreen() {
             className="adlr-tap w-full py-3.5 rounded-xl text-sm font-semibold mb-4 flex items-center justify-center gap-2"
             style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
           >
-            <Check size={16} /> Fertig — alles gespeichert
+            <Check size={16} /> {t('Fertig — alles gespeichert')}
           </button>
         </>
       )}
@@ -906,7 +906,7 @@ export default function PlanBuilderScreen() {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4" onClick={() => setAltPicker(null)}>
           <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
-              <p className="text-sm font-semibold text-white">Alternative {altPicker.slot + 1} wählen</p>
+              <p className="text-sm font-semibold text-white">{t('Alternative {n} wählen', { n: altPicker.slot + 1 })}</p>
               <button onClick={() => setAltPicker(null)} className="adlr-tap p-1 text-white/50"><X size={18} /></button>
             </div>
             <div className="overflow-y-auto p-3">

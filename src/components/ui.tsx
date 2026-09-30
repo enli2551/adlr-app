@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode, type CSSProperties } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, type CSSProperties, useState } from 'react';
 
 const baseBtn = 'adlr-tap font-semibold rounded-xl px-5 py-3.5 text-sm tracking-wide transition-all disabled:cursor-not-allowed';
 
@@ -127,6 +127,26 @@ export function StatCard({ label, value, accent }: { label: string; value: React
     <div className="adlr-card p-4">
       <div className="text-2xl font-bold" style={accent ? { color: 'rgb(var(--adlr-gold))' } : { color: 'rgb(var(--text))' }}>{value}</div>
       <div className="text-xs text-white/40 mt-1 uppercase tracking-wide">{label}</div>
+    </div>
+  );
+}
+
+/** Card with a tappable header; body is only mounted when open (lazy content like photos). */
+export function CollapsibleCard({ title, subtitle, defaultOpen = false, className = '', children }: {
+  title: ReactNode; subtitle?: ReactNode; defaultOpen?: boolean; className?: string; children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`adlr-card p-5 ${className}`}>
+      <button onClick={() => setOpen(!open)} className="adlr-tap w-full flex items-center justify-between text-left">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white/80">{title}</p>
+          {subtitle && <p className="text-xs text-white/40 mt-0.5 truncate">{subtitle}</p>}
+        </div>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="shrink-0 text-white/35 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && <div className="mt-3 adlr-fade-in">{children}</div>}
     </div>
   );
 }

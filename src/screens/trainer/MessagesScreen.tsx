@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { Message, Profile, UpsellRequest } from '@/lib/types';
 import { SectionHeader, Loading, Card, Button, Input } from '@/components/ui';
 import { ArrowLeft, Star } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 const TEMPLATES = [
   'Alles klar. Wir machen das.',
@@ -27,7 +28,7 @@ export default function MessagesScreen() {
     setLoading(true);
     const [c, u] = await Promise.all([
       supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('first_name'),
-      supabase.from('upsell_requests').select('*, profiles(first_name,last_name)').order('created_at', { ascending: false }),
+      supabase.from('upsell_requests').select('*, profiles!inner(first_name,last_name)').eq('profiles.trainer_id', profile.id).order('created_at', { ascending: false }),
     ]);
     setClients((c.data ?? []) as Profile[]);
     setUpsells((u.data ?? []) as UpsellRequest[]);
@@ -58,7 +59,7 @@ export default function MessagesScreen() {
     return (
       <div className="adlr-fade-in">
         <button onClick={() => setActiveClient(null)} className="flex items-center gap-2 text-white/50 text-sm mb-4 adlr-tap">
-          <ArrowLeft size={16} /> Inbox
+          <ArrowLeft size={16} /> {t('Inbox')}
         </button>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold font-bold">
@@ -68,7 +69,7 @@ export default function MessagesScreen() {
         </div>
         <Card className="p-0 overflow-hidden">
           <div ref={scrollRef} className="h-72 overflow-y-auto px-5 py-3 space-y-3">
-            {messages.length === 0 && <p className="text-sm text-white/30 text-center py-12">Noch keine Nachrichten.</p>}
+            {messages.length === 0 && <p className="text-sm text-white/30 text-center py-12">{t('Noch keine Nachrichten.')}</p>}
             {messages.map((m) => (
               <div key={m.id} className={`flex ${m.sender === 'trainer' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${m.sender === 'trainer' ? 'bg-adlr-gold text-black rounded-br-sm' : 'bg-white/10 text-white rounded-bl-sm'}`}>
@@ -78,13 +79,13 @@ export default function MessagesScreen() {
             ))}
           </div>
           <div className="flex gap-2 p-3 border-t border-white/5">
-            <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Antwort..." onKeyDown={(e) => e.key === 'Enter' && send()} />
-            <Button onClick={send} disabled={!text.trim()} className="px-4">Senden</Button>
+            <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Antwort...')} onKeyDown={(e) => e.key === 'Enter' && send()} />
+            <Button onClick={send} disabled={!text.trim()} className="px-4">{t('Senden')}</Button>
           </div>
         </Card>
         <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-          {TEMPLATES.map((t) => (
-            <button key={t} onClick={() => setText(t)} className="adlr-tap px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 whitespace-nowrap">{t}</button>
+          {TEMPLATES.map((tpl) => (
+            <button key={tpl} onClick={() => setText(t(tpl))} className="adlr-tap px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 whitespace-nowrap">{t(tpl)}</button>
           ))}
         </div>
       </div>
@@ -96,12 +97,12 @@ export default function MessagesScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Nachrichten" subtitle="Deine Inbox." />
+      <SectionHeader title={t('Nachrichten')} subtitle={t('Deine Inbox.')} />
 
       {/* Upsell highlights */}
       {upsells.filter((u) => u.status === 'pending').length > 0 && (
         <Card className="mb-4 adlr-gold-border">
-          <p className="text-xs text-adlr-gold uppercase tracking-wide mb-3 flex items-center gap-1"><Star size={12} /> Upsell-Anfragen</p>
+          <p className="text-xs text-adlr-gold uppercase tracking-wide mb-3 flex items-center gap-1"><Star size={12} /> {t('Upsell-Anfragen')}</p>
           <div className="space-y-2">
             {upsells.filter((u) => u.status === 'pending').map((u) => (
               <div key={u.id} className="flex justify-between items-center text-sm">
@@ -114,7 +115,7 @@ export default function MessagesScreen() {
       )}
 
       {clients.length === 0 ? (
-        <p className="text-sm text-white/30 text-center py-12">Noch keine Klienten.</p>
+        <p className="text-sm text-white/30 text-center py-12">{t('Noch keine Klienten.')}</p>
       ) : (
         <div className="space-y-2">
           {clients.map((c) => {
@@ -127,7 +128,7 @@ export default function MessagesScreen() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-white">{c.first_name} {c.last_name}</p>
-                    {uCount > 0 && <p className="text-xs text-adlr-gold">{uCount} Upsell-Anfrage{uCount > 1 ? 'n' : ''}</p>}
+                    {uCount > 0 && <p className="text-xs text-adlr-gold">{t(uCount > 1 ? '{n} Upsell-Anfragen' : '{n} Upsell-Anfrage', { n: uCount })}</p>}
                   </div>
                 </div>
               </Card>

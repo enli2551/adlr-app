@@ -1,4 +1,5 @@
 import type { WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
+import { fmtDate, fmtNum } from '@/lib/i18n';
 
 export type ReportMetric = 'workouts' | 'duration' | 'volume' | 'sets';
 
@@ -90,7 +91,7 @@ export function trailingMonths(
 }
 
 export function fmtVolume(kg: number): string {
-  return kg >= 1000 ? `${(kg / 1000).toFixed(kg >= 10000 ? 0 : 1)}k kg` : `${kg} kg`;
+  return kg >= 1000 ? `${fmtNum(Number((kg / 1000).toFixed(kg >= 10000 ? 0 : 1)))}k kg` : `${fmtNum(kg)} kg`;
 }
 export function fmtDuration(min: number): string {
   const h = Math.floor(min / 60);
@@ -106,4 +107,8 @@ export function fmtDelta(metric: ReportMetric, cur: number, prev: number): strin
   return `${sign} ${abs}`;
 }
 
-export const MONTH_NAMES_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+/** Localized, capitalized month name (0-11) in the current app language. */
+export function monthName(month: number): string {
+  const s = fmtDate(new Date(2000, month, 1), { month: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

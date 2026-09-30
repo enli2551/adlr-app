@@ -29,7 +29,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  */
 @CapacitorPlugin(name = "RestChrono")
 public class RestChronoPlugin extends Plugin {
-    private static final String CHANNEL_ID = "rest-timer";
+    // Own channel, separate from the JS-side "rest-timer" (IMPORTANCE_HIGH) channel used
+    // for the "Pause vorbei" alert. Android channel importance is fixed at first creation
+    // and can't be changed later, so sharing one id between a LOW-importance ongoing
+    // chronometer and a HIGH-importance alert silently downgrades whichever is created
+    // second — since this plugin loads before the JS app runs, it always created first.
+    private static final String CHANNEL_ID = "rest-timer-live";
     private static final int NOTIF_ID = 8002;
     static final String ACTION_DONE = "com.adlr.app.REST_DONE";
     static final String ACTION_ADD30 = "com.adlr.app.REST_ADD30";
@@ -77,9 +82,9 @@ public class RestChronoPlugin extends Plugin {
             if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
                 NotificationChannel ch = new NotificationChannel(
                         CHANNEL_ID,
-                        "Trainings-Pausen-Timer",
+                        getContext().getString(R.string.rest_channel_name),
                         NotificationManager.IMPORTANCE_LOW);
-                ch.setDescription("Live-Countdown für Pausen zwischen Sätzen");
+                ch.setDescription(getContext().getString(R.string.rest_channel_desc));
                 nm.createNotificationChannel(ch);
             }
         }
@@ -92,6 +97,7 @@ public class RestChronoPlugin extends Plugin {
         if (endTime == null) endTime = System.currentTimeMillis();
         String title = call.getString("title", "Pause läuft");
         String body = call.getString("body", "");
+        String doneLabel = call.getString("doneLabel", "✓ Erledigt");
         boolean ongoing = Boolean.TRUE.equals(call.getBoolean("ongoing", true));
 
         PendingIntent donePi = actionIntent(ACTION_DONE, 1);
@@ -112,7 +118,7 @@ public class RestChronoPlugin extends Plugin {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setUsesChronometer(true)
                 .setWhen(endTime)
-                .addAction(0, "✓ Erledigt", donePi)
+                .addAction(0, doneLabel, donePi)
                 .addAction(0, "+30s", add30Pi);
         if (contentPi != null) b.setContentIntent(contentPi);
         if (Build.VERSION.SDK_INT >= 24) {

@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Users, Calendar } from 'lucide-react';
 import ClientsScreen from './ClientsScreen';
 import CalendarScreen from './CalendarScreen';
+import { t } from '@/lib/i18n';
 
 type View = 'klienten' | 'kalender';
 
@@ -27,19 +28,19 @@ export default function ClientsHub() {
   return (
     <div>
       <div className="flex gap-1.5 p-1 rounded-xl mb-4" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.06)' }}>
-        {tabs.map((t) => {
-          const active = view === t.id;
+        {tabs.map((tab) => {
+          const active = view === tab.id;
           return (
             <button
-              key={t.id}
-              onClick={() => setView(t.id)}
+              key={tab.id}
+              onClick={() => setView(tab.id)}
               className="adlr-tap flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all"
               style={active
                 ? { background: 'rgb(var(--adlr-gold))', color: '#000' }
                 : { background: 'transparent', color: 'rgb(var(--text) / 0.5)' }}
             >
-              <t.icon size={15} strokeWidth={active ? 2.2 : 1.8} />
-              {t.label}
+              <tab.icon size={15} strokeWidth={active ? 2.2 : 1.8} />
+              {t(tab.label)}
             </button>
           );
         })}

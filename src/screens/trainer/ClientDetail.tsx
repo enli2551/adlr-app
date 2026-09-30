@@ -1,11 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
-import { Button, Card, Field, Input, Textarea, Loading, SectionHeader } from '@/components/ui';
+import { Card, Loading, CollapsibleCard } from '@/components/ui';
 import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight } from 'lucide-react';
 import MonthlyReport from '@/components/MonthlyReport';
+import TrainingHistory from '@/components/TrainingHistory';
+import ExerciseProgress from '@/components/ExerciseProgress';
+import PersonalRecords from '@/components/PersonalRecords';
+import ClientSummary from '@/components/ClientSummary';
+import ClientPackageCard from '@/components/business/ClientPackageCard';
+import HealthSummary from '@/components/HealthSummary';
+import { fetchExercises } from '@/lib/exercises';
+import { useAsyncData } from '@/lib/useAsyncData';
 import SignedPhoto from '@/components/SignedPhoto';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { t, fmtDate } from '@/lib/i18n';
 
 const GOAL_LABELS: Record<string, string> = {
   nutrition: 'Ernährungs-Analyse',
@@ -16,6 +26,7 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 export default function ClientDetail({ clientId, onBack }: { clientId: string; onBack: () => void }) {
+  const { profile } = useAuth();
   const [client, setClient] = useState<Profile | null>(null);
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
@@ -23,16 +34,18 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
   const [setLogs, setSetLogs] = useState<ExerciseSetLog[]>([]);
   const [planDays, setPlanDays] = useState<{ id: string; workout_name: string | null }[]>([]);
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const { data: library } = useAsyncData(fetchExercises, []);
+  const muscleByName = useMemo(() => new Map((library ?? []).map((e) => [e.name, e.muscle_group])), [library]);
+  const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? 'Sonstige', [muscleByName]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activePlan, setActivePlan] = useState<ClientPlan | null>(null);
 
   const load = async () => {
+    if (!profile) return;
     setLoading(true);
     const [c, e, p, ph, wc, cp, pl, sl] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', clientId).maybeSingle(),
@@ -41,7 +54,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       supabase.from('progress_photos').select('*').eq('client_id', clientId).order('photo_date', { ascending: false }),
       supabase.from('workout_completions').select('*').eq('client_id', clientId).order('completed_at', { ascending: false }),
       supabase.from('client_plans').select('*').eq('client_id', clientId).eq('is_active', true).maybeSingle(),
-      supabase.from('plans').select('*'),
+      supabase.from('plans').select('*').eq('trainer_id', profile.id),
       supabase.from('exercise_set_logs').select('*').eq('client_id', clientId).order('created_at', { ascending: true }),
     ]);
     setClient(c.data as Profile | null);
@@ -64,13 +77,8 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [clientId]);
+  useEffect(() => { load(); }, [clientId, profile?.id]);
 
-  const saveNote = async () => {
-    if (!client || !note.trim()) return;
-    await supabase.from('session_notes').insert({ client_id: clientId, trainer_id: client.trainer_id ?? '', body: note.trim() });
-    setNote('');
-  };
 
   // Remove client from this trainer's roster (unlink — keeps the account + data, RLS-safe).
   const removeClient = async () => {
@@ -90,35 +98,17 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   };
 
   if (loading) return <Loading />;
-  if (!client) return <p className="text-white/40 text-center py-12">Klient nicht gefunden.</p>;
+  if (!client) return <p className="text-white/40 text-center py-12">{t('Klient nicht gefunden.')}</p>;
 
   const intake = client.intake ?? {};
-  const attendance = completions.length > 0 ? Math.min(100, Math.round((completions.length / 7) * 100)) : 0;
-  const chartData = entries.map((e) => ({ date: new Date(e.logged_at).toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' }), gewicht: e.weight_kg }));
+  const chartData = entries.map((e) => ({ date: fmtDate(e.logged_at, { day: '2-digit', month: '2-digit' }), gewicht: e.weight_kg }));
 
-  // Workout history: set logs grouped per completed session, newest first.
-  const dayNameById = new Map(planDays.map((d) => [d.id, d.workout_name]));
-  const logsByCompletion = new Map<string, ExerciseSetLog[]>();
-  for (const l of setLogs) {
-    if (!l.workout_completion_id) continue;
-    const arr = logsByCompletion.get(l.workout_completion_id) ?? [];
-    arr.push(l);
-    logsByCompletion.set(l.workout_completion_id, arr);
-  }
-  const groupByExercise = (logs: ExerciseSetLog[]): Map<string, ExerciseSetLog[]> => {
-    const m = new Map<string, ExerciseSetLog[]>();
-    for (const l of logs) {
-      const arr = m.get(l.exercise_name) ?? [];
-      arr.push(l);
-      m.set(l.exercise_name, arr);
-    }
-    return m;
-  };
+  const dayNameById = new Map(planDays.map((d) => [d.id, d.workout_name ?? t('Training')]));
 
   return (
     <div className="adlr-fade-in">
       <button onClick={onBack} className="flex items-center gap-2 text-white/50 text-sm mb-4 adlr-tap">
-        <ArrowLeft size={16} /> Zurück
+        <ArrowLeft size={16} /> {t('Zurück')}
       </button>
 
       {/* Profile header */}
@@ -128,10 +118,15 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">{client.first_name} {client.last_name}</h1>
-          <p className="text-sm text-white/40">{client.age} Jahre · {client.height_cm}cm · {client.weight_kg}kg</p>
-          <p className="text-xs text-adlr-gold/70">Streak: {client.streak} · Anwesenheit: {attendance}%</p>
+          <p className="text-sm text-white/40">{t('{n} Jahre', { n: client.age ?? '' })} · {client.height_cm}cm · {client.weight_kg}kg</p>
         </div>
       </div>
+
+      {/* At-a-glance summary + private trainer notes */}
+      <ClientSummary client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />
+
+      {/* Package, sessions used, payments */}
+      <ClientPackageCard clientId={clientId} />
 
       {/* Monthly report — only once the client has data from an earlier calendar month */}
       {setLogs.some((l) => { const d = new Date(l.created_at); return d.getFullYear() * 12 + d.getMonth() < new Date().getFullYear() * 12 + new Date().getMonth(); }) && (
@@ -144,8 +139,8 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
             <BarChart3 size={18} className="text-adlr-gold" />
           </div>
           <div className="flex-1 text-left">
-            <p className="text-sm font-semibold text-white">Monatsbericht</p>
-            <p className="text-xs text-white/50">Der Monat von {client.first_name} in Zahlen</p>
+            <p className="text-sm font-semibold text-white">{t('Monatsbericht')}</p>
+            <p className="text-xs text-white/50">{t('Der Monat von {name} in Zahlen', { name: client.first_name ?? '' })}</p>
           </div>
           <ChevronRight size={18} className="text-adlr-gold shrink-0" />
         </button>
@@ -153,24 +148,23 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       {showReport && <MonthlyReport clientId={clientId} clientName={client.first_name ?? undefined} onClose={() => setShowReport(false)} />}
 
       {/* Intake summary */}
-      <Card className="mb-4">
-        <p className="text-sm font-medium text-white/80 mb-3">Intake Antworten</p>
+      <CollapsibleCard className="mb-4" title={t('Intake Antworten')} subtitle={(intake.goals ?? []).map((x) => t(x)).join(', ') || t('Onboarding-Angaben')}>
         <div className="space-y-1.5 text-sm">
-          <Row label="Ziele" value={(intake.goals ?? []).join(', ')} />
-          <Row label="Erfahrung" value={intake.experience} />
-          <Row label="Trainingstage" value={(intake.trainingDays ?? []).length + ' Tage'} />
-          <Row label="Equipment" value={intake.equipment} />
-          <Row label="Verletzungen" value={(intake.injuries ?? []).join(', ')} />
-          <Row label="Ernährung" value={intake.dietRestrictions ? (intake.dietRestrictions).join(', ') : '—'} />
-          <Row label="Commitment" value={intake.commitmentLevel ? `${intake.commitmentLevel}/5` : '—'} />
-          <Row label="Warum jetzt" value={intake.whyNow} />
+          <Row label={t('Ziele')} value={(intake.goals ?? []).map((x) => t(x)).join(', ')} />
+          <Row label={t('Erfahrung')} value={intake.experience && t(`exp|${intake.experience}`)} />
+          <Row label={t('Trainingstage')} value={t('{n} Tage', { n: (intake.trainingDays ?? []).length })} />
+          <Row label={t('Equipment')} value={intake.equipment && t(intake.equipment)} />
+          <Row label={t('Verletzungen')} value={(intake.injuries ?? []).map((x) => t(x)).join(', ')} />
+          <Row label={t('Ernährung')} value={intake.dietRestrictions ? intake.dietRestrictions.map((x) => t(x)).join(', ') : '—'} />
+          <Row label={t('Commitment')} value={intake.commitmentLevel ? `${intake.commitmentLevel}/5` : '—'} />
+          <Row label={t('Warum jetzt')} value={intake.whyNow} />
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* Weight chart */}
       {chartData.length > 0 && (
         <Card className="mb-4">
-          <p className="text-sm font-medium text-white/80 mb-3">Gewichtsverlauf</p>
+          <p className="text-sm font-medium text-white/80 mb-3">{t('Gewichtsverlauf')}</p>
           <ResponsiveContainer width="100%" height={140}>
             <LineChart data={chartData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
               <Line type="monotone" dataKey="gewicht" stroke="rgb(var(--adlr-gold))" strokeWidth={2} dot={{ fill: 'rgb(var(--adlr-gold))', r: 3 }} />
@@ -182,114 +176,60 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         </Card>
       )}
 
+      {/* Apple Health / Health Connect (last 7 days) */}
+      <Card className="mb-4">
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Gesundheit · letzte 7 Tage')}</p>
+        <HealthSummary clientId={clientId} emptyText={t('Noch keine Daten — der Klient kann Apple Health / Health Connect im Profil verbinden.')} />
+      </Card>
+
+      {/* Strength curve per exercise */}
+      <Card className="mb-4">
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Kraftentwicklung')}</p>
+        <ExerciseProgress setLogs={setLogs} completions={completions} />
+      </Card>
+
       {/* Workout history */}
       <Card className="mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-white/80">Trainings-Historie</p>
-          <span className="text-xs text-white/40">{completions.length} Einheiten</span>
-        </div>
-        {completions.length === 0 ? (
-          <p className="text-sm text-white/30">Noch keine abgeschlossenen Trainings.</p>
-        ) : (
-          <div className="space-y-2">
-            {completions.slice(0, 30).map((c) => {
-              const logs = logsByCompletion.get(c.id) ?? [];
-              const byEx = groupByExercise(logs);
-              const open = expandedSession === c.id;
-              const d = new Date(c.completed_at);
-              const name = (c.plan_day_id && dayNameById.get(c.plan_day_id)) || 'Training';
-              return (
-                <div key={c.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgb(var(--text) / 0.08)', background: 'rgb(var(--text) / 0.03)' }}>
-                  <button onClick={() => setExpandedSession(open ? null : c.id)} className="adlr-tap w-full flex items-center justify-between px-3 py-2.5 text-left">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">
-                        {d.toLocaleDateString('de-AT', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {name}
-                      </p>
-                      <p className="text-xs text-white/40 mt-0.5 flex items-center gap-3">
-                        <span className="flex items-center gap-1"><Dumbbell size={11} /> {byEx.size} Übungen</span>
-                        {c.duration_sec ? <span className="flex items-center gap-1"><Clock size={11} /> {Math.round(c.duration_sec / 60)} Min</span> : null}
-                      </p>
-                    </div>
-                    <ChevronDown size={16} className="shrink-0 transition-transform" style={{ color: 'rgb(var(--text) / 0.3)', transform: open ? 'rotate(180deg)' : 'none' }} />
-                  </button>
-                  {open && (
-                    <div className="px-3 pb-3 pt-1 space-y-2.5" style={{ borderTop: '1px solid rgb(var(--text) / 0.06)' }}>
-                      {byEx.size === 0 ? (
-                        <p className="text-xs text-white/30 pt-2">Keine Übungsdaten erfasst.</p>
-                      ) : (
-                        [...byEx.entries()].map(([exName, ls]) => (
-                          <div key={exName} className="pt-1.5">
-                            <p className="text-sm text-white/85">{exName}</p>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {ls.sort((a, b) => a.set_number - b.set_number).map((l) => (
-                                <span key={l.id} className="text-xs bg-inset rounded-md px-2 py-1" style={{ color: 'rgb(var(--text) / 0.6)' }}>
-                                  {l.set_number}. {l.weight_kg ?? '—'} kg × {l.reps ?? '—'}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf} limit={10} collapsible />
       </Card>
 
       {/* PRs */}
-      {prs.length > 0 && (
-        <Card className="mb-4">
-          <p className="text-sm font-medium text-white/80 mb-3">Personal Records</p>
-          <div className="space-y-1.5 text-sm">
-            {prs.map((pr) => (
-              <Row key={pr.id} label={pr.exercise_name} value={`${pr.weight_kg} kg × ${pr.reps}`} />
-            ))}
-          </div>
-        </Card>
-      )}
+      <Card className="mb-4">
+        <PersonalRecords prs={prs} />
+      </Card>
 
       {/* Photos */}
       {photos.length > 0 && (
-        <Card className="mb-4">
-          <p className="text-sm font-medium text-white/80 mb-3">Fortschrittsfotos</p>
+        <CollapsibleCard className="mb-4" title={t('Fortschrittsfotos')} subtitle={`${t(photos.length === 1 ? '{n} Foto' : '{n} Fotos', { n: photos.length })} · ${t('zuletzt')} ${fmtDate(photos[0].photo_date, { day: '2-digit', month: '2-digit', year: '2-digit' })}`}>
           <div className="grid grid-cols-3 gap-2">
             {photos.map((ph) => (
               <div key={ph.id} className="aspect-square rounded-lg overflow-hidden bg-inset"><SignedPhoto path={ph.storage_path} /></div>
             ))}
           </div>
-        </Card>
+        </CollapsibleCard>
       )}
 
       {/* Plan assignment */}
       <Card className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-white/80">Trainingsplan</p>
-          <button onClick={() => setEditingPlan(!editingPlan)} className="text-adlr-gold text-sm flex items-center gap-1 adlr-tap"><Edit3 size={14} /> Ändern</button>
+          <p className="text-sm font-medium text-white/80">{t('Trainingsplan')}</p>
+          <button onClick={() => setEditingPlan(!editingPlan)} className="text-adlr-gold text-sm flex items-center gap-1 adlr-tap"><Edit3 size={14} /> {t('Ändern')}</button>
         </div>
         {activePlan ? (
-          <p className="text-sm text-white/60">Aktiv: {plans.find((p) => p.id === activePlan.plan_id)?.name ?? '—'}</p>
-        ) : <p className="text-sm text-white/40">Kein Plan zugewiesen.</p>}
+          <p className="text-sm text-white/60">{t('Aktiv')}: {plans.find((p) => p.id === activePlan.plan_id)?.name ?? '—'}</p>
+        ) : <p className="text-sm text-white/40">{t('Kein Plan zugewiesen.')}</p>}
         {editingPlan && (
           <div className="mt-3 space-y-2 adlr-fade-in">
             {plans.map((p) => (
               <button key={p.id} onClick={() => assignPlan(p.id)} className="adlr-tap w-full text-left px-4 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-adlr-gold/40 text-sm text-white/80">
-                {p.name} {p.is_template && <span className="text-xs text-adlr-gold/60">(Vorlage)</span>}
+                {p.name} {p.is_template && <span className="text-xs text-adlr-gold/60">({t('Vorlage')})</span>}
               </button>
             ))}
-            {plans.length === 0 && <p className="text-xs text-white/30">Erstelle zuerst einen Plan im Plan Builder.</p>}
+            {plans.length === 0 && <p className="text-xs text-white/30">{t('Erstelle zuerst einen Plan im Plan Builder.')}</p>}
           </div>
         )}
       </Card>
 
-      {/* Session note */}
-      <Card className="mb-4">
-        <p className="text-sm font-medium text-white/80 mb-3">Private Notiz hinzufügen</p>
-        <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notiz zur letzten Session..." />
-        <Button onClick={saveNote} variant="ghost" className="w-full mt-3" disabled={!note.trim()}>Notiz speichern</Button>
-      </Card>
 
       {/* Remove client from roster (unlink — account & data stay) */}
       <button
@@ -297,9 +237,9 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         className="adlr-tap w-full py-3 rounded-xl text-sm font-medium mb-2 flex items-center justify-center gap-2"
         style={{ background: 'rgba(248,113,113,0.10)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}
       >
-        <UserMinus size={15} /> {confirmRemove ? 'Wirklich entfernen? Nochmal tippen' : 'Klient entfernen'}
+        <UserMinus size={15} /> {confirmRemove ? t('Wirklich entfernen? Nochmal tippen') : t('Klient entfernen')}
       </button>
-      <p className="text-xs text-white/30 text-center mb-4">Entfernt den Klienten aus deiner Liste — Konto und Daten bleiben erhalten.</p>
+      <p className="text-xs text-white/30 text-center mb-4">{t('Entfernt den Klienten aus deiner Liste — Konto und Daten bleiben erhalten.')}</p>
     </div>
   );
 }

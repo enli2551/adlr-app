@@ -4,14 +4,17 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, SectionHeader, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2 } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages } from 'lucide-react';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
+import HealthConnectCard from '@/components/HealthConnectCard';
+import MyPackageCard from '@/components/business/MyPackageCard';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
+import { t, fmtDate } from '@/lib/i18n';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 interface DayInfo {
   date: string;
@@ -61,7 +64,7 @@ export default function ProfileScreen() {
     if (error) {
       setDeleting(false);
       setConfirmDelete(false);
-      setDeleteErr('Löschen fehlgeschlagen. Bitte später erneut versuchen.');
+      setDeleteErr(t('Löschen fehlgeschlagen. Bitte später erneut versuchen.'));
       return;
     }
     await signOut();
@@ -93,7 +96,27 @@ export default function ProfileScreen() {
 
   useEffect(() => { load(); }, [profile?.id]);
 
+  // ---- Week helpers ----
+  // Plans are a flexible rotation ("Trainingstag N"), NOT bound to weekdays: the plan
+  // defines a weekly TARGET (number of training days), and any completion on any date
+  // counts toward the week it happened in. day_of_week only orders the plan days.
+  const trainingsPerWeek = planDays.filter((pd) => !pd.is_rest_day).length;
+  const weekBounds = (ref: Date) => {
+    const dow = ref.getDay() === 0 ? 6 : ref.getDay() - 1;
+    const start = new Date(ref);
+    start.setDate(ref.getDate() - dow);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { startKey: localDateKey(start), endKey: localDateKey(end), dow };
+  };
+  const countInRange = (startKey: string, endKey: string) =>
+    completions.filter((c) => {
+      const k = localDateKey(c.completed_at);
+      return k >= startKey && k <= endKey;
+    }).length;
+
   // ---- Calendar ----
+  // Purely date-based: a day is green when a training was actually logged on it.
   const calendarDays: DayInfo[] = useMemo(() => {
     const year = calMonth.getFullYear();
     const month = calMonth.getMonth();
@@ -101,6 +124,7 @@ export default function ProfileScreen() {
     const lastDay = new Date(year, month + 1, 0);
     const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     const todayStr = localDateKey(new Date());
+    const nameById = new Map(planDays.map((pd) => [pd.id, pd.workout_name ?? t('Training')]));
 
     const days: DayInfo[] = [];
     // Previous month padding
@@ -111,116 +135,50 @@ export default function ProfileScreen() {
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const date = new Date(year, month, d);
       const dateStr = localDateKey(date);
-      const dayOfWeek = date.getDay() === 0 ? 6 : date.getDay() - 1;
-      const planDay = planDays.find((pd) => pd.day_of_week === dayOfWeek);
-      // Week bounds (Mon–Sun) for this cell
-      const cellWeekStart = new Date(date);
-      cellWeekStart.setDate(date.getDate() - dayOfWeek);
-      const cellWeekEnd = new Date(cellWeekStart);
-      cellWeekEnd.setDate(cellWeekStart.getDate() + 6);
-      const wS = localDateKey(cellWeekStart);
-      const wE = localDateKey(cellWeekEnd);
-      // Scheduled training day: done if its plan day was completed anywhere in this
-      // cell's week (Monday's plan trained on Tuesday still marks Monday). Otherwise
-      // fall back to a completion logged on this exact date.
-      const completion = (planDay && !planDay.is_rest_day)
-        ? completions.find((c) => c.plan_day_id === planDay.id && localDateKey(c.completed_at) >= wS && localDateKey(c.completed_at) <= wE)
-        : completions.find((c) => localDateKey(c.completed_at) === dateStr);
-      const isFuture = dateStr > todayStr;
-      const isToday = dateStr === todayStr;
-
-      let status: DayInfo['status'] = 'none';
-      let workoutName: string | undefined;
-      if (planDay?.is_rest_day) {
-        status = 'rest';
-        workoutName = 'Ruhetag';
-      } else if (planDay && !planDay.is_rest_day) {
-        workoutName = planDay.workout_name ?? 'Training';
-        if (completion) status = 'completed';
-        else if (isFuture) status = 'planned';
-        else if (isToday) status = 'planned';
-        else status = 'missed';
-      }
-      if (completion && !planDay) status = 'completed';
-
-      days.push({ date: dateStr, dayInMonth: d, isCurrentMonth: true, isToday, isFuture, status, workoutName, completion });
+      const dayCompletions = completions.filter((c) => localDateKey(c.completed_at) === dateStr);
+      const completion = dayCompletions[0];
+      const workoutName = dayCompletions.length > 0
+        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || t('Training')).join(' + ')
+        : undefined;
+      days.push({
+        date: dateStr, dayInMonth: d, isCurrentMonth: true,
+        isToday: dateStr === todayStr, isFuture: dateStr > todayStr,
+        status: completion ? 'completed' : 'none', workoutName, completion,
+      });
     }
     return days;
   }, [calMonth, planDays, completions]);
 
-  // ---- Streak calculation ----
-  // Was plan day `pdId` completed anywhere within [wStartKey, wEndKey]?
-  const doneInWeek = (pdId: string, wStartKey: string, wEndKey: string) =>
-    completions.some((c) => {
-      if (c.plan_day_id !== pdId) return false;
-      const k = localDateKey(c.completed_at);
-      return k >= wStartKey && k <= wEndKey;
-    });
-
-  // ---- Streak: consecutive weeks where every due plan day was completed ----
+  // ---- Streak: consecutive weeks where the weekly target was reached ----
+  // The current week never breaks the streak (it's still in progress).
   const streak = useMemo(() => {
+    if (trainingsPerWeek === 0) return 0;
     const today = new Date();
-    const todayKey = localDateKey(today);
-    const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const nonRest = planDays.filter((pd) => !pd.is_rest_day);
-    if (nonRest.length === 0) return 0;
     let weeks = 0;
     for (let w = 0; w < 52; w++) {
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - dayOfWeek - w * 7);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const wStartKey = localDateKey(weekStart);
-      const wEndKey = localDateKey(weekEnd);
-      let allDone = true;
-      let anyDue = false;
-      for (const pd of nonRest) {
-        const due = new Date(weekStart);
-        due.setDate(weekStart.getDate() + pd.day_of_week);
-        if (localDateKey(due) > todayKey) continue; // not due yet
-        anyDue = true;
-        if (!doneInWeek(pd.id, wStartKey, wEndKey)) { allDone = false; break; }
-      }
-      if (anyDue && allDone) weeks++;
-      else if (anyDue) break; // a due training was missed
-      // else: current week hasn't started yet — keep checking previous weeks
+      const ref = new Date(today);
+      ref.setDate(today.getDate() - w * 7);
+      const { startKey, endKey } = weekBounds(ref);
+      const reached = countInRange(startKey, endKey) >= trainingsPerWeek;
+      if (reached) weeks++;
+      else if (w > 0) break;
     }
     return weeks;
   }, [planDays, completions]);
 
+  // Missed = the remaining trainings of this week no longer fit into the days left.
   const hasMissedThisWeek = useMemo(() => {
-    const today = new Date();
-    const todayKey = localDateKey(today);
-    const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - dayOfWeek);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    const wStartKey = localDateKey(weekStart);
-    const wEndKey = localDateKey(weekEnd);
-    for (const pd of planDays) {
-      if (pd.is_rest_day) continue;
-      const due = new Date(weekStart);
-      due.setDate(weekStart.getDate() + pd.day_of_week);
-      if (localDateKey(due) >= todayKey) continue; // only past due days
-      if (!doneInWeek(pd.id, wStartKey, wEndKey)) return true;
-    }
-    return false;
+    if (trainingsPerWeek === 0) return false;
+    const { startKey, endKey, dow } = weekBounds(new Date());
+    const remaining = trainingsPerWeek - countInRange(startKey, endKey);
+    const daysLeft = 7 - dow; // including today
+    return remaining > daysLeft;
   }, [planDays, completions]);
 
-  // ---- Weekly fulfillment (plan days completed this week, by plan day) ----
+  // ---- Weekly fulfillment (trainings logged this week vs. weekly target) ----
   const weeklyFulfillment = useMemo(() => {
-    const today = new Date();
-    const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1;
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - dayOfWeek);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    const wStartKey = localDateKey(weekStart);
-    const wEndKey = localDateKey(weekEnd);
-    const nonRest = planDays.filter((pd) => !pd.is_rest_day);
-    const completed = nonRest.filter((pd) => doneInWeek(pd.id, wStartKey, wEndKey)).length;
-    return { planned: nonRest.length, completed };
+    const { startKey, endKey } = weekBounds(new Date());
+    return { planned: trainingsPerWeek, completed: countInRange(startKey, endKey) };
   }, [planDays, completions]);
 
   // ---- Muscle group heatmap (this week) ----
@@ -269,8 +227,8 @@ export default function ProfileScreen() {
         if (change < 0.005) {
           alerts.push({
             type: 'weight',
-            title: 'Gewicht stagniert',
-            message: 'Dein Gewicht ist seit 3 Wochen stabil. Das ist normal — dein Körper passt sich an. Eine 1-2-wöchige Pause auf Erhaltungskalorien kann helfen, danach geht es weiter.',
+            title: t('Gewicht stagniert'),
+            message: t('Dein Gewicht ist seit 3 Wochen stabil. Das ist normal — dein Körper passt sich an. Eine 1-2-wöchige Pause auf Erhaltungskalorien kann helfen, danach geht es weiter.'),
             icon: AlertCircle,
           });
         }
@@ -295,8 +253,8 @@ export default function ProfileScreen() {
           if (maxRecent <= maxBefore) {
             alerts.push({
               type: 'strength',
-              title: `${name}: Kraft stagniert`,
-              message: `Bei ${name} hast du seit 3 Einheiten nicht gesteigert. Probier eine Übungsvariante oder leg eine Deload-Woche ein — danach wirst du wieder stärker.`,
+              title: t('{name}: Kraft stagniert', { name: t(name) }),
+              message: t('Bei {name} hast du seit 3 Einheiten nicht gesteigert. Probier eine Übungsvariante oder leg eine Deload-Woche ein — danach wirst du wieder stärker.', { name: t(name) }),
               icon: TrendingUp,
             });
             break;
@@ -311,8 +269,8 @@ export default function ProfileScreen() {
     if (lowDays.length >= 4) {
       alerts.push({
         type: 'energy',
-        title: 'Energie niedrig',
-        message: 'Du fühlst dich seit mehreren Tagen müde. Das kann ein Zeichen von Übermüdung sein. Ein Ruhetag oder leichtes Training könnte helfen. Hör auf deinen Körper.',
+        title: t('Energie niedrig'),
+        message: t('Du fühlst dich seit mehreren Tagen müde. Das kann ein Zeichen von Übermüdung sein. Ein Ruhetag oder leichtes Training könnte helfen. Hör auf deinen Körper.'),
         icon: AlertCircle,
       });
     }
@@ -338,11 +296,11 @@ export default function ProfileScreen() {
 
   if (loading) return <Loading />;
 
-  const weekPct = weeklyFulfillment.planned > 0 ? (weeklyFulfillment.completed / weeklyFulfillment.planned) * 100 : 0;
+  const weekPct = weeklyFulfillment.planned > 0 ? Math.min(100, (weeklyFulfillment.completed / weeklyFulfillment.planned) * 100) : 0;
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Profil" subtitle="Dein Trainingsweg." />
+      <SectionHeader title={t('Profil')} subtitle={t('Dein Trainingsweg.')} />
 
       {/* Streak */}
       <Card className="mb-5 adlr-gold-border">
@@ -351,13 +309,13 @@ export default function ProfileScreen() {
             <Flame size={28} className="text-adlr-gold" />
           </div>
           <div className="flex-1">
-            <p className="text-2xl font-bold text-white">{streak} <span className="text-sm text-white/50 font-normal">Wochen-Streak</span></p>
+            <p className="text-2xl font-bold text-white">{streak} <span className="text-sm text-white/50 font-normal">{t('Wochen-Streak')}</span></p>
             <p className="text-xs text-white/40 mt-0.5">
               {hasMissedThisWeek && streak === 0
-                ? 'Ein verpasstes Training ist kein Rückschlag — morgen geht es weiter.'
+                ? t('Ein verpasstes Training ist kein Rückschlag — morgen geht es weiter.')
                 : streak > 0
-                ? 'Kein geplantes Training verpasst. Bleib dran!'
-                : 'Starte deine Streak — schließe dein nächstes Training ab.'}
+                ? t('Kein geplantes Training verpasst. Bleib dran!')
+                : t('Starte deine Streak — schließe dein nächstes Training ab.')}
             </p>
           </div>
         </div>
@@ -365,7 +323,7 @@ export default function ProfileScreen() {
 
       {/* Weekly fulfillment */}
       <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><Target size={16} className="text-adlr-gold" /> Diese Woche</p>
+        <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><Target size={16} className="text-adlr-gold" /> {t('Diese Woche')}</p>
         <div className="flex items-center gap-4">
           <div className="relative w-20 h-20 flex-shrink-0">
             <svg width="80" height="80" viewBox="0 0 80 80">
@@ -385,24 +343,38 @@ export default function ProfileScreen() {
           </div>
           <div className="flex-1">
             <p className="text-sm text-white/70">
-              {weeklyFulfillment.completed} von {weeklyFulfillment.planned} geplanten Trainings abgeschlossen
+              {t('{n} von {total} Trainings diese Woche', { n: weeklyFulfillment.completed, total: weeklyFulfillment.planned })}
             </p>
             <p className="text-xs text-white/40 mt-1">
-              {weekPct === 100 ? 'Perfekte Woche!' : weekPct >= 50 ? 'Gut unterwegs.' : 'Noch ein paar Trainings offen.'}
+              {weekPct === 100 ? t('Perfekte Woche!') : weekPct >= 50 ? t('Gut unterwegs.') : t('Noch ein paar Trainings offen.')}
             </p>
           </div>
+        </div>
+      </Card>
+
+      {/* Package from the coach (sessions left, validity) */}
+      {profile && <MyPackageCard clientId={profile.id} />}
+
+      {/* Apple Health / Health Connect */}
+      {profile && <HealthConnectCard clientId={profile.id} />}
+
+      {/* Training log entry */}
+      <Card className="mb-5" onClick={() => nav('/app/verlauf')}>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><History size={16} className="text-adlr-gold" /> {t('Trainings-Verlauf')}</p>
+          <span className="flex items-center gap-1 text-xs text-white/40">{t('{n} Trainings', { n: completions.length })} <ChevronRight size={14} /></span>
         </div>
       </Card>
 
       {/* Monthly calendar */}
       <Card className="mb-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calendar size={16} className="text-adlr-gold" /> Kalender</p>
+          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calendar size={16} className="text-adlr-gold" /> {t('Kalender')}</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="adlr-tap p-1.5 rounded-lg bg-white/5 text-white/50">
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs text-white/70 min-w-[80px] text-center">{MONTH_NAMES[calMonth.getMonth()]} {calMonth.getFullYear()}</span>
+            <span className="text-xs text-white/70 min-w-[80px] text-center">{fmtDate(calMonth, { month: 'long', year: 'numeric' })}</span>
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1))} className="adlr-tap p-1.5 rounded-lg bg-white/5 text-white/50">
               <ChevronRight size={16} />
             </button>
@@ -410,7 +382,7 @@ export default function ProfileScreen() {
         </div>
         <div className="grid grid-cols-7 gap-1 mb-2">
           {DAY_NAMES.map((d) => (
-            <div key={d} className="text-center text-[10px] text-white/30 uppercase">{d}</div>
+            <div key={d} className="text-center text-[10px] text-white/30 uppercase">{t(d)}</div>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -444,24 +416,21 @@ export default function ProfileScreen() {
         </div>
         {/* Legend */}
         <div className="flex flex-wrap gap-3 mt-4 text-[10px] text-white/40">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Training</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" /> Verpasst</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/30" /> Ruhetag</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-adlr-gold" /> Geplant</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> {t('Training')}</span>
         </div>
       </Card>
 
       {/* Muscle group heatmap */}
       {muscleHeatmap.length > 0 && (
         <Card className="mb-5">
-          <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><TrendingUp size={16} className="text-adlr-gold" /> Muskelgruppen diese Woche</p>
+          <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><TrendingUp size={16} className="text-adlr-gold" /> {t('Muskelgruppen diese Woche')}</p>
           <div className="space-y-2.5">
             {muscleHeatmap.map((m) => {
               const maxSets = Math.max(...muscleHeatmap.map((x) => x.sets));
               const pct = maxSets > 0 ? (m.sets / maxSets) * 100 : 0;
               return (
                 <div key={m.group} className="flex items-center gap-3">
-                  <span className="text-xs text-white/70 w-20 shrink-0">{m.group}</span>
+                  <span className="text-xs text-white/70 w-20 shrink-0">{t(m.group)}</span>
                   <div className="flex-1 h-6 rounded-md bg-white/5 overflow-hidden">
                     <div
                       className="h-full rounded-md transition-all duration-500"
@@ -484,13 +453,13 @@ export default function ProfileScreen() {
           </div>
           <div>
             <p className="text-2xl font-bold text-white">{totalWorkouts}</p>
-            <p className="text-xs text-white/40">Trainings abgeschlossen</p>
+            <p className="text-xs text-white/40">{t('Trainings abgeschlossen')}</p>
           </div>
         </div>
         {nextMilestone && (
           <div className="mt-3 pt-3 border-t border-white/5">
             <p className="text-xs text-adlr-gold/70">
-              Noch {nextMilestone - totalWorkouts} Trainings bis zum {nextMilestone}. Meilenstein.
+              {t('Noch {n} Trainings bis zum {m}. Meilenstein.', { n: nextMilestone - totalWorkouts, m: nextMilestone })}
             </p>
           </div>
         )}
@@ -517,19 +486,28 @@ export default function ProfileScreen() {
       <Card className="mb-5">
         <div className="flex items-center gap-3 mb-3">
           <Palette size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">Erscheinungsbild</p>
+          <p className="text-sm font-medium text-white/80">{t('Erscheinungsbild')}</p>
         </div>
         <ThemeSwitcher />
+      </Card>
+
+      {/* Language */}
+      <Card className="mb-5">
+        <div className="flex items-center gap-3 mb-3">
+          <Languages size={18} className="text-adlr-gold" />
+          <p className="text-sm font-medium text-white/80">{t('Sprache')}</p>
+        </div>
+        <LanguageSwitcher />
       </Card>
 
       {/* Danger zone — account deletion (required by App Store & Play) */}
       <Card className="mb-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
         <div className="flex items-center gap-3 mb-2">
           <Trash2 size={18} className="text-red-400" />
-          <p className="text-sm font-medium text-white/80">Konto löschen</p>
+          <p className="text-sm font-medium text-white/80">{t('Konto löschen')}</p>
         </div>
         <p className="text-xs text-white/50 leading-relaxed mb-3">
-          Dein Konto und alle deine Daten (Trainings, Fortschritt, Fotos) werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.
+          {t('Dein Konto und alle deine Daten (Trainings, Fortschritt, Fotos) werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.')}
         </p>
         {deleteErr && <p className="text-xs text-red-400 mb-2">{deleteErr}</p>}
         <button
@@ -540,7 +518,7 @@ export default function ProfileScreen() {
             ? { background: 'rgb(239,68,68)', color: '#fff' }
             : { background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.3)' }}
         >
-          {deleting ? 'Wird gelöscht…' : confirmDelete ? 'Wirklich löschen? Tippe erneut' : 'Konto endgültig löschen'}
+          {deleting ? t('Wird gelöscht…') : confirmDelete ? t('Wirklich löschen? Tippe erneut') : t('Konto endgültig löschen')}
         </button>
       </Card>
 
@@ -551,9 +529,9 @@ export default function ProfileScreen() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-white">
-                  {new Date(selectedDay).toLocaleDateString('de-AT', { weekday: 'long', day: '2-digit', month: 'long' })}
+                  {fmtDate(selectedDay, { weekday: 'long', day: '2-digit', month: 'long' })}
                 </p>
-                <p className="text-xs text-white/40 mt-0.5">{selectedDayInfo.workoutName ?? 'Kein Training geplant'}</p>
+                <p className="text-xs text-white/40 mt-0.5">{selectedDayInfo.workoutName ?? t('Kein Training geplant')}</p>
               </div>
               <button onClick={() => setSelectedDay(null)} className="adlr-tap p-1.5 rounded-lg bg-white/5 text-white/50">
                 <X size={18} />
@@ -563,26 +541,26 @@ export default function ProfileScreen() {
             {selectedDayInfo.status === 'completed' && (
               <div className="flex items-center gap-2 mb-3 text-green-500 text-sm">
                 <span className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-xs">✓</span>
-                Training abgeschlossen
+                {t('Training abgeschlossen')}
               </div>
             )}
             {selectedDayInfo.status === 'missed' && (
               <div className="flex items-center gap-2 mb-3 text-orange-400 text-sm">
                 <span className="w-5 h-5 rounded-full bg-orange-400/20 flex items-center justify-center text-xs">!</span>
-                Geplantes Training verpasst
+                {t('Geplantes Training verpasst')}
               </div>
             )}
             {selectedDayInfo.status === 'rest' && (
               <div className="flex items-center gap-2 mb-3 text-white/50 text-sm">
                 <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs">−</span>
-                Ruhetag
+                {t('Ruhetag')}
               </div>
             )}
 
             {/* Exercise logs for this day */}
             {selectedDayLogs.length > 0 ? (
               <div className="space-y-3 mb-4">
-                <p className="text-xs text-white/40 uppercase tracking-wide">Übungen</p>
+                <p className="text-xs text-white/40 uppercase tracking-wide">{t('Übungen')}</p>
                 {(() => {
                   const byExercise = new Map<string, ExerciseSetLog[]>();
                   for (const log of selectedDayLogs) {
@@ -592,11 +570,11 @@ export default function ProfileScreen() {
                   }
                   return Array.from(byExercise.entries()).map(([name, logs]) => (
                     <div key={name} className="py-2 border-b border-white/5 last:border-0">
-                      <p className="text-sm text-white/90 font-medium">{name}</p>
+                      <p className="text-sm text-white/90 font-medium">{t(name)}</p>
                       <div className="flex flex-wrap gap-2 mt-1">
                         {logs.sort((a, b) => a.set_number - b.set_number).map((l) => (
                           <span key={l.id} className="text-xs text-white/50 bg-white/5 px-2 py-1 rounded-md">
-                            Satz {l.set_number}: {l.weight_kg ?? '—'} kg × {l.reps ?? '—'} Wdh
+                            {t('Satz {n}', { n: l.set_number })}: {l.weight_kg ?? '—'} kg × {l.reps ?? '—'} {t('Wdh')}
                           </span>
                         ))}
                       </div>
@@ -605,21 +583,21 @@ export default function ProfileScreen() {
                 })()}
               </div>
             ) : selectedDayInfo.status === 'completed' ? (
-              <p className="text-sm text-white/30 mb-4">Keine Übungsdaten für dieses Training.</p>
+              <p className="text-sm text-white/30 mb-4">{t('Keine Übungsdaten für dieses Training.')}</p>
             ) : null}
 
             {/* Check-in for this day */}
             {selectedDayCheckin && (
               <div className="pt-3 border-t border-white/5">
-                <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Check-in</p>
+                <p className="text-xs text-white/40 uppercase tracking-wide mb-2">{t('Check-in')}</p>
                 <div className="flex gap-4">
                   <div className="flex-1 text-center py-2 rounded-lg bg-white/5">
                     <p className="text-lg font-bold text-white">{selectedDayCheckin.energy}/5</p>
-                    <p className="text-[10px] text-white/40 uppercase">Energie</p>
+                    <p className="text-[10px] text-white/40 uppercase">{t('Energie')}</p>
                   </div>
                   <div className="flex-1 text-center py-2 rounded-lg bg-white/5">
                     <p className="text-lg font-bold text-white">{selectedDayCheckin.mood}/5</p>
-                    <p className="text-[10px] text-white/40 uppercase">Stimmung</p>
+                    <p className="text-[10px] text-white/40 uppercase">{t('Stimmung')}</p>
                   </div>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { Message, Session, SessionNote, WeeklyMessage } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input } from '@/components/ui';
 import { Calendar, FileText, Sparkles } from 'lucide-react';
+import { t, fmtDate, fmtTime } from '@/lib/i18n';
 
 export default function CoachScreen() {
   const { profile } = useAuth();
@@ -48,20 +49,20 @@ export default function CoachScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Mein Coach" subtitle="Peter ist für dich da." />
+      <SectionHeader title={t('Mein Coach')} subtitle={t('Peter ist für dich da.')} />
 
       {/* Next session */}
       <Card className="mb-4">
         <div className="flex items-center gap-3 mb-2">
           <Calendar size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">Nächste Session</p>
+          <p className="text-sm font-medium text-white/80">{t('Nächste Session')}</p>
         </div>
         {nextSession ? (
           <div>
-            <p className="text-lg font-bold text-white">{new Date(nextSession.scheduled_at).toLocaleDateString('de-AT', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
-            <p className="text-sm text-white/60">{new Date(nextSession.scheduled_at).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} Uhr · {nextSession.location}</p>
+            <p className="text-lg font-bold text-white">{fmtDate(nextSession.scheduled_at, { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+            <p className="text-sm text-white/60">{t('{time} Uhr', { time: fmtTime(nextSession.scheduled_at) })} · {t(nextSession.location)}</p>
           </div>
-        ) : <p className="text-sm text-white/40">Noch keine Session geplant.</p>}
+        ) : <p className="text-sm text-white/40">{t('Noch keine Session geplant.')}</p>}
       </Card>
 
       {/* Weekly message */}
@@ -69,7 +70,7 @@ export default function CoachScreen() {
         <Card className="mb-4 adlr-gold-border bg-gradient-to-br from-adlr-gold/5 to-transparent">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles size={16} className="text-adlr-gold" />
-            <p className="text-xs text-adlr-gold/80 uppercase tracking-wide">Wöchentliche Nachricht</p>
+            <p className="text-xs text-adlr-gold/80 uppercase tracking-wide">{t('Wöchentliche Nachricht')}</p>
           </div>
           <p className="text-sm text-white/90 leading-relaxed">{weekly.body}</p>
         </Card>
@@ -80,7 +81,7 @@ export default function CoachScreen() {
         <Card className="mb-4">
           <div className="flex items-center gap-2 mb-2">
             <FileText size={16} className="text-white/50" />
-            <p className="text-xs text-white/40 uppercase tracking-wide">Notiz der letzten Session</p>
+            <p className="text-xs text-white/40 uppercase tracking-wide">{t('Notiz der letzten Session')}</p>
           </div>
           <p className="text-sm text-white/80 leading-relaxed">{lastNote.body}</p>
         </Card>
@@ -88,9 +89,9 @@ export default function CoachScreen() {
 
       {/* Chat */}
       <Card className="p-0 overflow-hidden">
-        <p className="text-sm font-medium text-white/80 px-5 pt-5 mb-2">Nachricht an Peter</p>
+        <p className="text-sm font-medium text-white/80 px-5 pt-5 mb-2">{t('Nachricht an Peter')}</p>
         <div ref={scrollRef} className="h-64 overflow-y-auto px-5 py-3 space-y-3">
-          {messages.length === 0 && <p className="text-sm text-white/30 text-center py-8">Schreib Peter. Er antwortet.</p>}
+          {messages.length === 0 && <p className="text-sm text-white/30 text-center py-8">{t('Schreib Peter. Er antwortet.')}</p>}
           {messages.map((m) => (
             <div key={m.id} className={`flex ${m.sender === 'client' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${m.sender === 'client' ? 'bg-adlr-gold text-black rounded-br-sm' : 'bg-white/10 text-white rounded-bl-sm'}`}>
@@ -100,8 +101,8 @@ export default function CoachScreen() {
           ))}
         </div>
         <div className="flex gap-2 p-3 border-t border-white/5">
-          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Nachricht..." onKeyDown={(e) => e.key === 'Enter' && send()} />
-          <Button onClick={send} disabled={sending || !text.trim()} className="px-4">Senden</Button>
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Nachricht...')} onKeyDown={(e) => e.key === 'Enter' && send()} />
+          <Button onClick={send} disabled={sending || !text.trim()} className="px-4">{t('Senden')}</Button>
         </div>
       </Card>
     </div>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="rest_channel_name">Live-Pausen-Countdown</string>
+    <string name="rest_channel_desc">Laufender Countdown-Timer für Pausen zwischen Sätzen</string>
+</resources>

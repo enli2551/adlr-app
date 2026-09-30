@@ -12,6 +12,7 @@ import StepTraining from './onboarding/StepTraining';
 import StepNutrition from './onboarding/StepNutrition';
 import StepMotivation from './onboarding/StepMotivation';
 import Completion from './onboarding/Completion';
+import { t } from '@/lib/i18n';
 
 const HEADERS = [
   'Wer bist du? Lass uns beginnen.',
@@ -53,7 +54,7 @@ export default function Onboarding() {
       email: data.email,
       phone: data.phone,
       avatar_url: data.avatarUrl,
-      intake: data,
+      intake: { ...data, avatarUrl: undefined }, // photo lives in avatar_url only — never duplicate it here
       trainer_id: trainerId ?? null,
     }).eq('id', uid);
     setSaving(false);
@@ -75,7 +76,7 @@ export default function Onboarding() {
       <div className="fixed top-0 left-0 right-0 z-20 bg-adlr-black/90 safe-top">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <button onClick={back} disabled={step === 0} className="text-white/40 text-sm disabled:opacity-0">
-            Zurück
+            {t('Zurück')}
           </button>
           <span className="text-xs text-white/40 tracking-widest uppercase">{step + 1} / {STEPS}</span>
           <div className="w-10" />
@@ -88,8 +89,8 @@ export default function Onboarding() {
       <div className="flex-1 px-6 pt-20 pb-32 max-w-md mx-auto w-full">
         <div key={step} className="adlr-slide-in">
           <div className="mb-6">
-            <p className="text-xs text-adlr-gold tracking-widest uppercase mb-2">Schritt {step + 1}</p>
-            <h1 className="text-2xl font-bold tracking-tight">{HEADERS[step]}</h1>
+            <p className="text-xs text-adlr-gold tracking-widest uppercase mb-2">{t('Schritt {n}', { n: step + 1 })}</p>
+            <h1 className="text-2xl font-bold tracking-tight">{t(HEADERS[step])}</h1>
           </div>
 
           {step === 0 && <StepPersonal data={data} update={update} />}
@@ -109,7 +110,7 @@ export default function Onboarding() {
             disabled={saving}
             className="w-full"
           >
-            {saving ? 'Speichert...' : step === STEPS - 1 ? 'Profil absenden' : 'Weiter'}
+            {saving ? t('Speichert...') : step === STEPS - 1 ? t('Profil absenden') : t('Weiter')}
           </Button>
         </div>
       </div>

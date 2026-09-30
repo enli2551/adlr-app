@@ -14,8 +14,9 @@ import {
 } from 'recharts';
 import {
   computeMonth, trailingMonths, metricValue, radarGroup, RADAR_AXES,
-  fmtVolume, fmtDuration, fmtDelta, MONTH_NAMES_DE, type ReportMetric, type MonthStats,
+  fmtVolume, fmtDuration, fmtDelta, monthName, type ReportMetric, type MonthStats,
 } from '@/lib/reportStats';
+import { t } from '@/lib/i18n';
 
 const METRICS: { id: ReportMetric; label: string }[] = [
   { id: 'workouts', label: 'Workouts' },
@@ -69,7 +70,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
         <button onClick={onClose} className="adlr-tap w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--text) / 0.06)' }}>
           <ArrowLeft size={18} className="text-white" />
         </button>
-        <h1 className="text-lg font-bold text-white">{MONTH_NAMES_DE[m]} Bericht</h1>
+        <h1 className="text-lg font-bold text-white">{t('{month} Bericht', { month: monthName(m) })}</h1>
       </div>
 
       {loading || !cur || !prev ? (
@@ -77,17 +78,17 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
       ) : (
         <div className="px-4 pb-28 pt-2 adlr-fade-in max-w-md mx-auto w-full">
           {/* Header: month + workouts + delta */}
-          <p className="text-3xl font-extrabold text-white mt-2">{MONTH_NAMES_DE[m]} {y}</p>
+          <p className="text-3xl font-extrabold text-white mt-2">{monthName(m)} {y}</p>
           <div className="flex items-center gap-2 mt-1 mb-4">
             <span className="text-2xl font-bold text-white">{cur.workouts}</span>
             <Delta metric="workouts" cur={cur.workouts} prev={prev.workouts} />
-            <span className="text-sm text-white/40">Workouts</span>
+            <span className="text-sm text-white/40">{t('Workouts')}</span>
           </div>
 
           {/* Trend chart + metric tabs */}
           <div className="adlr-card p-4 mb-5">
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={trend.map((s) => ({ label: MONTH_NAMES_DE[s.month][0], value: metricValue(s, metric), isCur: s.year === y && s.month === m }))} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
+              <BarChart data={trend.map((s) => ({ label: monthName(s.month)[0], value: metricValue(s, metric), isCur: s.year === y && s.month === m }))} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
                 <XAxis dataKey="label" stroke="rgb(var(--text) / 0.3)" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis hide domain={[0, (max: number) => Math.max(max, 1)]} />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false}>
@@ -104,7 +105,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
                   <button key={mt.id} onClick={() => setMetric(mt.id)}
                     className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0"
                     style={on ? { background: GOLD, color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.6)' }}>
-                    {mt.label}
+                    {t(mt.label)}
                   </button>
                 );
               })}
@@ -112,30 +113,30 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
           </div>
 
           {/* Zusammenfassung */}
-          <p className="text-xs uppercase tracking-wider text-white/30 mb-3">Zusammenfassung</p>
+          <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Zusammenfassung')}</p>
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <StatCard label="Workouts" value={String(cur.workouts)} metric="workouts" cur={cur.workouts} prev={prev.workouts} />
-            <StatCard label="Dauer" value={fmtDuration(cur.durationMin)} metric="duration" cur={cur.durationMin} prev={prev.durationMin} />
-            <StatCard label="Volumen" value={fmtVolume(cur.volumeKg)} metric="volume" cur={cur.volumeKg} prev={prev.volumeKg} />
-            <StatCard label="Sätze" value={String(cur.sets)} metric="sets" cur={cur.sets} prev={prev.sets} />
+            <StatCard label={t('Workouts')} value={String(cur.workouts)} metric="workouts" cur={cur.workouts} prev={prev.workouts} />
+            <StatCard label={t('Dauer')} value={fmtDuration(cur.durationMin)} metric="duration" cur={cur.durationMin} prev={prev.durationMin} />
+            <StatCard label={t('Volumen')} value={fmtVolume(cur.volumeKg)} metric="volume" cur={cur.volumeKg} prev={prev.volumeKg} />
+            <StatCard label={t('Sätze')} value={String(cur.sets)} metric="sets" cur={cur.sets} prev={prev.sets} />
           </div>
 
           {/* Muskelverteilung radar */}
           {cur.sets > 0 && (
             <>
-              <p className="text-xs uppercase tracking-wider text-white/30 mb-2">Muskelverteilung</p>
+              <p className="text-xs uppercase tracking-wider text-white/30 mb-2">{t('Muskelverteilung')}</p>
               <div className="adlr-card p-4 mb-6">
                 <ResponsiveContainer width="100%" height={260}>
                   <RadarChart data={radarData(cur, prev)} outerRadius="70%">
                     <PolarGrid stroke="rgb(var(--text) / 0.12)" />
-                    <PolarAngleAxis dataKey="axis" tick={{ fill: 'rgb(var(--text) / 0.55)', fontSize: 12 }} />
-                    <Radar name="Vormonat" dataKey="prev" stroke="rgb(var(--text) / 0.3)" fill="rgb(var(--text) / 0.15)" fillOpacity={0.6} isAnimationActive={false} />
-                    <Radar name="Aktuell" dataKey="cur" stroke={GOLD} fill={GOLD} fillOpacity={0.4} isAnimationActive={false} />
+                    <PolarAngleAxis dataKey="axis" tickFormatter={(v: string) => t(v)} tick={{ fill: 'rgb(var(--text) / 0.55)', fontSize: 12 }} />
+                    <Radar name={t('Vormonat')} dataKey="prev" stroke="rgb(var(--text) / 0.3)" fill="rgb(var(--text) / 0.15)" fillOpacity={0.6} isAnimationActive={false} />
+                    <Radar name={t('Aktuell')} dataKey="cur" stroke={GOLD} fill={GOLD} fillOpacity={0.4} isAnimationActive={false} />
                   </RadarChart>
                 </ResponsiveContainer>
                 <div className="flex items-center justify-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5 text-white/40"><span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgb(var(--text) / 0.3)' }} /> {MONTH_NAMES_DE[prev.month]}</span>
-                  <span className="flex items-center gap-1.5 text-white/70"><span className="w-2.5 h-2.5 rounded-full" style={{ background: GOLD }} /> {MONTH_NAMES_DE[m]}</span>
+                  <span className="flex items-center gap-1.5 text-white/40"><span className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgb(var(--text) / 0.3)' }} /> {monthName(prev.month)}</span>
+                  <span className="flex items-center gap-1.5 text-white/70"><span className="w-2.5 h-2.5 rounded-full" style={{ background: GOLD }} /> {monthName(m)}</span>
                 </div>
               </div>
             </>
@@ -145,15 +146,15 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
           {cur.sets > 0 && (
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase tracking-wider text-white/30">Hauptmuskelgruppen</p>
-                <span className="text-xs uppercase tracking-wider text-white/30">Sätze</span>
+                <p className="text-xs uppercase tracking-wider text-white/30">{t('Hauptmuskelgruppen')}</p>
+                <span className="text-xs uppercase tracking-wider text-white/30">{t('Sätze')}</span>
               </div>
               {(() => {
                 const rows = Object.entries(cur.byMuscle).sort((a, b) => b[1] - a[1]);
                 const max = rows[0]?.[1] ?? 1;
                 return rows.map(([muscle, sets]) => (
                   <div key={muscle} className="flex items-center gap-3 mb-2.5">
-                    <span className="text-sm text-white/80 w-24 shrink-0">{muscle}</span>
+                    <span className="text-sm text-white/80 w-24 shrink-0">{t(muscle)}</span>
                     <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'rgb(var(--text) / 0.06)' }}>
                       <div className="h-full rounded-full" style={{ width: `${(sets / max) * 100}%`, background: GOLD }} />
                     </div>
@@ -167,7 +168,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
           {/* Top-Übungen */}
           {cur.topExercises.length > 0 && (
             <div className="mb-6">
-              <p className="text-xs uppercase tracking-wider text-white/30 mb-3">Top-Übungen</p>
+              <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Top-Übungen')}</p>
               <div className="adlr-card divide-y" style={{ borderColor: 'rgb(var(--text) / 0.05)' }}>
                 {cur.topExercises.slice(0, 5).map((ex) => {
                   const img = data ? LOCAL_DEMO_IMAGES[data.idOf(ex.name) ?? ''] : undefined;
@@ -177,8 +178,8 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
                         {img ? <img src={`/exercises/${img}`} alt="" className="w-full h-full object-contain" /> : <Dumbbell size={18} style={{ color: 'rgb(var(--adlr-gold-dim))' }} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white leading-tight">{ex.name}</p>
-                        <p className="text-xs text-white/40 mt-0.5">{ex.count} mal</p>
+                        <p className="text-sm font-medium text-white leading-tight">{t(ex.name)}</p>
+                        <p className="text-xs text-white/40 mt-0.5">{t('{n} mal', { n: ex.count })}</p>
                       </div>
                       <ChevronRight size={16} className="text-white/20 shrink-0" />
                     </div>
@@ -189,8 +190,8 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
           )}
 
           {/* Congrats */}
-          <h2 className="text-xl font-bold text-white mb-2">Glückwunsch zu einem tollen Monat, {profile?.first_name ?? ''}! 👏</h2>
-          <p className="text-sm text-white/50 mb-4">Feiere deine Erfolge und bleib dran.</p>
+          <h2 className="text-xl font-bold text-white mb-2">{t('Glückwunsch zu einem tollen Monat, {name}! 👏', { name: profile?.first_name ?? '' })}</h2>
+          <p className="text-sm text-white/50 mb-4">{t('Feiere deine Erfolge und bleib dran.')}</p>
         </div>
       )}
 
@@ -199,7 +200,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
         <div className="fixed bottom-0 left-0 right-0 px-4 py-3 safe-bottom" style={{ background: 'rgb(var(--adlr-black) / 0.95)', backdropFilter: 'blur(8px)', borderTop: '1px solid rgb(var(--text) / 0.06)' }}>
           <div className="max-w-md mx-auto">
             <button onClick={() => shareReport(cur, m, y)} className="adlr-tap w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" style={{ background: GOLD, color: '#000' }}>
-              <Share2 size={17} /> Teilen
+              <Share2 size={17} /> {t('Teilen')}
             </button>
           </div>
         </div>
@@ -247,10 +248,10 @@ function StatCard({ label, value, metric, cur, prev }: { label: string; value: s
 }
 
 async function shareReport(cur: MonthStats, month: number, year: number): Promise<void> {
-  const text = `Mein ${MONTH_NAMES_DE[month]} ${year} bei ADLR 💪\n${cur.workouts} Workouts · ${cur.sets} Sätze · ${fmtVolume(cur.volumeKg)} · ${fmtDuration(cur.durationMin)}\nSteig auf. Bleib stark. 🦅`;
+  const text = `${t('Mein {month} {year} bei ADLR 💪', { month: monthName(month), year })}\n${t('{n} Workouts', { n: cur.workouts })} · ${t('{n} Sätze', { n: cur.sets })} · ${fmtVolume(cur.volumeKg)} · ${fmtDuration(cur.durationMin)}\n${t('Steig auf. Bleib stark.')} 🦅`;
   try {
     const nav = navigator as Navigator & { share?: (d: { title?: string; text?: string }) => Promise<void> };
-    if (nav.share) { await nav.share({ title: 'ADLR Monatsbericht', text }); return; }
+    if (nav.share) { await nav.share({ title: t('ADLR Monatsbericht'), text }); return; }
     await navigator.clipboard?.writeText(text);
   } catch { /* user cancelled or unsupported */ }
 }

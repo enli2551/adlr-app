@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Search, Dumbbell, Play, Plus, X, Loader2, Activity, Target, Clock } from 'lucide-react';
 import { fetchExercises, MUSCLE_GROUPS, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
+import { t } from '@/lib/i18n';
 
 interface Props {
   onAdd: (ex: ExerciseRow) => void;
@@ -22,7 +23,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
     const q = search.toLowerCase();
     return exercises.filter((s) => {
       const matchGroup = filter === 'Alle' || s.muscle_group === filter;
-      const matchSearch = !q || s.name.toLowerCase().includes(q);
+      const matchSearch = !q || s.name.toLowerCase().includes(q) || t(s.name).toLowerCase().includes(q);
       return matchGroup && matchSearch;
     });
   }, [exercises, search, filter]);
@@ -39,14 +40,14 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgb(var(--text) / 0.07)' }}>
       <div className="px-4 pt-4 pb-3" style={{ background: 'rgb(var(--text) / 0.03)' }}>
         <p className="text-xs font-semibold uppercase tracking-wider text-white/40 mb-3">
-          ÜBUNGSBIBLIOTHEK · {exercises?.length ?? 0} Übungen
+          {t('ÜBUNGSBIBLIOTHEK')} · {t('{n} Übungen', { n: exercises?.length ?? 0 })}
         </p>
         <div className="relative mb-3">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Übung suchen..."
+            placeholder={t('Übung suchen...')}
             className="w-full bg-inset border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-white/30 outline-none"
           />
         </div>
@@ -60,7 +61,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
                 ? { background: 'rgb(var(--adlr-gold))', color: '#000', borderColor: 'rgb(var(--adlr-gold))' }
                 : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)', borderColor: 'rgb(var(--text) / 0.08)' }}
             >
-              {g}
+              {t(g)}
             </button>
           ))}
         </div>
@@ -72,8 +73,8 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
               <Dumbbell size={15} style={{ color: 'rgb(var(--adlr-gold))' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{s.name}</p>
-              <p className="text-xs text-white/40">{s.muscle_group} · {s.default_sets}×{s.default_reps} · {s.equipment}</p>
+              <p className="text-sm font-medium text-white">{t(s.name)}</p>
+              <p className="text-xs text-white/40">{t(s.muscle_group)} · {s.default_sets}×{s.default_reps} · {t(s.equipment)}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {hasDemo(s.exercise_id) && (
@@ -82,7 +83,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
                   className="adlr-tap flex items-center gap-1 text-xs"
                   style={{ color: 'rgb(var(--text) / 0.35)' }}
                 >
-                  <Play size={11} /> Demo
+                  <Play size={11} /> {t('Demo')}
                 </button>
               )}
               <button
@@ -101,12 +102,12 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
           </div>
         ))}
         {filtered.length === 0 && (
-          <p className="text-sm text-white/25 text-center py-8">Keine Treffer.</p>
+          <p className="text-sm text-white/25 text-center py-8">{t('Keine Treffer.')}</p>
         )}
       </div>
       {hint && (
         <div className="px-4 py-2.5 text-xs text-center adlr-fade-in" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', color: 'rgb(var(--adlr-gold))', borderTop: '1px solid rgb(var(--adlr-gold) / 0.15)' }}>
-          {noSelectionHint ?? 'Wähle zuerst einen Trainingstag oben aus'}
+          {noSelectionHint ?? t('Wähle zuerst einen Trainingstag oben aus')}
         </div>
       )}
     </div>
@@ -238,8 +239,8 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
         <div className="adlr-card p-6 max-w-md w-full" style={{ background: 'rgb(var(--surface-2))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h2 className="text-lg font-bold text-white">{ex.name}</h2>
-            <p className="text-sm text-white/40 mt-0.5">Ausführung Demo</p>
+            <h2 className="text-lg font-bold text-white">{t(ex.name)}</h2>
+            <p className="text-sm text-white/40 mt-0.5">{t('Ausführung Demo')}</p>
           </div>
           <button onClick={onClose} className="adlr-tap text-white/40 hover:text-white/80"><X size={20} /></button>
         </div>
@@ -247,14 +248,14 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
           {gifError ? (
             <div className="flex flex-col items-center gap-2 py-12">
               <Activity size={32} style={{ color: 'rgb(var(--adlr-gold))' }} />
-              <p className="text-sm text-white/40">Demo nicht verfügbar</p>
+              <p className="text-sm text-white/40">{t('Demo nicht verfügbar')}</p>
             </div>
           ) : (
             <>
               {gifLoading && (
                 <div className="absolute flex flex-col items-center gap-3 py-12">
                   <Loader2 size={32} className="animate-spin" style={{ color: 'rgb(var(--adlr-gold))' }} />
-                  <p className="text-sm text-white/40">Lade Animation...</p>
+                  <p className="text-sm text-white/40">{t('Lade Animation...')}</p>
                 </div>
               )}
               {localVid ? (
@@ -270,7 +271,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
                   onError={() => { setGifLoading(false); setGifError(true); }}
                 />
               ) : (
-                <img src={gifUrl} alt={ex.name} className="w-full h-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} onLoad={() => setGifLoading(false)} onError={() => { setGifLoading(false); setGifError(true); }} />
+                <img src={gifUrl} alt={t(ex.name)} className="w-full h-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} onLoad={() => setGifLoading(false)} onError={() => { setGifLoading(false); setGifError(true); }} />
               )}
             </>
           )}
@@ -278,27 +279,27 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-inset rounded-lg p-2.5 text-center">
             <Target size={14} className="mx-auto mb-1" style={{ color: 'rgb(var(--adlr-gold))' }} />
-            <p className="text-xs text-white/40">Muskel</p>
-            <p className="text-xs text-white/80 font-medium mt-0.5">{ex.muscle_group}</p>
+            <p className="text-xs text-white/40">{t('Muskel')}</p>
+            <p className="text-xs text-white/80 font-medium mt-0.5">{t(ex.muscle_group)}</p>
           </div>
           <div className="bg-inset rounded-lg p-2.5 text-center">
             <Activity size={14} className="mx-auto mb-1" style={{ color: 'rgb(var(--adlr-gold))' }} />
-            <p className="text-xs text-white/40">Equipment</p>
-            <p className="text-xs text-white/80 font-medium mt-0.5">{ex.equipment}</p>
+            <p className="text-xs text-white/40">{t('Equipment')}</p>
+            <p className="text-xs text-white/80 font-medium mt-0.5">{t(ex.equipment)}</p>
           </div>
           <div className="bg-inset rounded-lg p-2.5 text-center">
             <Clock size={14} className="mx-auto mb-1" style={{ color: 'rgb(var(--adlr-gold))' }} />
-            <p className="text-xs text-white/40">Tempo</p>
-            <p className="text-xs text-white/80 font-medium mt-0.5">{ex.tempo}</p>
+            <p className="text-xs text-white/40">{t('Tempo')}</p>
+            <p className="text-xs text-white/80 font-medium mt-0.5">{/\d/.test(ex.tempo) ? ex.tempo : t(`tempo|${ex.tempo}`)}</p>
           </div>
         </div>
         {ex.cues.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>Ausführungshinweise</p>
+            <p className="text-xs uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Ausführungshinweise')}</p>
             {ex.cues.map((cue, i) => (
               <div key={i} className="flex items-start gap-2.5 rounded-lg px-3 py-2 transition-all" style={i === step ? { background: 'rgb(var(--adlr-gold) / 0.1)', border: '1px solid rgb(var(--adlr-gold) / 0.3)' } : { background: 'rgb(var(--text) / 0.03)', border: '1px solid transparent' }}>
                 <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all mt-0.5" style={i === step ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.1)', color: 'rgb(var(--text) / 0.4)' }}>{i + 1}</span>
-                <span className="text-sm leading-relaxed" style={i === step ? { color: 'rgb(var(--text))' } : { color: 'rgb(var(--text) / 0.5)' }}>{cue}</span>
+                <span className="text-sm leading-relaxed" style={i === step ? { color: 'rgb(var(--text))' } : { color: 'rgb(var(--text) / 0.5)' }}>{t(cue)}</span>
               </div>
             ))}
           </div>

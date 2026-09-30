@@ -1,5 +1,6 @@
 import type { IntakeData } from '@/lib/types';
 import { Chip } from '@/components/ui';
+import { t } from '@/lib/i18n';
 
 function Slider({ value, onChange, labels }: { value: number; onChange: (n: number) => void; labels: string[] }) {
   return (
@@ -9,7 +10,7 @@ function Slider({ value, onChange, labels }: { value: number; onChange: (n: numb
       </div>
       <input type="range" min={1} max={5} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
       <div className="flex justify-between text-[10px] text-white/30 mt-1.5">
-        {labels.map((l, i) => <span key={i} className="flex-1 text-center">{l}</span>)}
+        {labels.map((l, i) => <span key={i} className="flex-1 text-center">{t(l)}</span>)}
       </div>
     </div>
   );
@@ -25,30 +26,30 @@ export default function StepHealth({ data, update }: { data: IntakeData; update:
   return (
     <div className="space-y-7">
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Aktuelles Aktivitätslevel</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Aktuelles Aktivitätslevel')}</p>
         <Slider value={data.activityLevel ?? 3} onChange={(n) => update({ activityLevel: n })} labels={['Kaum', 'Selten', 'Gelegentlich', 'Oft', 'Täglich']} />
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Verletzungen oder Beschwerden</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Verletzungen oder Beschwerden')}</p>
         <div className="flex gap-2 flex-wrap">
           {injuries.map((i) => (
-            <Chip key={i} active={(data.injuries ?? []).includes(i)} onClick={() => toggleInjury(i)}>{i}</Chip>
+            <Chip key={i} active={(data.injuries ?? []).includes(i)} onClick={() => toggleInjury(i)}>{t(i)}</Chip>
           ))}
         </div>
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Schlafqualität</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Schlafqualität')}</p>
         <Slider value={data.sleepQuality ?? 3} onChange={(n) => update({ sleepQuality: n })} labels={['Schlecht', 'Mittel', 'Okay', 'Gut', 'Tief']} />
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Stresslevel</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Stresslevel')}</p>
         <Slider value={data.stressLevel ?? 3} onChange={(n) => update({ stressLevel: n })} labels={['Ruhig', 'Entspannt', 'Normal', 'Hoch', 'Extrem']} />
       </div>
       <div>
-        <p className="text-sm font-medium text-white/80 mb-3">Berufsart</p>
+        <p className="text-sm font-medium text-white/80 mb-3">{t('Berufsart')}</p>
         <div className="flex gap-2 flex-wrap">
           {jobs.map((j) => (
-            <Chip key={j} active={data.jobType === j} onClick={() => update({ jobType: j })}>{j}</Chip>
+            <Chip key={j} active={data.jobType === j} onClick={() => update({ jobType: j })}>{t(j)}</Chip>
           ))}
         </div>
       </div>

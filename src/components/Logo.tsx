@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 interface LogoProps {
   size?: number;
   showTagline?: boolean;
@@ -57,7 +58,7 @@ export default function Logo({ size = 36, showTagline = false, className = '' }:
       </svg>
       {showTagline && (
         <span className="mt-1 text-[10px] tracking-[0.3em] text-white/40 uppercase font-medium">
-          Steig auf. Bleib stark.
+          {t('Steig auf. Bleib stark.')}
         </span>
       )}
     </div>

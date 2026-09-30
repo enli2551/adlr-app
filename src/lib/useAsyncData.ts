@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { t } from '@/lib/i18n';
 
 export function useAsyncData<T>(fn: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
@@ -10,7 +11,7 @@ export function useAsyncData<T>(fn: () => Promise<T>, deps: unknown[]) {
     setLoading(true);
     fn()
       .then((result) => { if (!cancelled) { setData(result); setError(null); } })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Fehler'); })
+      .catch((e) => { if (!cancelled) setError(e?.message ?? t('Fehler')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps

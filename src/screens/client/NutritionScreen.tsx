@@ -1,9 +1,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { localDateKey } from '@/lib/dates';
 import type { NutritionTip, HydrationLog, NutritionPrincipleCheckin, ProgressEntry } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
 import { Plus, Minus, Droplets, Check, X, Calculator, Flame } from 'lucide-react';
+import { t, fmtNum } from '@/lib/i18n';
 
 const PRINCIPLES: Record<string, string[]> = {
   'Gewicht reduzieren': ['Protein bei jeder Mahlzeit', 'Zucker meiden', 'Wasser vor jedem Essen'],
@@ -159,13 +161,13 @@ export default function NutritionScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title="Ernährung" subtitle="Du bist, was du isst." />
+      <SectionHeader title={t('Ernährung')} subtitle={t('Du bist, was du isst.')} />
 
       {/* Hydration */}
       <Card className="mb-5">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Droplets size={16} className="text-adlr-gold" /> Hydration</p>
-          <span className="text-xs text-white/40">{glasses} / {goal} Gläser</span>
+          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Droplets size={16} className="text-adlr-gold" /> {t('Hydration')}</p>
+          <span className="text-xs text-white/40">{t('{n} / {goal} Gläser', { n: glasses, goal })}</span>
         </div>
         <div className="flex items-center gap-6">
           <div className="relative w-24 h-24 flex-shrink-0">
@@ -185,25 +187,28 @@ export default function NutritionScreen() {
             </div>
           </div>
           <div className="flex flex-col gap-2 flex-1">
-            <button onClick={() => adjustWater(1)} className="adlr-tap flex-1 py-4 rounded-xl bg-adlr-gold/10 border border-adlr-gold/30 text-adlr-gold flex items-center justify-center gap-2"><Plus size={18} /> Glas</button>
-            <button onClick={() => adjustWater(-1)} className="adlr-tap py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 flex items-center justify-center gap-2"><Minus size={14} /> Glas entfernen</button>
+            <button onClick={() => adjustWater(1)} className="adlr-tap flex-1 py-4 rounded-xl bg-adlr-gold/10 border border-adlr-gold/30 text-adlr-gold flex items-center justify-center gap-2"><Plus size={18} /> {t('Glas')}</button>
+            <button onClick={() => adjustWater(-1)} className="adlr-tap py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 flex items-center justify-center gap-2"><Minus size={14} /> {t('Glas entfernen')}</button>
           </div>
         </div>
       </Card>
 
+      {/* Daily calorie target from the coach (+ today's intake from Health/YAZIO) */}
+      {profile?.kcal_target ? <KcalTargetCard clientId={profile.id} target={profile.kcal_target} /> : null}
+
       {/* Calorie calculator */}
       <Card className="mb-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calculator size={16} className="text-adlr-gold" /> Kalorienrechner</p>
+          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calculator size={16} className="text-adlr-gold" /> {t('Kalorienrechner')}</p>
           <button onClick={() => setShowCalc(!showCalc)} className="text-adlr-gold text-sm adlr-tap">
-            {showCalc ? 'Schließen' : 'Berechnen'}
+            {showCalc ? t('Schließen') : t('Berechnen')}
           </button>
         </div>
         {calcResult && !showCalc && (
           <div className="text-center py-2">
-            <p className="text-3xl font-bold adlr-gold-text">{calcResult.target} kcal</p>
-            <p className="text-xs text-white/40 mt-1">Tagesziel · {calcResult.goal}</p>
-            <p className="text-xs text-white/30 mt-0.5">Erhaltung: {calcResult.tdee} kcal</p>
+            <p className="text-3xl font-bold adlr-gold-text">{fmtNum(calcResult.target)} kcal</p>
+            <p className="text-xs text-white/40 mt-1">{t('Tagesziel')} · {t(calcResult.goal)}</p>
+            <p className="text-xs text-white/30 mt-0.5">{t('Erhaltung')}: {fmtNum(calcResult.tdee)} kcal</p>
           </div>
         )}
         {showCalc && (
@@ -215,21 +220,21 @@ export default function NutritionScreen() {
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${
                   calcForm.gender === 'male' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'
                 }`}
-              >Männlich</button>
+              >{t('Männlich')}</button>
               <button
                 onClick={() => setCalcForm({ ...calcForm, gender: 'female' })}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${
                   calcForm.gender === 'female' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'
                 }`}
-              >Weiblich</button>
+              >{t('Weiblich')}</button>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Field label="Alter"><Input type="number" value={calcForm.age} onChange={(e) => setCalcForm({ ...calcForm, age: e.target.value })} placeholder="30" /></Field>
-              <Field label="Größe (cm)"><Input type="number" value={calcForm.height} onChange={(e) => setCalcForm({ ...calcForm, height: e.target.value })} placeholder="175" /></Field>
-              <Field label="Gewicht (kg)"><Input type="number" value={calcForm.weight} onChange={(e) => setCalcForm({ ...calcForm, weight: e.target.value })} placeholder="80" /></Field>
+              <Field label={t('Alter')}><Input type="number" value={calcForm.age} onChange={(e) => setCalcForm({ ...calcForm, age: e.target.value })} placeholder="30" /></Field>
+              <Field label={t('Größe (cm)')}><Input type="number" value={calcForm.height} onChange={(e) => setCalcForm({ ...calcForm, height: e.target.value })} placeholder="175" /></Field>
+              <Field label={t('Gewicht (kg)')}><Input type="number" value={calcForm.weight} onChange={(e) => setCalcForm({ ...calcForm, weight: e.target.value })} placeholder="80" /></Field>
             </div>
             {/* Activity */}
-            <Field label="Aktivitätslevel">
+            <Field label={t('Aktivitätslevel')}>
               <div className="grid grid-cols-2 gap-2">
                 {ACTIVITY_LEVELS.map((a) => (
                   <button
@@ -238,24 +243,24 @@ export default function NutritionScreen() {
                     className={`py-2.5 rounded-xl text-xs font-medium adlr-tap border transition-all ${
                       calcForm.activity === a.factor ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'
                     }`}
-                  >{a.label} ×{a.factor}</button>
+                  >{t(a.label)} ×{fmtNum(a.factor)}</button>
                 ))}
               </div>
             </Field>
             {/* Goal */}
-            <Field label="Ziel">
+            <Field label={t('Ziel')}>
               <div className="flex gap-2">
-                <button onClick={() => setCalcForm({ ...calcForm, goal: 'reduce', rate: 0.5 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'reduce' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>Reduzieren</button>
-                <button onClick={() => setCalcForm({ ...calcForm, goal: 'maintain', rate: 0 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'maintain' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>Halten</button>
-                <button onClick={() => setCalcForm({ ...calcForm, goal: 'gain', rate: 0.25 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'gain' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>Aufbauen</button>
+                <button onClick={() => setCalcForm({ ...calcForm, goal: 'reduce', rate: 0.5 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'reduce' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>{t('Reduzieren')}</button>
+                <button onClick={() => setCalcForm({ ...calcForm, goal: 'maintain', rate: 0 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'maintain' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>{t('Halten')}</button>
+                <button onClick={() => setCalcForm({ ...calcForm, goal: 'gain', rate: 0.25 })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium adlr-tap border transition-all ${calcForm.goal === 'gain' ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'}`}>{t('Aufbauen')}</button>
               </div>
             </Field>
             {/* Rate slider */}
             {calcForm.goal !== 'maintain' && maxRate > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-white/50 uppercase tracking-wide">Wöchentliche Veränderung</span>
-                  <span className="text-xs text-adlr-gold font-medium">{calcForm.rate.toFixed(2)}% / Woche</span>
+                  <span className="text-xs text-white/50 uppercase tracking-wide">{t('Wöchentliche Veränderung')}</span>
+                  <span className="text-xs text-adlr-gold font-medium">{t('{rate}% / Woche', { rate: fmtNum(calcForm.rate, { minimumFractionDigits: 2 }) })}</span>
                 </div>
                 <input
                   type="range"
@@ -267,28 +272,28 @@ export default function NutritionScreen() {
                   className="w-full accent-[rgb(var(--adlr-gold))]"
                 />
                 <div className="flex justify-between text-[10px] text-white/30 mt-1">
-                  <span>0.1%</span>
-                  <span>Max: {maxRate.toFixed(2)}%</span>
+                  <span>{fmtNum(0.1)}%</span>
+                  <span>{t('Max')}: {fmtNum(maxRate, { minimumFractionDigits: 2 })}%</span>
                 </div>
               </div>
             )}
-            <Button onClick={calculateCalories} className="w-full">Berechnen</Button>
+            <Button onClick={calculateCalories} className="w-full">{t('Berechnen')}</Button>
             {calcResult && (
               <div className="text-center py-3 rounded-xl" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', border: '1px solid rgb(var(--adlr-gold) / 0.2)' }}>
-                <p className="text-3xl font-bold adlr-gold-text">{calcResult.target} kcal</p>
-                <p className="text-xs text-white/50 mt-1">Tagesziel · {calcResult.goal}</p>
-                <p className="text-xs text-white/40 mt-0.5">Erhaltungskalorien (TDEE): {calcResult.tdee} kcal</p>
+                <p className="text-3xl font-bold adlr-gold-text">{fmtNum(calcResult.target)} kcal</p>
+                <p className="text-xs text-white/50 mt-1">{t('Tagesziel')} · {t(calcResult.goal)}</p>
+                <p className="text-xs text-white/40 mt-0.5">{t('Erhaltungskalorien (TDEE)')}: {fmtNum(calcResult.tdee)} kcal</p>
                 <p className="text-[11px] text-white/30 mt-2 leading-relaxed max-w-xs mx-auto">
-                  {calcForm.goal === 'reduce' && `Tagesdefizit: ${calcResult.tdee - calcResult.target} kcal`}
-                  {calcForm.goal === 'gain' && `Tagesüberschuss: ${calcResult.target - calcResult.tdee} kcal`}
-                  {calcForm.goal === 'maintain' && 'Entspricht deinem Erhaltungsbedarf'}
+                  {calcForm.goal === 'reduce' && `${t('Tagesdefizit')}: ${fmtNum(calcResult.tdee - calcResult.target)} kcal`}
+                  {calcForm.goal === 'gain' && `${t('Tagesüberschuss')}: ${fmtNum(calcResult.target - calcResult.tdee)} kcal`}
+                  {calcForm.goal === 'maintain' && t('Entspricht deinem Erhaltungsbedarf')}
                 </p>
               </div>
             )}
             {/* Mandatory disclaimer */}
             <div className="rounded-xl p-3" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.08)' }}>
               <p className="text-[11px] text-white/40 leading-relaxed">
-                Dieser Wert ist eine Schätzung auf Basis anerkannter Formeln und dient als Orientierung. Er ersetzt keine individuelle Ernährungsberatung durch eine diplomierte Fachkraft. Bei Vorerkrankungen bitte vorher ärztlich abklären.
+                {t('Dieser Wert ist eine Schätzung auf Basis anerkannter Formeln und dient als Orientierung. Er ersetzt keine individuelle Ernährungsberatung durch eine diplomierte Fachkraft. Bei Vorerkrankungen bitte vorher ärztlich abklären.')}
               </p>
             </div>
           </div>
@@ -297,12 +302,12 @@ export default function NutritionScreen() {
 
       {/* Daily principle check-ins */}
       <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-1">Tägliche Prinzipien</p>
-        <p className="text-xs text-white/40 mb-4">Basierend auf deinem Ziel: <span className="text-adlr-gold/80">{primaryGoal}</span></p>
+        <p className="text-sm font-medium text-white/80 mb-1">{t('Tägliche Prinzipien')}</p>
+        <p className="text-xs text-white/40 mb-4">{t('Basierend auf deinem Ziel:')} <span className="text-adlr-gold/80">{t(primaryGoal === 'default' ? 'Allgemein' : primaryGoal)}</span></p>
         {calcResult && (
           <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', border: '1px solid rgb(var(--adlr-gold) / 0.15)' }}>
             <Flame size={14} className="text-adlr-gold shrink-0" />
-            <span className="text-xs text-white/70">Tagesziel: <span className="adlr-gold-text font-bold">{calcResult.target} kcal</span></span>
+            <span className="text-xs text-white/70">{t('Tagesziel')}: <span className="adlr-gold-text font-bold">{fmtNum(calcResult.target)} kcal</span></span>
           </div>
         )}
         <div className="space-y-3">
@@ -313,7 +318,7 @@ export default function NutritionScreen() {
               <div key={i} className="rounded-xl p-3" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.06)' }}>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="w-6 h-6 rounded-full bg-adlr-gold/10 border border-adlr-gold/30 text-adlr-gold text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
-                  <span className="text-sm text-white/80 flex-1">{p}</span>
+                  <span className="text-sm text-white/80 flex-1">{t(p)}</span>
                 </div>
                 <div className="flex gap-2 ml-9">
                   <button
@@ -324,7 +329,7 @@ export default function NutritionScreen() {
                         : 'bg-white/5 text-white/40 border border-white/10'
                     }`}
                   >
-                    <Check size={13} /> Ja
+                    <Check size={13} /> {t('Ja')}
                   </button>
                   <button
                     onClick={() => togglePrinciple(p, false)}
@@ -334,7 +339,7 @@ export default function NutritionScreen() {
                         : 'bg-white/5 text-white/40 border border-white/10'
                     }`}
                   >
-                    <X size={13} /> Nein
+                    <X size={13} /> {t('Nein')}
                   </button>
                 </div>
               </div>
@@ -345,16 +350,16 @@ export default function NutritionScreen() {
 
       {/* Weekly summary */}
       <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-1">Wochenrückblick</p>
-        <p className="text-xs text-white/40 mb-4">Diese Woche ({DAY_LABELS[0]}–{DAY_LABELS[6]})</p>
+        <p className="text-sm font-medium text-white/80 mb-1">{t('Wochenrückblick')}</p>
+        <p className="text-xs text-white/40 mb-4">{t('Diese Woche')} ({t(DAY_LABELS[0])}–{t(DAY_LABELS[6])})</p>
         <div className="space-y-3">
           {weekSummary.map((ws, i) => {
             const pctVal = Math.round((ws.daysAdhered / ws.total) * 100);
             return (
               <div key={i}>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-white/70">{ws.principle}</span>
-                  <span className="text-xs text-adlr-gold font-medium">{ws.daysAdhered}/{ws.total} Tage · {pctVal}%</span>
+                  <span className="text-xs text-white/70">{t(ws.principle)}</span>
+                  <span className="text-xs text-adlr-gold font-medium">{t('{n}/{total} Tage', { n: ws.daysAdhered, total: ws.total })} · {pctVal}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-white/5 overflow-hidden">
                   <div
@@ -373,13 +378,41 @@ export default function NutritionScreen() {
 
       {/* Weekly tip from Peter */}
       <Card className="adlr-gold-border bg-gradient-to-br from-adlr-gold/5 to-transparent">
-        <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2">Tipp von Peter</p>
+        <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2">{t('Tipp von Peter')}</p>
         {tip ? (
           <p className="text-sm text-white/90 leading-relaxed">{tip.tip}</p>
         ) : (
-          <p className="text-sm text-white/40">Peter bereitet deinen Tipp vor.</p>
+          <p className="text-sm text-white/40">{t('Peter bereitet deinen Tipp vor.')}</p>
         )}
       </Card>
     </div>
+  );
+}
+
+function KcalTargetCard({ clientId, target }: { clientId: string; target: number }) {
+  const [today, setToday] = useState<number | null>(null);
+  useEffect(() => {
+    const key = localDateKey(new Date()); // health_daily.day is a LOCAL date
+    supabase.from('health_daily').select('kcal_in').eq('client_id', clientId).eq('day', key).maybeSingle()
+      .then(({ data }) => setToday((data as { kcal_in: number | null } | null)?.kcal_in ?? null));
+  }, [clientId]);
+  const pct = today != null ? Math.min(100, Math.round((today / target) * 100)) : 0;
+  return (
+    <Card className="mb-5">
+      <p className="text-xs uppercase tracking-wider text-white/40 mb-1">{t('Dein Tagesziel')}</p>
+      <p className="text-3xl font-bold adlr-gold-text">{fmtNum(target)} kcal</p>
+      <p className="text-xs text-white/40 mt-0.5">{t('festgelegt von deinem Coach')}</p>
+      {today != null && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-white/60 mb-1">
+            <span>{t('Heute gegessen')}: {fmtNum(today)} kcal</span>
+            <span>{t('{n} kcal übrig', { n: fmtNum(Math.max(0, target - today)) })}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full bg-adlr-gold" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
