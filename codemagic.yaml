@@ -26,6 +26,7 @@ workflows:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.adlr.app"
+        WIDGET_BUNDLE_ID: "com.adlr.app.RestTimer"
       # Set this env group in the Codemagic UI:
       #   - "supabase": VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (Vite inlines them at build time)
       groups:
@@ -53,8 +54,16 @@ workflows:
             --type IOS_APP_STORE \
             --certificate-key @file:/tmp/adlr_cert_key.pem \
             --create
+          # Live Activity widget extension (RestTimerWidget) has its own bundle id and
+          # App Store profile. Register the id if it doesn't exist yet (fails harmlessly
+          # when it already does), then fetch its profile with the SAME certificate key.
+          app-store-connect bundle-ids create "$WIDGET_BUNDLE_ID" --name "ADLR Rest Timer" --platform IOS || true
+          app-store-connect fetch-signing-files "$WIDGET_BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key @file:/tmp/adlr_cert_key.pem \
+            --create
           keychain add-certificates
-          # Wire the downloaded profile into the Xcode project (manual signing).
+          # Wire the downloaded profiles (app + widget) into the Xcode project (manual signing).
           xcode-project use-profiles
       - name: Build .ipa
         script: |

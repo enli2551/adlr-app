@@ -17,7 +17,37 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		B2AD00000000000000000B01 /* RestChronoPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F01 /* RestChronoPlugin.swift */; };
+		B2AD00000000000000000B02 /* RestTimerShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F02 /* RestTimerShared.swift */; };
+		B2AD00000000000000000B03 /* ADLRBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */; };
+		B2AD00000000000000000B04 /* RestTimerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F04 /* RestTimerWidget.swift */; };
+		B2AD00000000000000000B05 /* RestTimerShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F02 /* RestTimerShared.swift */; };
+		B2AD00000000000000000B06 /* RestTimerWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F06 /* RestTimerWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B2AD00000000000000000D03 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B2AD00000000000000000D01;
+			remoteInfo = RestTimerWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B2AD00000000000000000C04 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B2AD00000000000000000B06 /* RestTimerWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -34,6 +64,12 @@
 		A1D0C0DE00000000000000A3 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A1D0C0DE00000000000000A4 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A1D0C0DE00000000000000A5 /* hu */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = hu; path = hu.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		B2AD00000000000000000F01 /* RestChronoPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestChronoPlugin.swift; sourceTree = "<group>"; };
+		B2AD00000000000000000F02 /* RestTimerShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerShared.swift; sourceTree = "<group>"; };
+		B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADLRBridgeViewController.swift; sourceTree = "<group>"; };
+		B2AD00000000000000000F04 /* RestTimerWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerWidget.swift; sourceTree = "<group>"; };
+		B2AD00000000000000000F05 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2AD00000000000000000F06 /* RestTimerWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RestTimerWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,6 +81,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B2AD00000000000000000C02 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -53,6 +96,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				B2AD00000000000000000A01 /* RestTimerWidget */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				B2AD00000000000000000F06 /* RestTimerWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -71,6 +116,9 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */,
+				B2AD00000000000000000F01 /* RestChronoPlugin.swift */,
+				B2AD00000000000000000F02 /* RestTimerShared.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -80,6 +128,15 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		B2AD00000000000000000A01 /* RestTimerWidget */ = {
+			isa = PBXGroup;
+			children = (
+				B2AD00000000000000000F04 /* RestTimerWidget.swift */,
+				B2AD00000000000000000F05 /* Info.plist */,
+			);
+			path = RestTimerWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -92,10 +149,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				B2AD00000000000000000C04 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B2AD00000000000000000D02 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -104,6 +163,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B2AD00000000000000000D01 /* RestTimerWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2AD00000000000000000E03 /* Build configuration list for PBXNativeTarget "RestTimerWidget" */;
+			buildPhases = (
+				B2AD00000000000000000C01 /* Sources */,
+				B2AD00000000000000000C02 /* Frameworks */,
+				B2AD00000000000000000C03 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RestTimerWidget;
+			productName = RestTimerWidget;
+			productReference = B2AD00000000000000000F06 /* RestTimerWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -140,6 +216,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				B2AD00000000000000000D01 /* RestTimerWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -159,6 +236,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B2AD00000000000000000C03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -168,10 +252,30 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				B2AD00000000000000000B03 /* ADLRBridgeViewController.swift in Sources */,
+				B2AD00000000000000000B01 /* RestChronoPlugin.swift in Sources */,
+				B2AD00000000000000000B02 /* RestTimerShared.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B2AD00000000000000000C01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B2AD00000000000000000B04 /* RestTimerWidget.swift in Sources */,
+				B2AD00000000000000000B05 /* RestTimerShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B2AD00000000000000000D02 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B2AD00000000000000000D01 /* RestTimerWidget */;
+			targetProxy = B2AD00000000000000000D03 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -360,6 +464,57 @@
 			};
 			name = Release;
 		};
+		B2AD00000000000000000E01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 7S87RYSQ7D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RestTimerWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.22;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adlr.app.RestTimer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B2AD00000000000000000E02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 7S87RYSQ7D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RestTimerWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.22;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adlr.app.RestTimer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -377,6 +532,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B2AD00000000000000000E03 /* Build configuration list for PBXNativeTarget "RestTimerWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B2AD00000000000000000E01 /* Debug */,
+				B2AD00000000000000000E02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
