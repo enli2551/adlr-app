@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
-import { Card, SectionHeader, Loading } from '@/components/ui';
+import { Card, Loading } from '@/components/ui';
 import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages } from 'lucide-react';
-import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
+import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
 import HealthConnectCard from '@/components/HealthConnectCard';
@@ -13,6 +13,9 @@ import MyPackageCard from '@/components/business/MyPackageCard';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t, fmtDate } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { createPortal } from 'react-dom';
+import { THEMES, getTheme } from '@/lib/theme';
+import { LANGS, useLang } from '@/lib/i18n';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -38,6 +41,9 @@ export default function ProfileScreen() {
   const { profile, signOut } = useAuth();
   const nav = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sheet, setSheet] = useState<'theme' | 'lang' | 'delete' | null>(null);
+  const [themeId, setThemeId] = useState(getTheme());
+  const lang = useLang();
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
@@ -175,12 +181,6 @@ export default function ProfileScreen() {
     return remaining > daysLeft;
   }, [planDays, completions]);
 
-  // ---- Weekly fulfillment (trainings logged this week vs. weekly target) ----
-  const weeklyFulfillment = useMemo(() => {
-    const { startKey, endKey } = weekBounds(new Date());
-    return { planned: trainingsPerWeek, completed: countInRange(startKey, endKey) };
-  }, [planDays, completions]);
-
   // ---- Muscle group heatmap (this week) ----
   const muscleHeatmap = useMemo(() => {
     const today = new Date();
@@ -296,61 +296,42 @@ export default function ProfileScreen() {
 
   if (loading) return <Loading />;
 
-  const weekPct = weeklyFulfillment.planned > 0 ? Math.min(100, (weeklyFulfillment.completed / weeklyFulfillment.planned) * 100) : 0;
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title={t('Profil')} subtitle={t('Dein Trainingsweg.')} />
-
-      {/* Streak */}
-      <Card className="mb-5 adlr-gold-border">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--adlr-gold) / 0.15)' }}>
-            <Flame size={28} className="text-adlr-gold" />
-          </div>
-          <div className="flex-1">
-            <p className="text-2xl font-bold text-white">{streak} <span className="text-sm text-white/50 font-normal">{t('Wochen-Streak')}</span></p>
-            <p className="text-xs text-white/40 mt-0.5">
-              {hasMissedThisWeek && streak === 0
-                ? t('Ein verpasstes Training ist kein Rückschlag — morgen geht es weiter.')
-                : streak > 0
-                ? t('Kein geplantes Training verpasst. Bleib dran!')
-                : t('Starte deine Streak — schließe dein nächstes Training ab.')}
-            </p>
-          </div>
+      {/* Header: who + three key numbers (the weekly goal itself lives on the training screen) */}
+      <div className="flex items-center gap-4 mb-5">
+        <div className="w-16 h-16 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-xl font-bold overflow-hidden shrink-0">
+          {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" /> : (profile?.first_name?.[0] ?? '?').toUpperCase()}
         </div>
-      </Card>
-
-      {/* Weekly fulfillment */}
-      <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><Target size={16} className="text-adlr-gold" /> {t('Diese Woche')}</p>
-        <div className="flex items-center gap-4">
-          <div className="relative w-20 h-20 flex-shrink-0">
-            <svg width="80" height="80" viewBox="0 0 80 80">
-              <circle cx="40" cy="40" r="34" stroke="rgb(var(--text) / 0.12)" strokeWidth="6" fill="none" />
-              <circle
-                cx="40" cy="40" r="34" stroke="rgb(var(--adlr-gold))" strokeWidth="6" fill="none"
-                strokeDasharray={`${2 * Math.PI * 34}`}
-                strokeDashoffset={`${2 * Math.PI * 34 * (1 - weekPct / 100)}`}
-                strokeLinecap="round"
-                transform="rotate(-90 40 40)"
-                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-bold adlr-gold-text">{weeklyFulfillment.completed}/{weeklyFulfillment.planned}</span>
-            </div>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm text-white/70">
-              {t('{n} von {total} Trainings diese Woche', { n: weeklyFulfillment.completed, total: weeklyFulfillment.planned })}
-            </p>
-            <p className="text-xs text-white/40 mt-1">
-              {weekPct === 100 ? t('Perfekte Woche!') : weekPct >= 50 ? t('Gut unterwegs.') : t('Noch ein paar Trainings offen.')}
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-white truncate">{profile?.first_name ?? t('Profil')} {profile?.last_name ?? ''}</h1>
+          {profile?.intake?.goals?.[0] && (
+            <p className="text-xs text-adlr-gold/80 mt-0.5 flex items-center gap-1"><Target size={12} /> {t(profile.intake.goals[0])}</p>
+          )}
         </div>
-      </Card>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        {[
+          { icon: Flame, value: String(streak), label: streak === 1 ? t('Woche in Folge') : t('Wochen in Folge') },
+          { icon: Trophy, value: String(totalWorkouts), label: t('Trainings') },
+          { icon: Target, value: nextMilestone ? String(nextMilestone - totalWorkouts) : '✓', label: nextMilestone ? t('bis {m} Trainings', { m: nextMilestone }) : t('Alle Meilensteine') },
+        ].map((s, i) => (
+          <div key={i} className="adlr-card px-3 py-3 text-center">
+            <s.icon size={16} className="text-adlr-gold mx-auto mb-1" />
+            <p className="text-xl font-bold text-white leading-none">{s.value}</p>
+            <p className="text-[10px] text-white/45 mt-1 leading-tight">{s.label}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-white/40 mb-5 px-1">
+        {hasMissedThisWeek && streak === 0
+          ? t('Ein verpasstes Training ist kein Rückschlag — morgen geht es weiter.')
+          : streak > 0
+          ? t('Kein geplantes Training verpasst. Bleib dran!')
+          : t('Starte deine Streak — schließe dein nächstes Training ab.')}
+      </p>
 
       {/* Package from the coach (sessions left, validity) */}
       {profile && <MyPackageCard clientId={profile.id} />}
@@ -445,26 +426,6 @@ export default function ProfileScreen() {
         </Card>
       )}
 
-      {/* Total stats */}
-      <Card className="mb-5">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--adlr-gold) / 0.1)' }}>
-            <Trophy size={24} className="text-adlr-gold" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white">{totalWorkouts}</p>
-            <p className="text-xs text-white/40">{t('Trainings abgeschlossen')}</p>
-          </div>
-        </div>
-        {nextMilestone && (
-          <div className="mt-3 pt-3 border-t border-white/5">
-            <p className="text-xs text-adlr-gold/70">
-              {t('Noch {n} Trainings bis zum {m}. Meilenstein.', { n: nextMilestone - totalWorkouts, m: nextMilestone })}
-            </p>
-          </div>
-        )}
-      </Card>
-
       {/* Plateau detection */}
       {plateaus.length > 0 && (
         <div className="space-y-3 mb-5">
@@ -482,45 +443,67 @@ export default function ProfileScreen() {
         </div>
       )}
 
-      {/* Appearance / theme */}
-      <Card className="mb-5">
-        <div className="flex items-center gap-3 mb-3">
-          <Palette size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">{t('Erscheinungsbild')}</p>
-        </div>
-        <ThemeSwitcher />
-      </Card>
+      {/* Settings — compact grouped list; each row opens a bottom sheet */}
+      <p className="text-[11px] uppercase tracking-wider text-white/35 mb-2 px-1">{t('Einstellungen')}</p>
+      <div className="adlr-card p-0 mb-6 overflow-hidden">
+        {[
+          { key: 'theme' as const, icon: Palette, label: t('Erscheinungsbild'), value: THEMES.find((x) => x.id === themeId)?.label ?? '', danger: false },
+          { key: 'lang' as const, icon: Languages, label: t('Sprache'), value: LANGS.find((l) => l.id === lang)?.label ?? '', danger: false },
+          { key: 'delete' as const, icon: Trash2, label: t('Konto löschen'), value: '', danger: true },
+        ].map((row, i) => (
+          <button
+            key={row.key}
+            onClick={() => setSheet(row.key)}
+            className="adlr-tap w-full flex items-center gap-3 px-4 py-3.5 text-left"
+            style={i > 0 ? { borderTop: '1px solid rgb(var(--text) / 0.06)' } : undefined}
+          >
+            <row.icon size={17} className={row.danger ? 'text-red-400' : 'text-adlr-gold'} />
+            <span className={`flex-1 text-sm ${row.danger ? 'text-red-400' : 'text-white/85'}`}>{row.label}</span>
+            {row.value && <span className="text-sm text-white/40">{row.value}</span>}
+            <ChevronRight size={16} className="text-white/25" />
+          </button>
+        ))}
+      </div>
 
-      {/* Language */}
-      <Card className="mb-5">
-        <div className="flex items-center gap-3 mb-3">
-          <Languages size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">{t('Sprache')}</p>
-        </div>
-        <LanguageSwitcher />
-      </Card>
-
-      {/* Danger zone — account deletion (required by App Store & Play) */}
-      <Card className="mb-5" style={{ border: '1px solid rgba(239,68,68,0.2)' }}>
-        <div className="flex items-center gap-3 mb-2">
-          <Trash2 size={18} className="text-red-400" />
-          <p className="text-sm font-medium text-white/80">{t('Konto löschen')}</p>
-        </div>
-        <p className="text-xs text-white/50 leading-relaxed mb-3">
-          {t('Dein Konto und alle deine Daten (Trainings, Fortschritt, Fotos) werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.')}
-        </p>
-        {deleteErr && <p className="text-xs text-red-400 mb-2">{deleteErr}</p>}
-        <button
-          onClick={handleDeleteAccount}
-          disabled={deleting}
-          className="adlr-tap w-full py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-          style={confirmDelete
-            ? { background: 'rgb(239,68,68)', color: '#fff' }
-            : { background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.3)' }}
-        >
-          {deleting ? t('Wird gelöscht…') : confirmDelete ? t('Wirklich löschen? Tippe erneut') : t('Konto endgültig löschen')}
-        </button>
-      </Card>
+      {sheet && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => { setSheet(null); setConfirmDelete(false); }}>
+          <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>
+            {sheet === 'theme' && (
+              <>
+                <p className="text-base font-semibold text-white mb-3 flex items-center gap-2"><Palette size={16} className="text-adlr-gold" /> {t('Erscheinungsbild')}</p>
+                <div onClick={() => setThemeId(getTheme())}><ThemeSwitcher /></div>
+              </>
+            )}
+            {sheet === 'lang' && (
+              <>
+                <p className="text-base font-semibold text-white mb-3 flex items-center gap-2"><Languages size={16} className="text-adlr-gold" /> {t('Sprache')}</p>
+                <LanguageSwitcher />
+              </>
+            )}
+            {sheet === 'delete' && (
+              <>
+                <p className="text-base font-semibold text-white mb-2 flex items-center gap-2"><Trash2 size={16} className="text-red-400" /> {t('Konto löschen')}</p>
+                <p className="text-xs text-white/55 leading-relaxed mb-4">
+                  {t('Dein Konto und alle deine Daten (Trainings, Fortschritt, Fotos) werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.')}
+                </p>
+                {deleteErr && <p className="text-xs text-red-400 mb-2">{deleteErr}</p>}
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                  className="adlr-tap w-full py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+                  style={confirmDelete
+                    ? { background: 'rgb(239,68,68)', color: '#fff' }
+                    : { background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.3)' }}
+                >
+                  {deleting ? t('Wird gelöscht…') : confirmDelete ? t('Wirklich löschen? Tippe erneut') : t('Konto endgültig löschen')}
+                </button>
+              </>
+            )}
+            <button onClick={() => { setSheet(null); setConfirmDelete(false); }} className="adlr-tap w-full mt-3 py-2.5 rounded-xl text-sm text-white/60 bg-white/5">{t('Schließen')}</button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Day detail modal */}
       {selectedDay && selectedDayInfo && (

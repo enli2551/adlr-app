@@ -1,17 +1,12 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { localDateKey } from '@/lib/dates';
-import type { NutritionTip, HydrationLog, NutritionPrincipleCheckin, ProgressEntry } from '@/lib/types';
+import type { NutritionTip, HydrationLog, ProgressEntry } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
-import { Plus, Minus, Droplets, Check, X, Calculator, Flame } from 'lucide-react';
-import { t, fmtNum } from '@/lib/i18n';
-
-const PRINCIPLES: Record<string, string[]> = {
-  'Gewicht reduzieren': ['Protein bei jeder Mahlzeit', 'Zucker meiden', 'Wasser vor jedem Essen'],
-  'Muskeln aufbauen': ['1.6-2g Protein pro kg Körpergewicht', 'Kalorienüberschuss', 'Post-Workout-Carb'],
-  default: ['Protein bei jeder Mahlzeit', 'Verarbeitetes meiden', 'Wasser trinken'],
-};
+import { Plus, Minus, Droplets, Calculator, Flame, Beef, HeartPulse, ChevronRight, Sparkles } from 'lucide-react';
+import { t, fmtNum, fmtDate } from '@/lib/i18n';
 
 const ACTIVITY_LEVELS = [
   { label: 'Sitzend', factor: 1.2 },
@@ -20,27 +15,20 @@ const ACTIVITY_LEVELS = [
   { label: 'Sehr aktiv', factor: 1.725 },
 ];
 
-function getWeekDates(): string[] {
-  const dates: string[] = [];
-  const today = new Date();
-  const day = today.getDay() === 0 ? 6 : today.getDay() - 1; // Mon=0
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - day);
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-  return dates;
-}
+const WATER_GOAL = 8;
+const DAY = 86400000;
 
-const DAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+// Protein guidance (g per kg body weight) by the client's primary goal.
+const PROTEIN_PER_KG: Record<string, number> = { 'Muskeln aufbauen': 2.0, 'Gewicht reduzieren': 1.8 };
+
+interface HealthRow { day: string; kcal_in: number | null }
 
 export default function NutritionScreen() {
   const { profile } = useAuth();
+  const nav = useNavigate();
   const [tip, setTip] = useState<NutritionTip | null>(null);
   const [hydration, setHydration] = useState<HydrationLog | null>(null);
-  const [checkins, setCheckins] = useState<NutritionPrincipleCheckin[]>([]);
+  const [health, setHealth] = useState<HealthRow[]>([]);
   const [latestWeight, setLatestWeight] = useState<number | null>(null);
   const [showCalc, setShowCalc] = useState(false);
   const [calcResult, setCalcResult] = useState<{ tdee: number; target: number; goal: string } | null>(null);
@@ -55,28 +43,27 @@ export default function NutritionScreen() {
   });
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const weekDates = getWeekDates();
+  const today = localDateKey(new Date());
 
   const load = async () => {
     if (!profile) return;
-    setLoading(true);
-    const [tipRes, hydRes, checkinRes, peRes] = await Promise.all([
+    const since = localDateKey(new Date(Date.now() - 6 * DAY));
+    const [tipRes, hydRes, peRes, hd] = await Promise.all([
       supabase.from('nutrition_tips').select('*').eq('client_id', profile.id).maybeSingle(),
       supabase.from('hydration_logs').select('*').eq('client_id', profile.id).eq('log_date', today).maybeSingle(),
-      supabase.from('nutrition_principle_checkins').select('*').eq('client_id', profile.id).order('log_date', { ascending: false }).limit(50),
       supabase.from('progress_entries').select('*').eq('client_id', profile.id).order('logged_at', { ascending: false }).limit(1),
+      supabase.from('health_daily').select('day, kcal_in').eq('client_id', profile.id).gte('day', since),
     ]);
     setTip(tipRes.data as NutritionTip | null);
     setHydration(hydRes.data as HydrationLog | null);
-    setCheckins((checkinRes.data ?? []) as NutritionPrincipleCheckin[]);
+    setHealth((hd.data ?? []) as HealthRow[]);
     const pe = (peRes.data ?? []) as ProgressEntry[];
     const w = pe[0]?.weight_kg ?? profile.weight_kg ?? null;
     setLatestWeight(w);
     if (w) setCalcForm((f) => ({ ...f, weight: w.toString() }));
     if (profile.age) setCalcForm((f) => ({ ...f, age: profile.age!.toString() }));
     if (profile.height_cm) setCalcForm((f) => ({ ...f, height: profile.height_cm!.toString() }));
-    if (profile.gender) setCalcForm((f) => ({ ...f, gender: profile.gender === 'weiblich' ? 'female' : 'male' }));
+    if (profile.gender) setCalcForm((f) => ({ ...f, gender: /^(frau|weiblich)/i.test(profile.gender ?? '') ? 'female' : 'male' }));
     setLoading(false);
   };
 
@@ -84,31 +71,12 @@ export default function NutritionScreen() {
 
   const adjustWater = async (delta: number) => {
     if (!profile) return;
-    const cur = hydration?.glasses ?? 0;
-    const next = Math.max(0, cur + delta);
+    const next = Math.max(0, (hydration?.glasses ?? 0) + delta);
+    setHydration((h) => (h ? { ...h, glasses: next } : h)); // optimistic
     if (hydration) {
       await supabase.from('hydration_logs').update({ glasses: next }).eq('id', hydration.id);
     } else {
       await supabase.from('hydration_logs').insert({ client_id: profile.id, glasses: next, log_date: today });
-    }
-    load();
-  };
-
-  const togglePrinciple = async (principle: string, adhered: boolean) => {
-    if (!profile) return;
-    // Check if today's check-in for this principle already exists
-    const existing = checkins.find((c) => c.principle === principle && c.log_date === today);
-    if (existing) {
-      // Update existing
-      await supabase.from('nutrition_principle_checkins').update({ adhered }).eq('id', existing.id);
-    } else {
-      // Insert new
-      await supabase.from('nutrition_principle_checkins').insert({
-        client_id: profile.id,
-        principle,
-        adhered,
-        log_date: today,
-      });
     }
     load();
   };
@@ -126,13 +94,11 @@ export default function NutritionScreen() {
     let goalLabel = 'Halten';
     if (calcForm.goal === 'reduce') {
       const kgPerWeek = (calcForm.rate / 100) * w;
-      const dailyDeficit = Math.round((kgPerWeek * 7700) / 7);
-      target = tdee - dailyDeficit;
+      target = tdee - Math.round((kgPerWeek * 7700) / 7);
       goalLabel = 'Reduzieren';
     } else if (calcForm.goal === 'gain') {
       const kgPerWeek = (calcForm.rate / 100) * w;
-      const dailySurplus = Math.round((kgPerWeek * 7700) / 7);
-      target = tdee + dailySurplus;
+      target = tdee + Math.round((kgPerWeek * 7700) / 7);
       goalLabel = 'Aufbauen';
     }
     setCalcResult({ tdee, target: Math.round(target), goal: goalLabel });
@@ -142,62 +108,130 @@ export default function NutritionScreen() {
 
   if (loading) return <Loading />;
 
-  const goal = 8;
   const glasses = hydration?.glasses ?? 0;
-  const pct = Math.min(100, (glasses / goal) * 100);
-  const primaryGoal = profile?.intake?.goals?.[0] ?? 'default';
-  const principles = PRINCIPLES[primaryGoal] ?? PRINCIPLES.default;
+  const primaryGoal = profile?.intake?.goals?.[0] ?? null;
+  const target = profile?.kcal_target ?? calcResult?.target ?? null;
+  const eatenToday = health.find((h) => h.day === today)?.kcal_in ?? null;
+  const healthConnected = health.some((h) => h.kcal_in != null && h.kcal_in > 0);
+  const proteinG = latestWeight ? Math.round((latestWeight * (PROTEIN_PER_KG[primaryGoal ?? ''] ?? 1.6)) / 5) * 5 : null;
 
-  // Weekly summary per principle
-  const weekSummary = principles.map((p) => {
-    const daysAdhered = weekDates.filter((d) =>
-      checkins.some((c) => c.principle === p && c.log_date === d && c.adhered)
-    ).length;
-    return { principle: p, daysAdhered, total: 7 };
+  // Last 7 days (oldest → today) for the bar chart.
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(Date.now() - (6 - i) * DAY);
+    const key = localDateKey(d);
+    return { key, d, kcal: health.find((h) => h.day === key)?.kcal_in ?? null };
   });
+  const logged = week.filter((w) => w.kcal && w.kcal > 0);
+  const avgKcal = logged.length ? Math.round(logged.reduce((s, w) => s + (w.kcal ?? 0), 0) / logged.length) : null;
+  const maxBar = Math.max(target ?? 0, ...logged.map((w) => w.kcal ?? 0), 1);
 
-  // Today's check-ins
-  const todayCheckins = new Map(principles.map((p) => [p, checkins.find((c) => c.principle === p && c.log_date === today)]));
+  const R = 52, C = 2 * Math.PI * R;
+  const pct = target && eatenToday ? Math.min(1, eatenToday / target) : 0;
+  const over = target != null && eatenToday != null && eatenToday > target * 1.1;
 
   return (
     <div className="adlr-fade-in">
       <SectionHeader title={t('Ernährung')} subtitle={t('Du bist, was du isst.')} />
 
-      {/* Hydration */}
-      <Card className="mb-5">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Droplets size={16} className="text-adlr-gold" /> {t('Hydration')}</p>
-          <span className="text-xs text-white/40">{t('{n} / {goal} Gläser', { n: glasses, goal })}</span>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="relative w-24 h-24 flex-shrink-0">
-            <svg width="96" height="96" viewBox="0 0 96 96">
-              <circle cx="48" cy="48" r="42" stroke="rgb(var(--text) / 0.12)" strokeWidth="6" fill="none" />
-              <circle
-                cx="48" cy="48" r="42" stroke="rgb(var(--adlr-gold))" strokeWidth="6" fill="none"
-                strokeDasharray={`${2 * Math.PI * 42}`}
-                strokeDashoffset={`${2 * Math.PI * 42 * (1 - pct / 100)}`}
-                strokeLinecap="round"
-                transform="rotate(-90 48 48)"
-                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-              />
+      {/* Today: calories vs. target (from Apple Health / Health Connect, e.g. YAZIO) */}
+      <Card className="mb-4">
+        <div className="flex items-center gap-5">
+          <div className="relative w-32 h-32 shrink-0">
+            <svg viewBox="0 0 120 120" className="w-32 h-32 -rotate-90">
+              <circle cx="60" cy="60" r={R} fill="none" stroke="rgb(var(--text) / 0.08)" strokeWidth="10" />
+              <circle cx="60" cy="60" r={R} fill="none" stroke={over ? '#fb923c' : 'rgb(var(--adlr-gold))'} strokeWidth="10" strokeLinecap="round"
+                strokeDasharray={C} strokeDashoffset={C * (1 - pct)} style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
             </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xl font-bold adlr-gold-text">{glasses}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="text-2xl font-bold text-white leading-none">{eatenToday != null ? fmtNum(eatenToday) : '—'}</span>
+              <span className="text-[10px] uppercase tracking-wide text-white/40 mt-1">{t('kcal heute')}</span>
             </div>
           </div>
-          <div className="flex flex-col gap-2 flex-1">
-            <button onClick={() => adjustWater(1)} className="adlr-tap flex-1 py-4 rounded-xl bg-adlr-gold/10 border border-adlr-gold/30 text-adlr-gold flex items-center justify-center gap-2"><Plus size={18} /> {t('Glas')}</button>
-            <button onClick={() => adjustWater(-1)} className="adlr-tap py-2 rounded-xl bg-white/5 border border-white/10 text-white/50 flex items-center justify-center gap-2"><Minus size={14} /> {t('Glas entfernen')}</button>
+          <div className="min-w-0 flex-1 space-y-2.5">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1"><Flame size={12} className="text-adlr-gold" /> {t('Tagesziel')}</p>
+              <p className="text-lg font-bold text-white">{target ? `${fmtNum(target)} kcal` : '—'}</p>
+              {target && eatenToday != null && (
+                <p className="text-xs" style={{ color: over ? '#fb923c' : 'rgb(var(--text) / 0.55)' }}>
+                  {eatenToday <= target ? t('{n} kcal übrig', { n: fmtNum(target - eatenToday) }) : t('{n} kcal über dem Ziel', { n: fmtNum(eatenToday - target) })}
+                </p>
+              )}
+              {!target && <p className="text-xs text-white/45">{t('Dein Coach legt dein Ziel fest — oder berechne es unten.')}</p>}
+            </div>
+            {proteinG && (
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1"><Beef size={12} className="text-adlr-gold" /> {t('Protein-Ziel')}</p>
+                <p className="text-lg font-bold text-white">~{fmtNum(proteinG)} g</p>
+                <p className="text-xs text-white/45">{t('≈ {n} Portionen à 30 g', { n: Math.round(proteinG / 30) })}</p>
+              </div>
+            )}
           </div>
+        </div>
+        {!healthConnected && (
+          <button onClick={() => nav('/app/profil')} className="adlr-tap w-full mt-4 pt-3 flex items-center gap-2 text-left" style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}>
+            <HeartPulse size={16} className="text-adlr-gold shrink-0" />
+            <span className="flex-1 text-xs text-white/60">{t('Verbinde Apple Health / Health Connect (z. B. mit YAZIO) — dann erscheinen deine Kalorien hier automatisch.')}</span>
+            <ChevronRight size={16} className="text-white/30 shrink-0" />
+          </button>
+        )}
+      </Card>
+
+      {/* Last 7 days */}
+      {logged.length > 0 && (
+        <Card className="mb-4">
+          <div className="flex items-baseline justify-between mb-3">
+            <p className="text-sm font-medium text-white/80">{t('Letzte 7 Tage')}</p>
+            {avgKcal != null && <p className="text-xs text-white/45">{t('Ø {n} kcal', { n: fmtNum(avgKcal) })}</p>}
+          </div>
+          <div className="relative h-28 flex items-end gap-2">
+            {target && (
+              <div className="absolute left-0 right-0 border-t border-dashed" style={{ bottom: `${(target / maxBar) * 100}%`, borderColor: 'rgb(var(--adlr-gold) / 0.5)' }} />
+            )}
+            {week.map((w) => {
+              const h = w.kcal ? Math.max(4, (w.kcal / maxBar) * 100) : 3;
+              const ok = target && w.kcal ? Math.abs(w.kcal / target - 1) <= 0.1 : false;
+              return (
+                <div key={w.key} className="flex-1 flex flex-col items-center justify-end h-full">
+                  <div className="w-full rounded-md" style={{ height: `${h}%`, background: !w.kcal ? 'rgb(var(--text) / 0.08)' : ok ? '#22c55e' : target && w.kcal > target ? '#fb923c' : 'rgb(var(--adlr-gold))' }} />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 mt-1.5">
+            {week.map((w) => <span key={w.key} className="flex-1 text-center text-[10px] text-white/40">{fmtDate(w.d, { weekday: 'short' })}</span>)}
+          </div>
+          {target && <p className="text-[11px] text-white/35 mt-2">{t('Grün = im Zielbereich (±10 %) · gestrichelt = dein Tagesziel')}</p>}
+        </Card>
+      )}
+
+      {/* Water — one compact row */}
+      <Card className="mb-4">
+        <div className="flex items-center gap-3">
+          <Droplets size={20} className="text-adlr-gold shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white/85">{t('Wasser')}</p>
+            <div className="flex gap-1 mt-1.5">
+              {Array.from({ length: WATER_GOAL }, (_, i) => (
+                <span key={i} className="flex-1 h-2 rounded-full" style={{ background: i < glasses ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.1)' }} />
+              ))}
+            </div>
+            <p className="text-[11px] text-white/40 mt-1">{t('{n} / {goal} Gläser', { n: glasses, goal: WATER_GOAL })}</p>
+          </div>
+          <button onClick={() => adjustWater(-1)} disabled={glasses === 0} className="adlr-tap w-9 h-9 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center disabled:opacity-30" aria-label={t('Glas entfernen')}><Minus size={15} /></button>
+          <button onClick={() => adjustWater(1)} className="adlr-tap w-11 h-11 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }} aria-label={t('Glas')}><Plus size={18} /></button>
         </div>
       </Card>
 
-      {/* Daily calorie target from the coach (+ today's intake from Health/YAZIO) */}
-      {profile?.kcal_target ? <KcalTargetCard clientId={profile.id} target={profile.kcal_target} /> : null}
+      {/* Weekly tip from Peter */}
+      {tip && (
+        <Card className="mb-4 adlr-gold-border bg-gradient-to-br from-adlr-gold/5 to-transparent">
+          <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Sparkles size={13} /> {t('Tipp von Peter')}</p>
+          <p className="text-sm text-white/90 leading-relaxed">{tip.tip}</p>
+        </Card>
+      )}
 
       {/* Calorie calculator */}
-      <Card className="mb-5">
+      <Card className="mb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calculator size={16} className="text-adlr-gold" /> {t('Kalorienrechner')}</p>
           <button onClick={() => setShowCalc(!showCalc)} className="text-adlr-gold text-sm adlr-tap">
@@ -300,119 +334,6 @@ export default function NutritionScreen() {
         )}
       </Card>
 
-      {/* Daily principle check-ins */}
-      <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-1">{t('Tägliche Prinzipien')}</p>
-        <p className="text-xs text-white/40 mb-4">{t('Basierend auf deinem Ziel:')} <span className="text-adlr-gold/80">{t(primaryGoal === 'default' ? 'Allgemein' : primaryGoal)}</span></p>
-        {calcResult && (
-          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', border: '1px solid rgb(var(--adlr-gold) / 0.15)' }}>
-            <Flame size={14} className="text-adlr-gold shrink-0" />
-            <span className="text-xs text-white/70">{t('Tagesziel')}: <span className="adlr-gold-text font-bold">{fmtNum(calcResult.target)} kcal</span></span>
-          </div>
-        )}
-        <div className="space-y-3">
-          {principles.map((p, i) => {
-            const existing = todayCheckins.get(p);
-            const adhered = existing?.adhered;
-            return (
-              <div key={i} className="rounded-xl p-3" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.06)' }}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="w-6 h-6 rounded-full bg-adlr-gold/10 border border-adlr-gold/30 text-adlr-gold text-xs flex items-center justify-center font-bold shrink-0">{i + 1}</span>
-                  <span className="text-sm text-white/80 flex-1">{t(p)}</span>
-                </div>
-                <div className="flex gap-2 ml-9">
-                  <button
-                    onClick={() => togglePrinciple(p, true)}
-                    className={`adlr-tap flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
-                      adhered === true
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                        : 'bg-white/5 text-white/40 border border-white/10'
-                    }`}
-                  >
-                    <Check size={13} /> {t('Ja')}
-                  </button>
-                  <button
-                    onClick={() => togglePrinciple(p, false)}
-                    className={`adlr-tap flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
-                      adhered === false
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                        : 'bg-white/5 text-white/40 border border-white/10'
-                    }`}
-                  >
-                    <X size={13} /> {t('Nein')}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Weekly summary */}
-      <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-1">{t('Wochenrückblick')}</p>
-        <p className="text-xs text-white/40 mb-4">{t('Diese Woche')} ({t(DAY_LABELS[0])}–{t(DAY_LABELS[6])})</p>
-        <div className="space-y-3">
-          {weekSummary.map((ws, i) => {
-            const pctVal = Math.round((ws.daysAdhered / ws.total) * 100);
-            return (
-              <div key={i}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-white/70">{t(ws.principle)}</span>
-                  <span className="text-xs text-adlr-gold font-medium">{t('{n}/{total} Tage', { n: ws.daysAdhered, total: ws.total })} · {pctVal}%</span>
-                </div>
-                <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${pctVal}%`,
-                      background: pctVal >= 70 ? '#22c55e' : pctVal >= 40 ? 'rgb(var(--adlr-gold))' : '#f87171',
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Weekly tip from Peter */}
-      <Card className="adlr-gold-border bg-gradient-to-br from-adlr-gold/5 to-transparent">
-        <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2">{t('Tipp von Peter')}</p>
-        {tip ? (
-          <p className="text-sm text-white/90 leading-relaxed">{tip.tip}</p>
-        ) : (
-          <p className="text-sm text-white/40">{t('Peter bereitet deinen Tipp vor.')}</p>
-        )}
-      </Card>
     </div>
-  );
-}
-
-function KcalTargetCard({ clientId, target }: { clientId: string; target: number }) {
-  const [today, setToday] = useState<number | null>(null);
-  useEffect(() => {
-    const key = localDateKey(new Date()); // health_daily.day is a LOCAL date
-    supabase.from('health_daily').select('kcal_in').eq('client_id', clientId).eq('day', key).maybeSingle()
-      .then(({ data }) => setToday((data as { kcal_in: number | null } | null)?.kcal_in ?? null));
-  }, [clientId]);
-  const pct = today != null ? Math.min(100, Math.round((today / target) * 100)) : 0;
-  return (
-    <Card className="mb-5">
-      <p className="text-xs uppercase tracking-wider text-white/40 mb-1">{t('Dein Tagesziel')}</p>
-      <p className="text-3xl font-bold adlr-gold-text">{fmtNum(target)} kcal</p>
-      <p className="text-xs text-white/40 mt-0.5">{t('festgelegt von deinem Coach')}</p>
-      {today != null && (
-        <div className="mt-3">
-          <div className="flex justify-between text-xs text-white/60 mb-1">
-            <span>{t('Heute gegessen')}: {fmtNum(today)} kcal</span>
-            <span>{t('{n} kcal übrig', { n: fmtNum(Math.max(0, target - today)) })}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full rounded-full bg-adlr-gold" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      )}
-    </Card>
   );
 }

@@ -36,6 +36,7 @@ import { t, fmtDate, fmtTime } from '@/lib/i18n';
 import ClientDayEditor from '@/components/ClientDayEditor';
 import WeeklyRecap from '@/components/WeeklyRecap';
 import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapNotification, type WeeklyRecapData } from '@/lib/weeklyRecap';
+import { weeklyStreak } from '@/lib/streak';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
 const ACTIVE_TRAINING_KEY = 'adlr_active_training';
@@ -137,6 +138,7 @@ export default function PlanScreen() {
   const [gym, setGymState] = useState<string | null>(() => readLS<string | null>(GYM_KEY, null));
   const [savedGyms, setSavedGyms] = useState<string[]>(() => readLS<string[]>(GYMS_KEY, []));
   const [addingGym, setAddingGym] = useState(false);
+  const [gymSheet, setGymSheet] = useState(false);
   const [newGym, setNewGym] = useState('');
   const setGym = (g: string | null) => { setGymState(g); writeLS(GYM_KEY, g); };
   // Safety dialog before finishing with un-ticked sets, or before discarding a session.
@@ -716,6 +718,15 @@ export default function PlanScreen() {
     const k = localDateKey(c.completed_at);
     return k >= weekStartKey && k <= weekEndKey;
   }).length;
+  const weekStreak = weeklyStreak(completions.map((c) => c.completed_at), plannedDays.length);
+  const knownGyms = [...new Set([...savedGyms, ...completions.map((c) => c.gym).filter((g): g is string => !!g)])];
+  const addGym = () => {
+    const name = newGym.trim();
+    if (!name) return;
+    const next = [...new Set([...savedGyms, name])];
+    setSavedGyms(next); writeLS(GYMS_KEY, next);
+    setGym(name); setNewGym(''); setAddingGym(false); setGymSheet(false);
+  };
   const weeklyProgress = plannedDays.length > 0 ? Math.min(100, (completedThisWeek / plannedDays.length) * 100) : 0;
   // Flexible rotation, not a calendar weekday: sequential "Trainingstag N" labels
   // (rest days keep their own label), and a single "Als nächstes" recommendation —
@@ -738,7 +749,20 @@ export default function PlanScreen() {
   return (
     <div className="adlr-fade-in">
       {celebrate && <Celebration count={milestoneMsg ? 120 : 56} />}
-      <SectionHeader title={t('Mein Plan')} subtitle={t('Diese Woche')} />
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader title={t('Mein Plan')} subtitle={t('Diese Woche')} />
+        {activeDayIdx === null && (
+          <button
+            onClick={() => setGymSheet(true)}
+            className="adlr-tap mt-1 shrink-0 max-w-[45%] flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border"
+            style={gym ? { borderColor: 'rgb(var(--adlr-gold) / 0.4)', color: 'rgb(var(--adlr-gold))' } : { borderColor: 'rgb(var(--text) / 0.12)', color: 'rgb(var(--text) / 0.5)' }}
+            aria-label={t('Studio wählen')}
+          >
+            <MapPin size={13} className="shrink-0" />
+            <span className="truncate">{gym ?? t('Studio')}</span>
+          </button>
+        )}
+      </div>
 
       {/* Active training banner with live elapsed timer */}
       {activeDayIdx !== null && (
@@ -768,20 +792,12 @@ export default function PlanScreen() {
           className="adlr-tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-5 adlr-gold-border text-left"
           style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.18), rgb(var(--adlr-gold) / 0.05))' }}
         >
-          <span className="text-2xl shrink-0">💪</span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-semibold text-white">{t('Deine Woche ist da 💪')}</span>
             <span className="block text-xs text-white/55">{t('Dein Rückblick auf letzte Woche — Rekorde, Alltag, Peters Worte.')}</span>
           </span>
           <ChevronRight size={18} className="text-adlr-gold shrink-0" />
         </button>
-      )}
-
-      {activeDayIdx === null && profile && profile.streak > 0 && (
-        <div className="adlr-card p-4 mb-5 flex items-center gap-3 adlr-gold-border">
-          <Flame size={22} className="text-adlr-gold" />
-          <p className="text-sm text-white/80">{t('Du trainierst seit')} <span className="adlr-gold-text font-bold">{profile.streak}</span> {t('Tagen. Bleib stark.')}</p>
-        </div>
       )}
 
       {/* Upcoming PT sessions with the trainer */}
@@ -850,9 +866,17 @@ export default function PlanScreen() {
 
       {activeDayIdx === null && (
         <div className="adlr-card p-4 mb-4">
-          <div className="flex items-center justify-between mb-2.5">
-            <p className="text-sm font-medium text-white/80">{t('Wochenziel')}</p>
-            <p className="text-sm font-semibold text-adlr-gold">{t('{n}/{total} Trainings', { n: completedThisWeek, total: plannedDays.length })}</p>
+          <div className="flex items-end justify-between gap-3 mb-2.5">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-white/40">{t('Wochenziel')}</p>
+              <p className="text-xl font-bold text-white leading-tight mt-0.5">{t('{n}/{total} Trainings', { n: completedThisWeek, total: plannedDays.length })}</p>
+            </div>
+            {weekStreak > 0 && (
+              <div className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5" style={{ background: 'rgb(var(--adlr-gold) / 0.12)' }}>
+                <Flame size={15} className="text-adlr-gold" />
+                <span className="text-xs font-semibold text-adlr-gold">{weekStreak === 1 ? t('1 Woche in Folge') : t('{n} Wochen in Folge', { n: weekStreak })}</span>
+              </div>
+            )}
           </div>
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full bg-adlr-gold transition-all duration-500" style={{ width: `${weeklyProgress}%` }} />
@@ -866,74 +890,6 @@ export default function PlanScreen() {
             <span className="flex items-center gap-1 text-xs text-white/40">{t('{n} gesamt', { n: completions.length })} <ChevronRight size={14} /></span>
           </button>
         </div>
-      )}
-
-      {activeDayIdx === null && (() => {
-        const known = [...new Set([...savedGyms, ...completions.map((c) => c.gym).filter((g): g is string => !!g)])];
-        const addGym = () => {
-          const name = newGym.trim();
-          if (!name) return;
-          const next = [...new Set([...savedGyms, name])];
-          setSavedGyms(next); writeLS(GYMS_KEY, next);
-          setGym(name); setNewGym(''); setAddingGym(false);
-        };
-        return (
-          <div className="adlr-card p-4 mb-4">
-            <div className="flex items-center justify-between mb-2.5">
-              <p className="text-sm font-medium text-white/80 flex items-center gap-2"><MapPin size={15} className="text-adlr-gold" /> {t('Studio')}</p>
-              {known.length > 0 && <p className="text-[11px] text-white/35">{t('Gewichte pro Studio')}</p>}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {known.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setGym(gym === g ? null : g)}
-                  className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                  style={gym === g
-                    ? { background: 'rgb(var(--adlr-gold))', color: '#000', borderColor: 'rgb(var(--adlr-gold))' }
-                    : { background: 'transparent', color: 'rgb(var(--text) / 0.6)', borderColor: 'rgb(var(--text) / 0.12)' }}
-                >
-                  {g}
-                </button>
-              ))}
-              {addingGym ? (
-                <div className="flex gap-1.5 w-full mt-1">
-                  <input
-                    autoFocus
-                    value={newGym}
-                    onChange={(e) => setNewGym(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') addGym(); }}
-                    placeholder={t('z.B. FitInn Mitte')}
-                    className="flex-1 bg-inset border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/25 outline-none"
-                  />
-                  <button onClick={addGym} className="adlr-tap px-3 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
-                  <button onClick={() => { setAddingGym(false); setNewGym(''); }} className="adlr-tap px-2 rounded-lg text-xs text-white/50">✕</button>
-                </div>
-              ) : (
-                <button onClick={() => setAddingGym(true)} className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed text-white/45" style={{ borderColor: 'rgb(var(--text) / 0.18)' }}>
-                  + {t('Studio')}
-                </button>
-              )}
-            </div>
-            {known.length === 0 && !addingGym && (
-              <p className="text-[11px] text-white/35 mt-2">{t('Trainierst du in mehreren Studios? Lege sie an — Gewichte werden dann pro Studio gemerkt.')}</p>
-            )}
-          </div>
-        );
-      })()}
-
-      {activeDayIdx === null && (
-        <button
-          onClick={startFreeTraining}
-          className="adlr-tap w-full mb-4 px-4 py-3.5 rounded-2xl flex items-center gap-3 text-left border border-dashed"
-          style={{ borderColor: 'rgb(var(--text) / 0.15)', background: 'rgb(var(--text) / 0.02)' }}
-        >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white/5 text-adlr-gold"><Shuffle size={19} /></div>
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-white/90">{t('Freies Training')}</p>
-            <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
-          </div>
-        </button>
       )}
 
       <div className="space-y-2.5 adlr-stagger">
@@ -1216,6 +1172,59 @@ export default function PlanScreen() {
           );
         })}
       </div>
+      {activeDayIdx === null && (
+        <button
+          onClick={startFreeTraining}
+          className="adlr-tap w-full mt-4 mb-2 px-4 py-3.5 rounded-2xl flex items-center gap-3 text-left border border-dashed"
+          style={{ borderColor: 'rgb(var(--text) / 0.15)', background: 'rgb(var(--text) / 0.02)' }}
+        >
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white/5 text-adlr-gold"><Shuffle size={19} /></div>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-white/90">{t('Freies Training')}</p>
+            <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
+          </div>
+        </button>
+      )}
+
+      {gymSheet && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => { setGymSheet(false); setAddingGym(false); }}>
+          <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-semibold text-white flex items-center gap-2"><MapPin size={16} className="text-adlr-gold" /> {t('Studio')}</p>
+            <p className="text-xs text-white/45 mt-1 mb-4">{t('Gerätegewichte werden pro Studio gemerkt — wähle, wo du heute trainierst.')}</p>
+            <div className="space-y-1.5 mb-3">
+              {[null, ...knownGyms].map((g) => (
+                <button
+                  key={g ?? '__none'}
+                  onClick={() => { setGym(g); setGymSheet(false); }}
+                  className="adlr-tap w-full flex items-center justify-between rounded-xl px-3.5 py-3 text-sm text-left"
+                  style={gym === g ? { background: 'rgb(var(--adlr-gold) / 0.12)', color: 'rgb(var(--text))', border: '1px solid rgb(var(--adlr-gold) / 0.4)' } : { background: 'rgb(var(--text) / 0.04)', color: 'rgb(var(--text) / 0.8)', border: '1px solid transparent' }}
+                >
+                  <span className="truncate">{g ?? t('Kein bestimmtes Studio')}</span>
+                  {gym === g && <Check size={16} className="text-adlr-gold shrink-0" />}
+                </button>
+              ))}
+            </div>
+            {addingGym ? (
+              <div className="flex gap-1.5">
+                <input
+                  autoFocus
+                  value={newGym}
+                  onChange={(e) => setNewGym(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addGym(); }}
+                  placeholder={t('z.B. FitInn Mitte')}
+                  className="flex-1 bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
+                />
+                <button onClick={addGym} className="adlr-tap px-4 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
+              </div>
+            ) : (
+              <button onClick={() => setAddingGym(true)} className="adlr-tap w-full py-2.5 rounded-xl text-sm font-medium border border-dashed text-adlr-gold flex items-center justify-center gap-1.5" style={{ borderColor: 'rgb(var(--adlr-gold) / 0.4)' }}>
+                <Plus size={15} /> {t('Studio hinzufügen')}
+              </button>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
       {pickerOpen && createPortal(
         <div className="fixed inset-0 z-[65] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">

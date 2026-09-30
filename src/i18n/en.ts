@@ -893,6 +893,29 @@ const dict: Record<string, string> = {
   "Gewohnheit ist stärker als Motivation.": "Habit is stronger than motivation.",
   "Jeder Satz zahlt auf dein Konto ein.": "Every set pays into your account.",
   "Langsamer Fortschritt ist immer noch Fortschritt.": "Slow progress is still progress.",
+
+  // ── UI polish: nutrition, gym sheet, profile ──
+  "kcal heute": "kcal today",
+  "{n} kcal über dem Ziel": "{n} kcal over target",
+  "Dein Coach legt dein Ziel fest — oder berechne es unten.": "Your coach sets your target — or calculate it below.",
+  "Protein-Ziel": "Protein target",
+  "≈ {n} Portionen à 30 g": "≈ {n} servings of 30 g",
+  "Verbinde Apple Health / Health Connect (z. B. mit YAZIO) — dann erscheinen deine Kalorien hier automatisch.": "Connect Apple Health / Health Connect (e.g. with YAZIO) — your calories will then appear here automatically.",
+  "Letzte 7 Tage": "Last 7 days",
+  "Ø {n} kcal": "Avg {n} kcal",
+  "Grün = im Zielbereich (±10 %) · gestrichelt = dein Tagesziel": "Green = on target (±10%) · dashed = your daily target",
+  "Wasser": "Water",
+  "Studio wählen": "Choose gym",
+  "1 Woche in Folge": "1 week in a row",
+  "{n} Wochen in Folge": "{n} weeks in a row",
+  "Gerätegewichte werden pro Studio gemerkt — wähle, wo du heute trainierst.": "Machine weights are remembered per gym — choose where you're training today.",
+  "Kein bestimmtes Studio": "No specific gym",
+  "Studio hinzufügen": "Add gym",
+  "Woche in Folge": "week in a row",
+  "Wochen in Folge": "weeks in a row",
+  "Trainings": "workouts",
+  "bis {m} Trainings": "to {m} workouts",
+  "Alle Meilensteine": "All milestones",
 };
 
 export default dict;

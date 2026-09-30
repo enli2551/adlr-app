@@ -894,6 +894,29 @@ const dict: Record<string, string> = {
   "Gewohnheit ist stärker als Motivation.": "A szokás erősebb a motivációnál.",
   "Jeder Satz zahlt auf dein Konto ein.": "Minden sorozat a számládra fizet be.",
   "Langsamer Fortschritt ist immer noch Fortschritt.": "A lassú fejlődés is fejlődés.",
+
+  // ── UI polish: nutrition, gym sheet, profile ──
+  "kcal heute": "kcal ma",
+  "{n} kcal über dem Ziel": "{n} kcal-val a cél felett",
+  "Dein Coach legt dein Ziel fest — oder berechne es unten.": "Az edződ állítja be a célodat — vagy számold ki lent.",
+  "Protein-Ziel": "Fehérjecél",
+  "≈ {n} Portionen à 30 g": "≈ {n} adag, egyenként 30 g",
+  "Verbinde Apple Health / Health Connect (z. B. mit YAZIO) — dann erscheinen deine Kalorien hier automatisch.": "Kapcsold össze az Apple Health / Health Connect alkalmazást (pl. YAZIO-val) — ekkor a kalóriáid automatikusan itt jelennek meg.",
+  "Letzte 7 Tage": "Utolsó 7 nap",
+  "Ø {n} kcal": "Átl. {n} kcal",
+  "Grün = im Zielbereich (±10 %) · gestrichelt = dein Tagesziel": "Zöld = célon belül (±10%) · szaggatott = a napi célod",
+  "Wasser": "Víz",
+  "Studio wählen": "Terem kiválasztása",
+  "1 Woche in Folge": "1 hét egymás után",
+  "{n} Wochen in Folge": "{n} hét egymás után",
+  "Gerätegewichte werden pro Studio gemerkt — wähle, wo du heute trainierst.": "A gépsúlyokat teremenként jegyezzük meg — válaszd ki, hol edzel ma.",
+  "Kein bestimmtes Studio": "Nincs megadott terem",
+  "Studio hinzufügen": "Terem hozzáadása",
+  "Woche in Folge": "hét egymás után",
+  "Wochen in Folge": "hét egymás után",
+  "Trainings": "edzés",
+  "bis {m} Trainings": "a(z) {m}. edzésig",
+  "Alle Meilensteine": "Minden mérföldkő",
 };
 
 export default dict;
