@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
-import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
 import MonthlyReport from '@/components/MonthlyReport';
 import TrainingHistory from '@/components/TrainingHistory';
 import ExerciseProgress from '@/components/ExerciseProgress';
@@ -16,6 +16,7 @@ import { useAsyncData } from '@/lib/useAsyncData';
 import SignedPhoto from '@/components/SignedPhoto';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { t, fmtDate } from '@/lib/i18n';
+import ProgressReport from '@/components/ProgressReport';
 
 const GOAL_LABELS: Record<string, string> = {
   nutrition: 'Ernährungs-Analyse',
@@ -39,6 +40,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? 'Sonstige', [muscleByName]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -88,6 +90,16 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
     onBack();
   };
 
+  const [canEditErr, setCanEditErr] = useState<string | null>(null);
+  const toggleCanEdit = async () => {
+    if (!client) return;
+    const next = !client.can_edit_plan;
+    setCanEditErr(null);
+    setClient({ ...client, can_edit_plan: next });
+    const { error } = await supabase.from('profiles').update({ can_edit_plan: next }).eq('id', client.id);
+    if (error) { setClient({ ...client, can_edit_plan: !next }); setCanEditErr(t('Speichern fehlgeschlagen (Migration ausgeführt?)')); }
+  };
+
   const assignPlan = async (planId: string) => {
     if (activePlan) {
       await supabase.from('client_plans').update({ is_active: false }).eq('id', activePlan.id);
@@ -127,6 +139,23 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
 
       {/* Package, sessions used, payments */}
       <ClientPackageCard clientId={clientId} />
+
+      {/* Goal-driven progress report + AI coach summary (draft → edit → approve) */}
+      <button
+        onClick={() => setShowProgress(true)}
+        className="adlr-tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-4 text-left"
+        style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--adlr-gold) / 0.35)' }}
+      >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--adlr-gold) / 0.15)' }}>
+          <Sparkles size={18} className="text-adlr-gold" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">{t('Fortschrittsbericht & KI-Zusammenfassung')}</p>
+          <p className="text-xs text-white/50">{t('Entwurf in deinem Ton — erst nach deiner Freigabe sichtbar')}</p>
+        </div>
+        <ChevronRight size={18} className="text-adlr-gold shrink-0" />
+      </button>
+      {showProgress && <ProgressReport client={client} trainerMode onClose={() => setShowProgress(false)} />}
 
       {/* Monthly report — only once the client has data from an earlier calendar month */}
       {setLogs.some((l) => { const d = new Date(l.created_at); return d.getFullYear() * 12 + d.getMonth() < new Date().getFullYear() * 12 + new Date().getMonth(); }) && (
@@ -218,6 +247,21 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         {activePlan ? (
           <p className="text-sm text-white/60">{t('Aktiv')}: {plans.find((p) => p.id === activePlan.plan_id)?.name ?? '—'}</p>
         ) : <p className="text-sm text-white/40">{t('Kein Plan zugewiesen.')}</p>}
+        {(() => { const ed = plans.find((p) => p.id === activePlan?.plan_id)?.client_edited_at; return ed ? <p className="text-xs text-adlr-gold/80 mt-1">{t('Vom Klienten angepasst · {date}', { date: fmtDate(ed, { day: '2-digit', month: '2-digit', year: '2-digit' }) })}</p> : null; })()}
+        <button
+          onClick={toggleCanEdit}
+          className="adlr-tap w-full flex items-center justify-between gap-3 mt-3 pt-3 text-left"
+          style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}
+        >
+          <span className="min-w-0">
+            <span className="block text-sm text-white/80">{t('Klient darf Plan selbst anpassen')}</span>
+            <span className="block text-xs text-white/40">{t('Übungen tauschen, hinzufügen, Sätze/Wdh ändern — nur aus der Übungsbibliothek.')}</span>
+          </span>
+          <span className="relative shrink-0 w-11 h-6 rounded-full transition-colors" style={{ background: client.can_edit_plan ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.15)' }}>
+            <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: client.can_edit_plan ? 22 : 2 }} />
+          </span>
+        </button>
+        {canEditErr && <p className="text-xs text-red-400 mt-1">{canEditErr}</p>}
         {editingPlan && (
           <div className="mt-3 space-y-2 adlr-fade-in">
             {plans.map((p) => (

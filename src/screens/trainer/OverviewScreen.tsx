@@ -5,6 +5,7 @@ import type { Profile, UpsellRequest } from '@/lib/types';
 import { SectionHeader, Loading, StatCard, Card } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Users, Calendar, TrendingUp, AlertTriangle, MessageCircle, ClipboardX, Moon, Target, BatteryLow, ChevronRight } from 'lucide-react';
+import WeeklyMessagesCard from '@/components/WeeklyMessagesCard';
 import { computeAttention, type AttentionItem, type AttentionKind } from '@/lib/attention';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -133,6 +134,9 @@ export default function OverviewScreen() {
           </div>
         )}
       </Card>
+
+      {/* Clients still missing this week's personal line for their weekly recap */}
+      <WeeklyMessagesCard clients={clients} />
 
       {/* Upsell requests */}
       <Card className="mb-4 adlr-gold-border" onClick={() => nav('/trainer/business')}>

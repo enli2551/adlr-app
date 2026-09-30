@@ -8,7 +8,7 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle } from 'lucide-react';
+import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil } from 'lucide-react';
 import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/components/ExerciseLibrary';
 import { fetchExercises, isGymDependent, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
@@ -33,6 +33,9 @@ import {
   removeRestChronoActionListener,
 } from '@/lib/restChrono';
 import { t, fmtDate, fmtTime } from '@/lib/i18n';
+import ClientDayEditor from '@/components/ClientDayEditor';
+import WeeklyRecap from '@/components/WeeklyRecap';
+import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapNotification, type WeeklyRecapData } from '@/lib/weeklyRecap';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
 const ACTIVE_TRAINING_KEY = 'adlr_active_training';
@@ -121,6 +124,11 @@ export default function PlanScreen() {
   // Cardio exercises log time/distance instead of kg × reps.
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
+  // Weekly recap of LAST week: banner + auto-shown before the first workout of the week.
+  const [recap, setRecap] = useState<WeeklyRecapData | null>(null);
+  const [recapSeen, setRecapSeen] = useState(recapSeenThisWeek());
+  const [recapOpen, setRecapOpen] = useState<{ startIdx: number | null } | null>(null);
   const libMap = lib ? new Map(lib.map((e) => [e.name, e])) : null;
 
   // Active training session state
@@ -151,6 +159,7 @@ export default function PlanScreen() {
   const load = async () => {
     if (!profile) return;
     setLoading(true);
+    let trainingDaysInPlan = 0;
     const { data: cp } = await supabase
       .from('client_plans')
       .select('plan_id')
@@ -160,6 +169,7 @@ export default function PlanScreen() {
     if (cp) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week');
       const planDays = (pd ?? []) as PlanDay[];
+      trainingDaysInPlan = planDays.filter((d) => !d.is_rest_day).length;
       // Resume a training session that was active when the app got closed/killed —
       // only on the initial load (activeDayIdx is still null at that point).
       const persisted = activeDayIdx === null ? getPersistedActiveTraining() : null;
@@ -199,6 +209,8 @@ export default function PlanScreen() {
     const sessList = (ss ?? []) as Session[];
     setSessions(sessList);
     syncSessionReminders(sessList);
+    scheduleWeeklyRecapNotification();
+    if (!recapSeenThisWeek()) loadWeeklyRecap(profile.id, trainingDaysInPlan).then(setRecap).catch(() => {});
     setLoading(false);
   };
 
@@ -750,6 +762,21 @@ export default function PlanScreen() {
         </div>
       )}
 
+      {activeDayIdx === null && recap && !recapSeen && (
+        <button
+          onClick={() => setRecapOpen({ startIdx: null })}
+          className="adlr-tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-5 adlr-gold-border text-left"
+          style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.18), rgb(var(--adlr-gold) / 0.05))' }}
+        >
+          <span className="text-2xl shrink-0">💪</span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold text-white">{t('Deine Woche ist da 💪')}</span>
+            <span className="block text-xs text-white/55">{t('Dein Rückblick auf letzte Woche — Rekorde, Alltag, Peters Worte.')}</span>
+          </span>
+          <ChevronRight size={18} className="text-adlr-gold shrink-0" />
+        </button>
+      )}
+
       {activeDayIdx === null && profile && profile.streak > 0 && (
         <div className="adlr-card p-4 mb-5 flex items-center gap-3 adlr-gold-border">
           <Flame size={22} className="text-adlr-gold" />
@@ -992,13 +1019,24 @@ export default function PlanScreen() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => startTraining(idx)}
-                          className="adlr-tap w-full py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-                          style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
-                        >
-                          <Dumbbell size={16} /> {completed ? t('Nochmal trainieren') : t('Training starten')}
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => (recap && !recapSeen ? setRecapOpen({ startIdx: idx }) : startTraining(idx))}
+                            className="adlr-tap flex-1 py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+                            style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
+                          >
+                            <Dumbbell size={16} /> {completed ? t('Nochmal trainieren') : t('Training starten')}
+                          </button>
+                          {profile?.can_edit_plan && !day.is_free && activeDayIdx === null && (
+                            <button
+                              onClick={() => setEditingDay(day)}
+                              className="adlr-tap px-4 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm flex items-center justify-center gap-1.5"
+                              aria-label={t('Tag bearbeiten')}
+                            >
+                              <Pencil size={15} /> {t('Bearbeiten')}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
@@ -1195,6 +1233,14 @@ export default function PlanScreen() {
         document.body
       )}
       {demoEx && <LibDemoModal ex={demoEx} onClose={() => setDemoEx(null)} />}
+      {recap && recapOpen && (
+        <WeeklyRecap
+          data={recap}
+          onClose={() => { markRecapSeen(); setRecapSeen(true); const i = recapOpen.startIdx; setRecapOpen(null); if (i !== null) startTraining(i); }}
+          onStart={() => { markRecapSeen(); setRecapSeen(true); const i = recapOpen.startIdx; setRecapOpen(null); if (i !== null) startTraining(i); }}
+        />
+      )}
+      {editingDay && <ClientDayEditor day={editingDay} onClose={() => setEditingDay(null)} onSaved={() => { setEditingDay(null); load(); }} />}
       {confirm && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => setConfirm(null)}>
           <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>

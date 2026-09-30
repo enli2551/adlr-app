@@ -4,12 +4,13 @@ import { supabase } from '@/lib/supabase';
 import type { ProgressEntry, PersonalRecord, DailyCheckin, ProgressPhoto, ExerciseSetLog, WorkoutCompletion } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { Plus, Award, Camera, TrendingUp, Ruler, BarChart3, ChevronRight } from 'lucide-react';
+import { Plus, Award, Camera, TrendingUp, Ruler, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
 import MonthlyReport from '@/components/MonthlyReport';
 import ExerciseProgress from '@/components/ExerciseProgress';
 import PersonalRecords from '@/components/PersonalRecords';
 import SignedPhoto from '@/components/SignedPhoto';
 import { t, fmtDate as fmtD } from '@/lib/i18n';
+import ProgressReport from '@/components/ProgressReport';
 
 const MEASUREMENT_FIELDS: Array<{ key: keyof ProgressEntry; label: string; unit: string }> = [
   { key: 'weight_kg', label: 'Gewicht', unit: 'kg' },
@@ -35,6 +36,7 @@ export default function ProgressScreen() {
   const [prForm, setPrForm] = useState({ name: 'Bankdrücken', weight: '', reps: '1' });
   const [selectedMeasure, setSelectedMeasure] = useState<keyof ProgressEntry>('weight_kg');
   const [showReport, setShowReport] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
 
   const load = async () => {
     if (!profile) return;
@@ -117,6 +119,23 @@ export default function ProgressScreen() {
   return (
     <div className="adlr-fade-in">
       <SectionHeader title={t('Fortschritt')} subtitle={t('Zahlen lügen nicht.')} />
+
+      {/* Goal-driven personal progress report (+ Peter's approved summary) */}
+      <button
+        onClick={() => setShowProgress(true)}
+        className="adlr-tap w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 mb-4 text-left"
+        style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--adlr-gold) / 0.35)' }}
+      >
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--adlr-gold) / 0.15)' }}>
+          <Sparkles size={18} className="text-adlr-gold" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">{t('Dein Fortschrittsbericht')}</p>
+          <p className="text-xs text-white/50">{t('Auf dein Ziel zugeschnitten — mit Peters Einschätzung')}</p>
+        </div>
+        <ChevronRight size={18} className="text-adlr-gold shrink-0" />
+      </button>
+      {showProgress && profile && <ProgressReport client={profile} onClose={() => setShowProgress(false)} />}
 
       {/* Monthly report — only once there's data from an earlier calendar month */}
       {setLogs.some((l) => { const d = new Date(l.created_at); return d.getFullYear() * 12 + d.getMonth() < new Date().getFullYear() * 12 + new Date().getMonth(); }) && (

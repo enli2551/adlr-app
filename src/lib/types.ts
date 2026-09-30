@@ -12,6 +12,8 @@ export interface Profile {
   weight_kg: number | null;
   gender: string | null;
   kcal_target?: number | null; // daily calorie target (set by the trainer)
+  can_edit_plan?: boolean; // trainer allows this client to edit their own plan
+  lang?: string | null; // client's app language (de/en/hu), synced by the app
   email: string | null;
   phone: string | null;
   avatar_url: string | null;
@@ -63,6 +65,7 @@ export interface Plan {
   name: string;
   is_template: boolean;
   created_at: string;
+  client_edited_at?: string | null; // last time the client changed the plan themselves
 }
 
 export interface PlanDay {

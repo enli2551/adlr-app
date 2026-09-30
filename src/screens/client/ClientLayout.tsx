@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
 import { syncHealth } from '@/lib/health';
-import { t } from '@/lib/i18n';
+import { t, useLang } from '@/lib/i18n';
 
 // Coach (messaging) lives in the header as a chat icon — underused, kept out of the bottom bar.
 const TABS = [
@@ -16,11 +16,21 @@ const TABS = [
   { to: '/app/upgrades', label: 'Upgrades', icon: Gem, end: false },
 ];
 
+let syncedLang = '';
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { profile, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [coachUnread, setCoachUnread] = useState(false);
+  const lang = useLang();
+
+  // Keep the client's language on the profile so Peter's AI summaries are written in it.
+  useEffect(() => {
+    if (!profile?.id || profile.lang === lang || syncedLang === profile.id + lang) return;
+    syncedLang = profile.id + lang; // once per session/language — the layout remounts on every route
+    supabase.from('profiles').update({ lang }).eq('id', profile.id).then(() => {}, () => {});
+  }, [profile?.id, profile?.lang, lang]);
 
   // Unread indicator for the Coach chat: any trainer message newer than last-seen.
   // Background health sync (throttled inside syncHealth) on open and when the app returns.
