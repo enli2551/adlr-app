@@ -23,7 +23,7 @@ const authError = (msg: string) => {
 };
 
 export default function AuthScreen() {
-  const { signIn, signUp, session, profile, loading } = useAuth();
+  const { signIn, signUp, session, profile, loading, refreshProfile } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const isTrainer = loc.pathname === '/trainer-auth';
@@ -31,6 +31,8 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'signup'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Coach invite code — prefilled from an invite link (…/auth?code=ABC123).
+  const [inviteCode, setInviteCode] = useState(() => new URLSearchParams(loc.search).get('code')?.toUpperCase() ?? '');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,12 @@ export default function AuthScreen() {
     try {
       const role = isTrainer ? 'trainer' : 'client';
       const res = mode === 'signup' ? await signUp(email, password, role) : await signIn(email, password);
-      if (res.error) setError(authError(res.error));
+      if (res.error) { setError(authError(res.error)); return; }
+      if (mode === 'signup' && !isTrainer && inviteCode.trim()) {
+        const { data: coachName } = await supabase.rpc('join_trainer', { p_code: inviteCode.trim() });
+        if (coachName === null) setError(t('Einladungscode nicht gefunden — du kannst ihn später im Profil eingeben.'));
+        await refreshProfile();
+      }
     } catch (err) {
       // Surface the real error instead of an unhandled rejection.
       setError(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
@@ -187,6 +194,11 @@ export default function AuthScreen() {
               {pwToggle(showPw, setShowPw)}
             </div>
           </Field>
+          {mode === 'signup' && !isTrainer && (
+            <Field label={t('Einladungscode deines Coaches')} hint={t('Optional — du findest ihn in der Einladung deines Coaches.')}>
+              <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} placeholder="ABC123" maxLength={12} autoCapitalize="characters" className="tracking-[0.25em]" />
+            </Field>
+          )}
           {error && <p className="text-sm text-red-400 break-words">{error}</p>}
           {resetMsg && <p className="text-sm" style={{ color: '#22c55e' }}>{resetMsg}</p>}
           <Button type="submit" disabled={busy} className="w-full">
@@ -201,7 +213,7 @@ export default function AuthScreen() {
         )}
 
         <p className="text-center text-xs text-white/30 mt-6">
-          {isTrainer ? t('Trainer-Zugang für Peter') : t('Bereit aufzusteigen? Starte jetzt.')}
+          {isTrainer ? t('Zugang für Personal Trainer') : t('Bereit aufzusteigen? Starte jetzt.')}
         </p>
         <div className="flex justify-center gap-4 mt-3 text-xs">
           <button onClick={() => nav(isTrainer ? '/auth' : '/trainer-auth')} className="text-adlr-gold/60 hover:text-adlr-gold">

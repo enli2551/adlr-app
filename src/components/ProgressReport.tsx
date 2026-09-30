@@ -8,6 +8,7 @@ import { Loading } from '@/components/ui';
 import SignedPhoto from '@/components/SignedPhoto';
 import { computeProgress, statsForAI, type ProgressStats } from '@/lib/progressReport';
 import type { Profile } from '@/lib/types';
+import { useCoachName } from '@/lib/auth';
 
 const GOLD = 'rgb(var(--adlr-gold))';
 const CARD = { background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' };
@@ -37,6 +38,7 @@ function headline(s: ProgressStats): string {
  * before Peter approves it).
  */
 export default function ProgressReport({ client, onClose, trainerMode = false }: { client: Profile; onClose: () => void; trainerMode?: boolean }) {
+  const coach = useCoachName();
   const [stats, setStats] = useState<ProgressStats | null>(null);
   const [approved, setApproved] = useState<ReportRow | null>(null);
   const [draft, setDraft] = useState<ReportRow | null>(null);
@@ -122,7 +124,7 @@ export default function ProgressReport({ client, onClose, trainerMode = false }:
           {/* Coach summary (approved) */}
           {approved?.body && (
             <div className="rounded-3xl p-5" style={CARD}>
-              <p className="text-xs uppercase tracking-wider text-adlr-gold/80 mb-2 flex items-center gap-1.5"><Sparkles size={13} /> {t('Peters Einschätzung')}</p>
+              <p className="text-xs uppercase tracking-wider text-adlr-gold/80 mb-2 flex items-center gap-1.5"><Sparkles size={13} /> {t('Einschätzung von {coach}', { coach })}</p>
               <p className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">{approved.body}</p>
               {approved.approved_at && <p className="text-[11px] text-white/35 mt-2">{fmtDate(approved.approved_at, { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>}
             </div>

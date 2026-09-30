@@ -3,10 +3,11 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Session, Profile } from '@/lib/types';
 import { SectionHeader, Loading, Card, Button, Input, Field } from '@/components/ui';
-import { Plus, X, MapPin, Clock } from 'lucide-react';
+import { Plus, MapPin, Clock } from 'lucide-react';
 import { t, fmtDate, fmtTime } from '@/lib/i18n';
 
-const LOCATIONS = ['Powergym Kottingbrunn', 'Online', 'Sonstiges'];
+// Each trainer's own places: suggestions come from their previous sessions (+ Online).
+const DEFAULT_LOCATIONS = ['Online'];
 const CLIENT_COLORS = ['rgb(var(--adlr-gold))', '#8B0000', '#3a7a5a', '#5a5a8a', '#8a6a3a'];
 
 function getWeekStart(d: Date) {
@@ -23,7 +24,18 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ clientId: '', date: '', time: '10:00', location: LOCATIONS[0], duration: 60 });
+  const [locations, setLocations] = useState<string[]>(DEFAULT_LOCATIONS);
+  const [form, setForm] = useState({ clientId: '', date: '', time: '10:00', location: '', duration: 60 });
+
+  useEffect(() => {
+    if (!profile) return;
+    supabase.from('sessions').select('location').eq('trainer_id', profile.id).order('scheduled_at', { ascending: false }).limit(200).then(({ data }) => {
+      const seen = [...new Set(((data ?? []) as { location: string | null }[]).map((r) => r.location?.trim()).filter((l): l is string => !!l))];
+      const list = [...seen, ...DEFAULT_LOCATIONS.filter((d) => !seen.includes(d))];
+      setLocations(list);
+      setForm((f) => (f.location ? f : { ...f, location: list[0] ?? '' }));
+    });
+  }, [profile?.id]);
 
   const load = async () => {
     if (!profile) return;
@@ -47,7 +59,8 @@ export default function CalendarScreen() {
       client_id: form.clientId, trainer_id: profile.id, scheduled_at: dt.toISOString(),
       duration_min: Number(form.duration), location: form.location,
     });
-    setForm({ clientId: '', date: '', time: '10:00', location: LOCATIONS[0], duration: 60 });
+    if (form.location && !locations.includes(form.location)) setLocations((l) => [form.location, ...l]);
+    setForm({ clientId: '', date: '', time: '10:00', location: form.location, duration: 60 });
     setShowAdd(false);
     load();
   };
@@ -119,7 +132,7 @@ export default function CalendarScreen() {
           </div>
           <Field label={t('Ort')}>
               <div className="flex flex-wrap gap-2">
-                {LOCATIONS.map((l) => {
+                {locations.map((l) => {
                   const on = form.location === l;
                   return (
                     <button
@@ -136,6 +149,7 @@ export default function CalendarScreen() {
                   );
                 })}
               </div>
+              <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder={t('Ort eingeben, z. B. dein Studio')} className="mt-2" />
             </Field>
           <Button onClick={addSession} className="w-full">{t('Speichern')}</Button>
         </Card>

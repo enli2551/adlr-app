@@ -8,6 +8,7 @@ import ClientDetail from './ClientDetail';
 import { useSearchParams } from 'react-router-dom';
 import { t, fmtDate } from '@/lib/i18n';
 import { loadWeeklyStreaks } from '@/lib/streak';
+import { InviteClientsButton } from '@/components/CoachLink';
 
 export default function ClientsScreen() {
   const { profile } = useAuth();
@@ -44,7 +45,10 @@ export default function ClientsScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title={t('Klienten')} subtitle={t('{n} aktiv', { n: clients.length })} />
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader title={t('Klienten')} subtitle={t('{n} aktiv', { n: clients.length })} />
+        <div className="mt-1 shrink-0"><InviteClientsButton /></div>
+      </div>
 
       <div className="relative mb-3">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />

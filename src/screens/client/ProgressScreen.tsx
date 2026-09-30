@@ -131,7 +131,7 @@ export default function ProgressScreen() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white">{t('Dein Fortschrittsbericht')}</p>
-          <p className="text-xs text-white/50">{t('Auf dein Ziel zugeschnitten — mit Peters Einschätzung')}</p>
+          <p className="text-xs text-white/50">{t('Auf dein Ziel zugeschnitten — mit der Einschätzung deines Coaches')}</p>
         </div>
         <ChevronRight size={18} className="text-adlr-gold shrink-0" />
       </button>

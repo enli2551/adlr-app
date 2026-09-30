@@ -68,7 +68,7 @@ export default function OverviewScreen() {
 
   return (
     <div className="adlr-fade-in">
-      <SectionHeader title={t('Übersicht')} subtitle={t('Willkommen zurück, Peter.')} />
+      <SectionHeader title={t('Übersicht')} subtitle={(profile?.first_name ? t('Willkommen zurück, {name}.', { name: profile.first_name }) : t('Willkommen zurück.'))} />
       <div className="grid grid-cols-2 gap-3 mb-5">
         <StatCard label={t('Aktive Klienten')} value={clients.length} accent />
         <StatCard label={t('Termine diese Woche')} value={sessionsThisWeek} />

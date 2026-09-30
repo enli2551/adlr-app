@@ -1,6 +1,7 @@
 import type { IntakeData } from '@/lib/types';
 import { Textarea, Field, Chip } from '@/components/ui';
 import { t } from '@/lib/i18n';
+import { useCoachName } from '@/lib/auth';
 
 function Slider({ value, onChange, labels }: { value: number; onChange: (n: number) => void; labels: string[] }) {
   return (
@@ -19,9 +20,10 @@ function Slider({ value, onChange, labels }: { value: number; onChange: (n: numb
 const SOURCES = ['Empfehlung', 'Social Media', 'Gym', 'Sonstiges'];
 
 export default function StepMotivation({ data, update }: { data: IntakeData; update: (p: Partial<IntakeData>) => void }) {
+  const coach = useCoachName();
   return (
     <div className="space-y-7">
-      <Field label={t('Warum jetzt?')} hint={t('Mindestens 2 Sätze. Sei ehrlich — Peter liest das.')}>
+      <Field label={t('Warum jetzt?')} hint={t('Mindestens 2 Sätze. Sei ehrlich — {coach} liest das.', { coach })}>
         <Textarea
           rows={4}
           value={data.whyNow ?? ''}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Trophy, Footprints, Moon, Quote, MessageCircle, Target } from 'lucide-react';
 import { t, fmtDate, fmtNum } from '@/lib/i18n';
 import type { WeeklyRecapData } from '@/lib/weeklyRecap';
+import { useCoachName } from '@/lib/auth';
 
 const CARD_STYLE = { background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' };
 const fmtSleep = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}min`;
@@ -12,6 +13,7 @@ const fmtSleep = (m: number) => `${Math.floor(m / 60)}h ${String(m % 60).padStar
  * `onStart` is the closing "Starte Woche X" action (e.g. continue into the workout).
  */
 export default function WeeklyRecap({ data, onClose, onStart }: { data: WeeklyRecapData; onClose: () => void; onStart: () => void }) {
+  const coach = useCoachName();
   const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const end = new Date(data.weekStart);
@@ -83,7 +85,7 @@ export default function WeeklyRecap({ data, onClose, onStart }: { data: WeeklyRe
       node: (
         <div className="my-auto">
           <MessageCircle size={30} className="text-adlr-gold mb-4" />
-          <p className="text-xs uppercase tracking-wider text-white/40 mb-3">{t('Peter sagt')}</p>
+          <p className="text-xs uppercase tracking-wider text-white/40 mb-3">{t('{coach} sagt', { coach })}</p>
           <p className="text-xl font-semibold text-white leading-relaxed">{data.coachMessage}</p>
         </div>
       ),

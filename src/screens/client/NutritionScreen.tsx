@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { localDateKey } from '@/lib/dates';
 import type { NutritionTip, HydrationLog, ProgressEntry } from '@/lib/types';
@@ -25,6 +25,7 @@ interface HealthRow { day: string; kcal_in: number | null }
 
 export default function NutritionScreen() {
   const { profile } = useAuth();
+  const coach = useCoachName();
   const nav = useNavigate();
   const [tip, setTip] = useState<NutritionTip | null>(null);
   const [hydration, setHydration] = useState<HydrationLog | null>(null);
@@ -225,7 +226,7 @@ export default function NutritionScreen() {
       {/* Weekly tip from Peter */}
       {tip && (
         <Card className="mb-4 adlr-gold-border bg-gradient-to-br from-adlr-gold/5 to-transparent">
-          <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Sparkles size={13} /> {t('Tipp von Peter')}</p>
+          <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Sparkles size={13} /> {t('Tipp von {coach}', { coach })}</p>
           <p className="text-sm text-white/90 leading-relaxed">{tip.tip}</p>
         </Card>
       )}

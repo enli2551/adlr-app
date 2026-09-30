@@ -1,6 +1,7 @@
-// Writes a short, motivating progress summary in Peter's voice from the client's
-// computed progress stats, and stores it as a DRAFT in progress_reports. Peter
-// reviews/edits and approves it in the app; only then does the client see it.
+// Writes a short, motivating progress summary in the TRAINER's voice (their own
+// first name) from the client's computed progress stats, and stores it as a DRAFT in
+// progress_reports. The trainer reviews/edits and approves it in the app; only then
+// does the client see it.
 //
 // Trainer-only (checked via profiles.role). Deploy:
 //   npx supabase functions deploy coach-report
@@ -19,7 +20,7 @@ const json = (body: unknown, status = 200) =>
 
 const LANGUAGE: Record<string, string> = { de: 'German (Austrian, informal "du")', en: 'English (informal)', hu: 'Hungarian (informal "te")' };
 
-const SYSTEM = `You are Peter, a premium personal trainer in Austria who runs the ADLR coaching app ("Steig auf. Bleib stark." — rise up, stay strong).
+const systemPrompt = (coach: string) => `You are ${coach}, a premium personal trainer who coaches clients through the ADLR app ("Steig auf. Bleib stark." — rise up, stay strong).
 You write a short personal progress summary to one of your clients, based ONLY on the stats you are given.
 
 Voice: warm, direct, confident, like a coach who knows the client well. Motivating without hype. Speak to the client directly.
@@ -28,7 +29,7 @@ Content:
 - Mention one or two further highlights (consistency, strength, health habits, measurements) if the data supports it.
 - If something stalled or went backwards, frame it honestly but constructively (plateaus are normal) and give ONE concrete, simple focus for the next weeks.
 - Never invent numbers, exercises, events or medical claims. Skip anything the stats don't contain.
-Format: plain text, 4–6 sentences, no headings, no bullet points, no emojis except at most one at the very end. Sign off with "– Peter".`;
+Format: plain text, 4–6 sentences, no headings, no bullet points, no emojis except at most one at the very end. Sign off with "– ${coach}".`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -40,11 +41,14 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData?.user) return json({ error: 'Invalid session' }, 401);
 
-    const { data: me } = await admin.from('profiles').select('id, role').eq('id', userData.user.id).maybeSingle();
+    const { data: me } = await admin.from('profiles').select('id, role, first_name').eq('id', userData.user.id).maybeSingle();
     if (me?.role !== 'trainer') return json({ error: 'Trainer only' }, 403);
 
     const { client_id, stats, lang = 'de', first_name = '' } = await req.json();
     if (!client_id || !stats) return json({ error: 'client_id and stats required' }, 400);
+    // Only for the trainer's OWN clients (service role bypasses RLS, so check explicitly).
+    const { data: target } = await admin.from('profiles').select('trainer_id').eq('id', client_id).maybeSingle();
+    if (target?.trainer_id !== me.id) return json({ error: 'Not your client' }, 403);
     const language = LANGUAGE[lang] ?? LANGUAGE.de;
 
     const client = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
@@ -57,7 +61,7 @@ Deno.serve(async (req) => {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: SYSTEM,
+      system: systemPrompt(me.first_name?.trim() || 'your coach'),
       messages: [{
         role: 'user',
         content: `Write the summary in ${language}. Client first name: ${first_name || '(unknown)'}.\n\nProgress stats (JSON):\n${JSON.stringify(stats)}`,

@@ -2,9 +2,11 @@ import type { IntakeData } from '@/lib/types';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui';
 import { t } from '@/lib/i18n';
+import { useCoachName } from '@/lib/auth';
 
 export default function Completion({ data, onContinue }: { data: IntakeData; onContinue: () => void }) {
   const goals = data.goals ?? [];
+  const coach = useCoachName();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center adlr-fade-in">
       <div className="adlr-pop mb-8">
@@ -14,7 +16,7 @@ export default function Completion({ data, onContinue }: { data: IntakeData; onC
         </svg>
       </div>
       <h1 className="text-3xl font-bold tracking-tight mb-2">{t('Willkommen bei ADLR.')}</h1>
-      <p className="text-white/40 mb-10 max-w-xs">{t('Peter wird deinen Plan vorbereiten.')}</p>
+      <p className="text-white/40 mb-10 max-w-xs">{t('{coach} wird deinen Plan vorbereiten.', { coach })}</p>
 
       <div className="adlr-card p-6 w-full max-w-sm text-left mb-8">
         <div className="flex items-center gap-4 mb-4">

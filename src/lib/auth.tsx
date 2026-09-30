@@ -2,10 +2,15 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { Profile } from './types';
+import { t } from './i18n';
+
+/** The client's own coach (or, for a trainer, themselves) — shown instead of a hardcoded name. */
+export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }
 
 interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
+  coach: CoachInfo | null;
   loading: boolean;
   signUp: (email: string, password: string, role: 'trainer' | 'client') => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -18,12 +23,21 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [coach, setCoach] = useState<CoachInfo | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Clients: their trainer's name/avatar (RLS lets a client read their own trainer's row).
+  const loadCoach = async (p: Profile) => {
+    if (p.role === 'trainer') { setCoach({ id: p.id, first_name: p.first_name, last_name: p.last_name, avatar_url: p.avatar_url }); return; }
+    if (!p.trainer_id) { setCoach(null); return; }
+    const { data } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url').eq('id', p.trainer_id).maybeSingle();
+    setCoach((data as CoachInfo | null) ?? null);
+  };
 
   const loadProfile = async (uid: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     if (error) { console.error('profile load', error); return; }
-    if (data) { setProfile(data as Profile); return; }
+    if (data) { setProfile(data as Profile); loadCoach(data as Profile); return; }
     // Profile row missing — create a minimal client profile so the app works.
     const { data: user } = await supabase.auth.getUser();
     const email = user?.user?.email ?? '';
@@ -54,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (async () => { await loadProfile(sess.user.id); })();
       } else {
         setProfile(null);
+        setCoach(null);
       }
     });
 
@@ -80,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.user.id,
         email,
         role,
-        first_name: role === 'trainer' ? 'Peter' : null,
         trainer_id: trainerId,
       }, { onConflict: 'id' });
       await loadProfile(data.user.id);
@@ -98,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setCoach(null);
     setSession(null);
   };
 
@@ -106,10 +121,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, profile, coach, loading, signUp, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+/** Display name of the coach: the client's trainer, or the trainer themselves. */
+export function useCoachName(): string {
+  const { coach } = useAuth();
+  return coach?.first_name?.trim() || t('dein Coach');
 }
 
 export function useAuth() {

@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -16,6 +16,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { createPortal } from 'react-dom';
 import { THEMES, getTheme } from '@/lib/theme';
 import { LANGS, useLang } from '@/lib/i18n';
+import { JoinCoachSheet } from '@/components/CoachLink';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -38,10 +39,10 @@ interface PlateauAlert {
 }
 
 export default function ProfileScreen() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, coach } = useAuth();
   const nav = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [sheet, setSheet] = useState<'theme' | 'lang' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'delete' | null>(null);
   const [themeId, setThemeId] = useState(getTheme());
   const lang = useLang();
   const [deleting, setDeleting] = useState(false);
@@ -447,6 +448,7 @@ export default function ProfileScreen() {
       <p className="text-[11px] uppercase tracking-wider text-white/35 mb-2 px-1">{t('Einstellungen')}</p>
       <div className="adlr-card p-0 mb-6 overflow-hidden">
         {[
+          { key: 'coach' as const, icon: UserPlus, label: t('Coach'), value: coach?.first_name ?? t('Code eingeben'), danger: false },
           { key: 'theme' as const, icon: Palette, label: t('Erscheinungsbild'), value: THEMES.find((x) => x.id === themeId)?.label ?? '', danger: false },
           { key: 'lang' as const, icon: Languages, label: t('Sprache'), value: LANGS.find((l) => l.id === lang)?.label ?? '', danger: false },
           { key: 'delete' as const, icon: Trash2, label: t('Konto löschen'), value: '', danger: true },
@@ -465,7 +467,8 @@ export default function ProfileScreen() {
         ))}
       </div>
 
-      {sheet && createPortal(
+      {sheet === 'coach' && <JoinCoachSheet onClose={() => setSheet(null)} />}
+      {sheet && sheet !== 'coach' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => { setSheet(null); setConfirmDelete(false); }}>
           <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>
             {sheet === 'theme' && (

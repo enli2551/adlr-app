@@ -2,9 +2,11 @@ import type { IntakeData } from '@/lib/types';
 import { Field, Input, Chip } from '@/components/ui';
 import { resizeImageToDataUrl } from '@/lib/image';
 import { t } from '@/lib/i18n';
+import { useCoachName } from '@/lib/auth';
 
 export default function StepPersonal({ data, update }: { data: IntakeData; update: (p: Partial<IntakeData>) => void }) {
   const genders = ['Mann', 'Frau', 'Keine Angabe'];
+  const coach = useCoachName();
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3">
@@ -39,7 +41,7 @@ export default function StepPersonal({ data, update }: { data: IntakeData; updat
       <Field label={t('Telefon')}>
         <Input type="tel" value={data.phone ?? ''} onChange={(e) => update({ phone: e.target.value })} placeholder="+43..." />
       </Field>
-      <Field label={t('Profilfoto')} hint={t('Optional. Lade ein Foto hoch, damit Peter dich erkennt.')}>
+      <Field label={t('Profilfoto')} hint={t('Optional. Lade ein Foto hoch, damit {coach} dich erkennt.', { coach })}>
         <AvatarUpload data={data} update={update} />
       </Field>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { PlanDay, WorkoutCompletion, ExerciseSetLog, PersonalRecord, Exercise, Session } from '@/lib/types';
 import Celebration from '@/components/Celebration';
@@ -107,6 +107,7 @@ function getPersistedActiveTraining(): PersistedTraining | null {
 
 export default function PlanScreen() {
   const { profile, refreshProfile } = useAuth();
+  const coach = useCoachName();
   const [days, setDays] = useState<PlanDay[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
@@ -677,10 +678,10 @@ export default function PlanScreen() {
     return (
       <div className="adlr-fade-in">
         <SectionHeader title={t('Mein Plan')} />
-        <EmptyState title={t('Dein Plan wird vorbereitet.')} subtitle={t('Peter ist am Werk. Du trainierst, sobald dein Plan bereit ist.')} />
+        <EmptyState title={t('Dein Plan wird vorbereitet.')} subtitle={t('{coach} ist am Werk. Du trainierst, sobald dein Plan bereit ist.', { coach })} />
         <div className="adlr-card p-5 mt-4 adlr-gold-border" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.12), rgb(var(--adlr-gold) / 0.03))' }}>
           <p className="text-sm font-semibold text-white mb-1">{t('Schon mal loslegen? 💪')}</p>
-          <p className="text-xs text-white/60 mb-4 leading-relaxed">{t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald Peter deinen persönlichen Plan fertig hat, wird er automatisch aktiv.')}</p>
+          <p className="text-xs text-white/60 mb-4 leading-relaxed">{t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald {coach} deinen persönlichen Plan fertig hat, wird er automatisch aktiv.', { coach })}</p>
           <button
             onClick={activateStarter}
             disabled={starterBusy}
@@ -794,7 +795,7 @@ export default function PlanScreen() {
         >
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-semibold text-white">{t('Deine Woche ist da 💪')}</span>
-            <span className="block text-xs text-white/55">{t('Dein Rückblick auf letzte Woche — Rekorde, Alltag, Peters Worte.')}</span>
+            <span className="block text-xs text-white/55">{t('Dein Rückblick auf letzte Woche — Rekorde, Alltag, Worte deines Coaches.')}</span>
           </span>
           <ChevronRight size={18} className="text-adlr-gold shrink-0" />
         </button>
@@ -1162,7 +1163,7 @@ export default function PlanScreen() {
                   )}
                   {day.notes && (
                     <div className="bg-adlr-gold/5 border border-adlr-gold/20 rounded-xl p-3 mb-4">
-                      <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-1">{t('Notiz von Peter')}</p>
+                      <p className="text-xs text-adlr-gold/80 uppercase tracking-wide mb-1">{t('Notiz von {coach}', { coach })}</p>
                       <p className="text-sm text-white/70">{day.notes}</p>
                     </div>
                   )}

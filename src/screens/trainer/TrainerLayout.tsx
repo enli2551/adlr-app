@@ -16,7 +16,15 @@ const TABS = [
 ];
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const saveName = async () => {
+    const first = (nameDraft ?? '').trim();
+    if (!profile || !first) return;
+    await supabase.from('profiles').update({ first_name: first }).eq('id', profile.id);
+    await refreshProfile();
+    setNameDraft(null);
+  };
   const nav = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,7 +76,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
           </button>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <p className="text-xs font-medium text-white/80">{profile?.first_name ?? 'Peter'}</p>
+              <p className="text-xs font-medium text-white/80">{profile?.first_name ?? t('Coach')}</p>
               <p className="text-[10px] text-adlr-gold/70">{t('Trainer')}</p>
             </div>
             <div className="relative" ref={menuRef}>
@@ -77,10 +85,23 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                 className="w-9 h-9 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-xs font-bold adlr-tap"
                 aria-label={t('Konto-Menü')}
               >
-                {(profile?.first_name?.[0] ?? 'P').toUpperCase()}
+                {(profile?.first_name?.[0] ?? 'C').toUpperCase()}
               </button>
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-64 adlr-card p-3 z-40 adlr-fade-in" style={{ background: 'rgb(var(--adlr-anthracite))' }}>
+                  <p className="text-xs font-medium uppercase tracking-wider text-white/50 mb-2 px-1">{t('Dein Name (für Klienten sichtbar)')}</p>
+                  <div className="flex gap-1.5 mb-4">
+                    <input
+                      value={nameDraft ?? profile?.first_name ?? ''}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
+                      placeholder={t('Vorname')}
+                      className="flex-1 min-w-0 bg-inset border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 outline-none"
+                    />
+                    {nameDraft !== null && nameDraft.trim() !== (profile?.first_name ?? '') && (
+                      <button onClick={saveName} className="adlr-tap px-3 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mb-2 px-1">
                     <Palette size={15} className="text-adlr-gold" />
                     <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Erscheinungsbild')}</p>

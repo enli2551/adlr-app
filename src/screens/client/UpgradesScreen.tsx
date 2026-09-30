@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { SectionHeader, Button } from '@/components/ui';
 import { Check } from 'lucide-react';
@@ -15,14 +15,15 @@ interface Upgrade {
 
 const UPGRADES: Upgrade[] = [
   { key: 'nutrition', title: 'ERNÄHRUNGS-ANALYSE', desc: 'Personalisierter Ernährungsplan basierend auf deinen Zielen.', price: '€49', cta: 'Jetzt anfragen' },
-  { key: 'body', title: 'KÖRPERANALYSE SESSION', desc: 'InBody-Messung + detaillierter Report von Peter persönlich.', price: '€29 / Session', cta: 'Termin anfragen' },
-  { key: 'extra', title: 'EXTRA SESSION', desc: 'Eine zusätzliche 1-on-1 Einheit mit Peter.', price: '€65 / Session', cta: 'Buchen' },
-  { key: 'checkin', title: 'MONATLICHER CHECK-IN CALL', desc: '30 Minuten Video-Review deiner Fortschritte mit Peter.', price: '€39 / Monat', cta: 'Aktivieren' },
-  { key: 'transformation', title: 'TRANSFORMATION PAKET', desc: '3 Monate intensiv. Für die, die es ernst meinen.', price: 'Individuell — kontaktiere Peter', cta: 'Gespräch anfragen' },
+  { key: 'body', title: 'KÖRPERANALYSE SESSION', desc: 'InBody-Messung + detaillierter Report von deinem Coach persönlich.', price: '€29 / Session', cta: 'Termin anfragen' },
+  { key: 'extra', title: 'EXTRA SESSION', desc: 'Eine zusätzliche 1-on-1 Einheit mit deinem Coach.', price: '€65 / Session', cta: 'Buchen' },
+  { key: 'checkin', title: 'MONATLICHER CHECK-IN CALL', desc: '30 Minuten Video-Review deiner Fortschritte mit deinem Coach.', price: '€39 / Monat', cta: 'Aktivieren' },
+  { key: 'transformation', title: 'TRANSFORMATION PAKET', desc: '3 Monate intensiv. Für die, die es ernst meinen.', price: 'Individuell — frag deinen Coach', cta: 'Gespräch anfragen' },
 ];
 
 export default function UpgradesScreen() {
   const { profile } = useAuth();
+  const coach = useCoachName();
   const [requested, setRequested] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -55,7 +56,7 @@ export default function UpgradesScreen() {
                   className="text-sm"
                 >
                   {isRequested ? (
-                    <span className="flex items-center gap-1.5"><Check size={14} /> {t('An Peter gesendet')}</span>
+                    <span className="flex items-center gap-1.5"><Check size={14} /> {t('An {coach} gesendet', { coach })}</span>
                   ) : t(u.cta)}
                 </Button>
               </div>
@@ -63,7 +64,7 @@ export default function UpgradesScreen() {
           );
         })}
       </div>
-      <p className="text-center text-xs text-white/30 mt-8">{t('Bereit für mehr? Peter wartet.')}</p>
+      <p className="text-center text-xs text-white/30 mt-8">{t('Bereit für mehr? {coach} wartet.', { coach })}</p>
     </div>
   );
 }
