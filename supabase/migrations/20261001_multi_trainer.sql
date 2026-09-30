@@ -24,7 +24,16 @@ has none — so nothing changes for current clients.
 Idempotent: every table's policies are dropped dynamically and recreated, so it is
 correct even if the live DB drifted from the migration files. Run in the Supabase
 SQL Editor (as one script).
+
+DATA: this migration changes NO existing rows (clients, plans, assignments, logs,
+photos, messages stay exactly as they are). It only adds an empty column
+(invite_code), helper functions and replaces access policies. Run the pre-check
+(20261001_multi_trainer_precheck.sql) first.
 */
+
+-- All-or-nothing: if any statement fails, nothing is changed.
+BEGIN;
+
 
 -- ── Helpers (SECURITY DEFINER → no RLS recursion) ─────────────────────────────
 CREATE OR REPLACE FUNCTION public.is_trainer_of(p_client uuid)
@@ -247,3 +256,5 @@ CREATE POLICY "adlr_avatars" ON storage.objects FOR ALL TO authenticated
   USING (bucket_id = 'avatars') WITH CHECK (bucket_id = 'avatars');
 
 DROP FUNCTION public._adlr_drop_policies(text);
+
+COMMIT;
