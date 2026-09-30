@@ -12,6 +12,12 @@
 	<string>ADLR speichert Fortschrittsfotos in deiner Fotomediathek.</string>
   <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>de</string>
+		<string>en</string>
+		<string>hu</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>de</string>
 	<key>CFBundleDisplayName</key>
@@ -74,5 +80,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls und gegessene Kalorien, damit du und dein Coach deinen Fortschritt sehen.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>ADLR schreibt keine Daten in Apple Health.</string>
 </dict>
 </plist>

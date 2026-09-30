@@ -41,30 +41,32 @@ export default function AuthScreen() {
   useEffect(() => {
     const U = 'https://gzcewdhjlykwqhtjludv.supabase.co';
     const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6Y2V3ZGhqbHlrd3FodGpsdWR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDY5MTMsImV4cCI6MjEwMDU4MjkxM30.DbZ8NuNaFuOLRFaNvOonckyduEnbbXPMQSv_Vq-JhWw';
+    const full: Record<string, string> = {
+      'Content-Type': 'application/json;charset=UTF-8',
+      Authorization: `Bearer ${K}`,
+      apikey: K,
+      'X-Client-Info': 'supabase-js-web/2.57.4',
+      'X-Supabase-Api-Version': '2024-01-01',
+    };
+    const body = JSON.stringify({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
+    const tryPost = async (label: string, headers: Record<string, string>) => {
+      try {
+        const r = await fetch(`${U}/auth/v1/token?grant_type=password`, { method: 'POST', headers, body });
+        return `${label}=${r.status}`;
+      } catch (e) {
+        return `${label}!${e instanceof Error ? e.message : String(e)}`;
+      }
+    };
     (async () => {
-      const parts: string[] = ['b8'];
-      try {
-        const r = await fetch(`${U}/auth/v1/health`, { headers: { apikey: K } });
-        parts.push(`get=${r.status}`);
-      } catch (e) {
-        parts.push(`get!=${e instanceof Error ? e.message : String(e)}`);
-      }
-      // Raw POST replicating what supabase-js does — isolates the WebView from the client.
-      try {
-        const r = await fetch(`${U}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: K },
-          body: JSON.stringify({ email: 'diag@adlr.invalid', password: 'diag-only-xx' }),
-        });
-        parts.push(`post=${r.status}`);
-      } catch (e) {
-        parts.push(`post!=${e instanceof Error ? e.message : String(e)}`);
-      }
+      const parts: string[] = ['b14'];
+      // Raw POST with the exact supabase-js headers works (b9: full=400), so run
+      // the real supabase-js call and capture the failing request's BODY.
+      parts.push(await tryPost('full', full));
       try {
         const { error: e } = await supabase.auth.signInWithPassword({ email: 'diag@adlr.invalid', password: 'diag-only-xx' });
-        parts.push(e ? `sb=${e.name}/${(e as { status?: number }).status}/${e.message}` : 'sb=OK');
+        parts.push(e ? `sb=${e.message}` : 'sb=OK');
       } catch (e) {
-        parts.push(`sbthrow=${e instanceof Error ? `${e.name}:${e.message}` : String(e)}`);
+        parts.push(`sbthrow=${e instanceof Error ? e.message : String(e)}`);
       }
       const cap = (globalThis as Record<string, unknown>).__adlrFetchDiag;
       if (cap) parts.push(`CAP[${cap}]`);

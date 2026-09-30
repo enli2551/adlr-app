@@ -1,0 +1,6 @@
+/* ADLR — Hungarian permission texts */
+"NSCameraUsageDescription" = "Az ADLR a kamerát a fejlődési fotók elkészítéséhez használja.";
+"NSPhotoLibraryUsageDescription" = "Az ADLR-nek hozzáférés kell a fotóidhoz a fejlődési fotók feltöltéséhez.";
+"NSPhotoLibraryAddUsageDescription" = "Az ADLR a fejlődési fotókat a fotótáradba menti.";
+"NSHealthShareUsageDescription" = "Az ADLR beolvassa a lépéseket, az alvást, a testsúlyt, a nyugalmi pulzust és az elfogyasztott kalóriát, hogy te és az edződ lássátok a fejlődésedet.";
+"NSHealthUpdateUsageDescription" = "Az ADLR nem ír adatot az Apple Egészség alkalmazásba.";
