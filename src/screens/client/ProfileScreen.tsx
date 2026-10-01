@@ -9,6 +9,7 @@ import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
 import HealthConnectCard from '@/components/HealthConnectCard';
+import WorkoutImportCard from '@/components/WorkoutImportCard';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t, fmtDate } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -337,6 +338,7 @@ export default function ProfileScreen() {
 
       {/* Apple Health / Health Connect */}
       {profile && <HealthConnectCard clientId={profile.id} />}
+      {profile && <WorkoutImportCard clientId={profile.id} />}
 
       {/* Training log entry */}
       <Card className="mb-5" onClick={() => nav('/app/verlauf')}>

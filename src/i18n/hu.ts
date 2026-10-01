@@ -951,6 +951,21 @@ const dict: Record<string, string> = {
   "Kurzbeschreibung für Klienten (optional)": "Rövid leírás a klienseknek (opcionális)",
   "Klienten im Coach-Tab anbieten": "Ajánlás a klienseknek az Edző fülön",
   "intern": "belső",
+  "Trainingsdaten importieren": "Edzésadatok importálása",
+  "Übernimm deine Historie aus Hevy oder Strong — Kraftkurven und Rekorde laufen nahtlos weiter.": "Hozd át az előzményeidet a Hevyből vagy a Strongból — az erőgörbék és rekordok zökkenőmentesen folytatódnak.",
+  "Datei nicht erkannt. Bitte den CSV-Export aus Hevy oder Strong wählen.": "Nem felismerhető fájl. Válaszd a Hevy vagy Strong CSV-exportját.",
+  "Import abgebrochen — bereits importierte Trainings bleiben erhalten. Einfach erneut versuchen.": "Az importálás megszakadt — a már átvett edzések megmaradnak. Próbáld újra.",
+  "{w} Trainings · {s} Sätze importiert": "{w} edzés · {s} szett importálva",
+  "{n} Rekorde": "{n} rekord",
+  "CSV-Datei wählen": "CSV-fájl kiválasztása",
+  "Wo finde ich den Export?": "Hol találom az exportot?",
+  "Profil → Einstellungen → Daten exportieren & importieren → Workouts exportieren": "Profil → Beállítások → Export & Import Data → Export workouts",
+  "Einstellungen → Strong-Daten exportieren": "Beállítások → Export Strong Data",
+  "{n} bereits vorhanden — werden übersprungen": "{n} már megvan — kihagyjuk",
+  "{a} von {b} Übungen zugeordnet": "{b} gyakorlatból {a} párosítva",
+  "übernommen": "változatlanul",
+  "Importieren": "Importálás",
+  "Importiere… {a} / {b}": "Importálás… {a} / {b}",
 };
 
 export default dict;

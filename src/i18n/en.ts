@@ -950,6 +950,21 @@ const dict: Record<string, string> = {
   "Kurzbeschreibung für Klienten (optional)": "Short description for clients (optional)",
   "Klienten im Coach-Tab anbieten": "Offer to clients on the Coach tab",
   "intern": "internal",
+  "Trainingsdaten importieren": "Import training data",
+  "Übernimm deine Historie aus Hevy oder Strong — Kraftkurven und Rekorde laufen nahtlos weiter.": "Bring your history over from Hevy or Strong — strength curves and records continue seamlessly.",
+  "Datei nicht erkannt. Bitte den CSV-Export aus Hevy oder Strong wählen.": "File not recognised. Please choose the CSV export from Hevy or Strong.",
+  "Import abgebrochen — bereits importierte Trainings bleiben erhalten. Einfach erneut versuchen.": "Import stopped — workouts already imported are kept. Just try again.",
+  "{w} Trainings · {s} Sätze importiert": "{w} workouts · {s} sets imported",
+  "{n} Rekorde": "{n} records",
+  "CSV-Datei wählen": "Choose CSV file",
+  "Wo finde ich den Export?": "Where do I find the export?",
+  "Profil → Einstellungen → Daten exportieren & importieren → Workouts exportieren": "Profile → Settings → Export & Import Data → Export workouts",
+  "Einstellungen → Strong-Daten exportieren": "Settings → Export Strong Data",
+  "{n} bereits vorhanden — werden übersprungen": "{n} already there — will be skipped",
+  "{a} von {b} Übungen zugeordnet": "{a} of {b} exercises matched",
+  "übernommen": "kept as is",
+  "Importieren": "Import",
+  "Importiere… {a} / {b}": "Importing… {a} / {b}",
 };
 
 export default dict;
