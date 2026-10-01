@@ -34,11 +34,11 @@ export default function Completion({ data, onContinue }: { data: IntakeData; onC
           )}
           <Row label={t('Erfahrung')} value={data.experience ? t(`exp|${data.experience}`) : '—'} />
           <Row label={t('Trainingstage')} value={t('{n} Tage/Woche', { n: (data.trainingDays ?? []).length })} />
-          <Row label={t('Commitment')} value={`${data.commitmentLevel ?? 3}/5`} />
+          {data.commitmentLevel ? <Row label={t('Commitment')} value={`${data.commitmentLevel}/5`} /> : null}
         </div>
       </div>
 
-      <Button onClick={onContinue} className="w-full max-w-sm">{t('Zum Dashboard')}</Button>
+      <Button onClick={onContinue} className="w-full max-w-sm">{t("Los geht's")}</Button>
       <p className="text-xs text-white/30 mt-6">{t('Steig auf. Bleib stark.')}</p>
     </div>
   );

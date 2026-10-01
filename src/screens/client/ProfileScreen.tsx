@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading } from '@/components/ui';
@@ -40,6 +40,7 @@ interface PlateauAlert {
 
 export default function ProfileScreen() {
   const { profile, signOut, coach } = useAuth();
+  const coachName = useCoachName();
   const nav = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'delete' | null>(null);
@@ -334,7 +335,18 @@ export default function ProfileScreen() {
           : t('Starte deine Streak — schließe dein nächstes Training ab.')}
       </p>
 
-      {/* Package from the coach (sessions left, validity) */}
+      {/* Short sign-up → the detailed questionnaire is optional, offered here */}
+      {profile && !profile.intake?.extended && (
+        <Card className="mb-5 adlr-gold-border" onClick={() => nav('/onboarding?more=1')}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white/85">{t('Profil vervollständigen')}</p>
+              <p className="text-xs text-white/45 mt-0.5">{t('2 Minuten — hilft {coach}, deinen Plan noch genauer anzupassen.', { coach: coachName })}</p>
+            </div>
+            <ChevronRight size={18} className="text-adlr-gold shrink-0" />
+          </div>
+        </Card>
+      )}
 
       {/* Apple Health / Health Connect */}
       {profile && <HealthConnectCard clientId={profile.id} />}

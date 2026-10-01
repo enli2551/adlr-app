@@ -8,7 +8,9 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil } from 'lucide-react';
+import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff } from 'lucide-react';
+import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
+import { cacheGet, cacheSet, flushOutbox, isNetworkError, onOutboxChange, outbox, queueWorkout, type QueuedWorkout } from '@/lib/offline';
 import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/components/ExerciseLibrary';
 import { fetchExercises, isGymDependent, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
@@ -122,6 +124,8 @@ export default function PlanScreen() {
   const [finished, setFinished] = useState<{ summary: SessionSummary; all: WorkoutCompletion[] } | null>(null);
   const nav = useNavigate();
   const [demoEx, setDemoEx] = useState<ExerciseRow | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(() => outbox().length);
   const { data: lib } = useAsyncData(fetchExercises, []);
   // Cardio exercises log time/distance instead of kg × reps.
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
@@ -159,45 +163,78 @@ export default function PlanScreen() {
   const currentRestCtx = useRef<{ exerciseName: string; setNumber: number; totalSets: number; restSeconds: number; reps?: string } | null>(null);
   const notifPromptShown = useRef(false);
 
+  // Restores a training that was active when the app got closed (initial load only).
+  const applyPlanDays = (planDays: PlanDay[]) => {
+    // Resume a training session that was active when the app got closed/killed —
+    // only on the initial load (activeDayIdx is still null at that point).
+    const persisted = activeDayIdx === null ? getPersistedActiveTraining() : null;
+    const loadedDays = persisted?.freeDay ? [...planDays, persisted.freeDay] : planDays;
+    setDays(loadedDays);
+    if (activeDayIdx === null) {
+      if (persisted) {
+        const isStale = Date.now() - persisted.trainingStartAt > ACTIVE_TRAINING_MAX_AGE_MS;
+        const idx = loadedDays.findIndex((d) => d.id === persisted.dayId);
+        if (!isStale && idx !== -1) {
+          setActiveDayIdx(idx);
+          setCheckedSets(new Set(persisted.checkedSets));
+          setSetInputs(persisted.setInputs);
+          setTrainingStartAt(persisted.trainingStartAt);
+          setExpanded(idx);
+        } else {
+          persistActiveTraining(null);
+        }
+      }
+    }
+  };
+
+  // Workouts finished offline and not yet synced still count (history, "last time", streak).
+  const withPending = (wcs: WorkoutCompletion[], logs: ExerciseSetLog[]) => {
+    const pending = outbox().filter((q) => q.client_id === profile?.id && !q.remoteId);
+    return {
+      completions: [...pending.map((q) => ({ id: q.localId, client_id: q.client_id, plan_day_id: q.plan_day_id, completed_at: q.completed_at, duration_sec: q.duration_sec, gym: q.gym, title: q.title })), ...wcs],
+      logs: [...pending.flatMap((q) => q.logs.map((l, i) => ({ ...l, id: `${q.localId}-${i}`, client_id: q.client_id, workout_completion_id: q.localId, created_at: q.completed_at, set_type: l.set_type as ExerciseSetLog['set_type'] }))), ...logs],
+    };
+  };
+
   const load = async () => {
     if (!profile) return;
     setLoading(true);
+    if (outbox().length > 0) await flushOutbox().catch(() => 0);
     let trainingDaysInPlan = 0;
-    const { data: cp } = await supabase
+    const { data: cp, error: cpErr } = await supabase
       .from('client_plans')
       .select('plan_id')
       .eq('client_id', profile.id)
       .eq('is_active', true)
       .maybeSingle();
+    if (cpErr && isNetworkError(cpErr)) {
+      // Offline: open from the last snapshot so the client can still train.
+      const snap = cacheGet<{ days: PlanDay[]; completions: WorkoutCompletion[]; setLogs: ExerciseSetLog[]; prs: PersonalRecord[]; sessions: Session[] }>(profile.id, 'plan');
+      if (snap) {
+        applyPlanDays(snap.days);
+        const merged = withPending(snap.completions, snap.setLogs);
+        setCompletions(merged.completions);
+        setSetLogs(merged.logs);
+        setPrs(snap.prs);
+        setSessions(snap.sessions);
+      }
+      setOffline(true);
+      setLoading(false);
+      return;
+    }
+    setOffline(false);
+    let planDays: PlanDay[] = [];
     if (cp) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week');
-      const planDays = (pd ?? []) as PlanDay[];
+      planDays = (pd ?? []) as PlanDay[];
       trainingDaysInPlan = planDays.filter((d) => !d.is_rest_day).length;
-      // Resume a training session that was active when the app got closed/killed —
-      // only on the initial load (activeDayIdx is still null at that point).
-      const persisted = activeDayIdx === null ? getPersistedActiveTraining() : null;
-      const loadedDays = persisted?.freeDay ? [...planDays, persisted.freeDay] : planDays;
-      setDays(loadedDays);
-      if (activeDayIdx === null) {
-        if (persisted) {
-          const isStale = Date.now() - persisted.trainingStartAt > ACTIVE_TRAINING_MAX_AGE_MS;
-          const idx = loadedDays.findIndex((d) => d.id === persisted.dayId);
-          if (!isStale && idx !== -1) {
-            setActiveDayIdx(idx);
-            setCheckedSets(new Set(persisted.checkedSets));
-            setSetInputs(persisted.setInputs);
-            setTrainingStartAt(persisted.trainingStartAt);
-            setExpanded(idx);
-          } else {
-            persistActiveTraining(null);
-          }
-        }
-      }
+      applyPlanDays(planDays);
     }
     const { data: wc } = await supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false });
-    setCompletions((wc ?? []) as WorkoutCompletion[]);
     const { data: sl } = await supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: false });
-    setSetLogs((sl ?? []) as ExerciseSetLog[]);
+    const merged = withPending((wc ?? []) as WorkoutCompletion[], (sl ?? []) as ExerciseSetLog[]);
+    setCompletions(merged.completions);
+    setSetLogs(merged.logs);
     const { data: pr } = await supabase.from('personal_records').select('*').eq('client_id', profile.id);
     setPrs((pr ?? []) as PersonalRecord[]);
     // Upcoming PT sessions (from today), for the "Nächste Termine" card + reminders
@@ -211,6 +248,7 @@ export default function PlanScreen() {
       .order('scheduled_at', { ascending: true });
     const sessList = (ss ?? []) as Session[];
     setSessions(sessList);
+    cacheSet(profile.id, 'plan', { days: planDays, completions: wc ?? [], setLogs: (sl ?? []).slice(0, 1500), prs: pr ?? [], sessions: sessList });
     syncSessionReminders(sessList);
     scheduleWeeklyRecapNotification();
     if (!recapSeenThisWeek()) loadWeeklyRecap(profile.id, trainingDaysInPlan).then(setRecap).catch(() => {});
@@ -218,6 +256,13 @@ export default function PlanScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+  useEffect(() => onOutboxChange(() => setQueuedCount(outbox().length)), []);
+  // Back online with an open screen: sync queued workouts, then refresh from the server.
+  useEffect(() => {
+    const onOnline = () => { if (outbox().length > 0 || offline) load(); };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  });
 
   // Keep the active training session persisted so it survives the app being
   // backgrounded/killed and reopened (Android may kill the WebView process).
@@ -487,19 +532,10 @@ export default function PlanScreen() {
         delaySeconds: 1,
       });
     }
-    // Create workout completion
-    const { data: wc, error } = await supabase.from('workout_completions').insert({ client_id: profile.id, plan_day_id: day.is_free ? null : day.id }).select('*').single();
-    if (error || !wc) return;
-    if (day.is_free) await supabase.from('workout_completions').update({ title: day.workout_name }).eq('id', wc.id); // best-effort
-    // Studio tag (best-effort — no-op if the gym column isn't migrated yet)
-    if (gym) await supabase.from('workout_completions').update({ gym }).eq('id', wc.id);
-    // Record session duration (best-effort — no-op if the duration_sec column isn't there yet)
     const durationSec = trainingStartAt ? Math.floor((Date.now() - trainingStartAt) / 1000) : null;
-    if (durationSec != null) {
-      await supabase.from('workout_completions').update({ duration_sec: durationSec }).eq('id', wc.id);
-    }
-    // Save set logs
-    const logsToInsert: Array<{ client_id: string; workout_completion_id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null }> = [];
+    const completedAt = new Date().toISOString();
+    // Collect the logged sets first — they're saved online, or queued when offline.
+    const baseLogs: Array<{ client_id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null }> = [];
     for (const ex of day.exercises ?? []) {
       const inputs = setInputs[ex.name] ?? [];
       for (let i = 0; i < inputs.length; i++) {
@@ -508,9 +544,8 @@ export default function PlanScreen() {
         const dur = inputs[i]?.min ? Math.round(Number(inputs[i].min) * 60) : null;
         const km = inputs[i]?.km ? Number(inputs[i].km) : null;
         if (w !== null || r !== null || dur !== null || km !== null) {
-          logsToInsert.push({
+          baseLogs.push({
             client_id: profile.id,
-            workout_completion_id: wc.id,
             plan_day_id: day.is_free ? null : day.id,
             exercise_name: ex.name,
             set_number: i + 1,
@@ -523,7 +558,50 @@ export default function PlanScreen() {
         }
       }
     }
-    if (logsToInsert.length > 0) {
+    // Auto-detect new personal records from this session's heaviest working/dropset sets
+    // (warm-up sets are intentionally lighter and shouldn't trigger a false PR).
+    const bestByExercise = new Map<string, { weight_kg: number; reps: number }>();
+    for (const l of baseLogs) {
+      if (l.weight_kg == null || l.set_type === 'warmup') continue;
+      const cur = bestByExercise.get(l.exercise_name);
+      if (!cur || l.weight_kg > cur.weight_kg) bestByExercise.set(l.exercise_name, { weight_kg: l.weight_kg, reps: l.reps ?? 0 });
+    }
+    // Machine/cable PRs are compared within the current Studio only (loads differ per gym).
+    const equipmentByName = new Map((lib ?? []).map((e) => [e.name, e.equipment]));
+    const detected: { exercise_name: string; weight_kg: number; reps: number; gym: string | null }[] = [];
+    for (const [name, best] of bestByExercise) {
+      const prGym = gym && isGymDependent(equipmentByName.get(name)) ? gym : null;
+      const prevMax = prs
+        .filter((p) => p.exercise_name === name && (prGym ? p.gym === prGym : true))
+        .reduce((m, p) => Math.max(m, p.weight_kg), 0);
+      if (best.weight_kg > prevMax) detected.push({ exercise_name: name, weight_kg: best.weight_kg, reps: best.reps, gym: prGym });
+    }
+
+    // Create workout completion — or queue the whole workout when there's no connection.
+    let wc: { id: string } | null = null;
+    if (navigator.onLine !== false) {
+      const res = await supabase.from('workout_completions').insert({ client_id: profile.id, plan_day_id: day.is_free ? null : day.id, completed_at: completedAt }).select('*').single();
+      if (res.error && !isNetworkError(res.error)) return;
+      wc = res.data as { id: string } | null;
+    }
+    const savedOffline = !wc;
+    if (!wc) {
+      const queued: QueuedWorkout = {
+        localId: `offline-${Date.now()}`, client_id: profile.id, plan_day_id: day.is_free ? null : day.id, completed_at: completedAt,
+        title: day.is_free ? day.workout_name : null, gym, duration_sec: durationSec,
+        logs: baseLogs.map(({ client_id: _c, ...l }) => l), prs: detected,
+      };
+      queueWorkout(queued);
+      wc = { id: queued.localId };
+    } else {
+      if (day.is_free) await supabase.from('workout_completions').update({ title: day.workout_name }).eq('id', wc.id); // best-effort
+      // Studio tag (best-effort — no-op if the gym column isn't migrated yet)
+      if (gym) await supabase.from('workout_completions').update({ gym }).eq('id', wc.id);
+      // Record session duration (best-effort — no-op if the duration_sec column isn't there yet)
+      if (durationSec != null) await supabase.from('workout_completions').update({ duration_sec: durationSec }).eq('id', wc.id);
+    }
+    const logsToInsert = baseLogs.map((l) => ({ ...l, workout_completion_id: wc!.id }));
+    if (!savedOffline && logsToInsert.length > 0) {
       const { error: logsErr } = await supabase.from('exercise_set_logs').insert(logsToInsert);
       if (logsErr) {
         // set_type column not migrated on this Supabase project yet — retry without it
@@ -540,29 +618,13 @@ export default function PlanScreen() {
         await supabase.from('exercise_set_logs').insert(withoutType);
       }
     }
-    // Auto-detect new personal records from this session's heaviest working/dropset sets
-    // (warm-up sets are intentionally lighter and shouldn't trigger a false PR).
-    const bestByExercise = new Map<string, { weight_kg: number; reps: number }>();
-    for (const l of logsToInsert) {
-      if (l.weight_kg == null || l.set_type === 'warmup') continue;
-      const cur = bestByExercise.get(l.exercise_name);
-      if (!cur || l.weight_kg > cur.weight_kg) bestByExercise.set(l.exercise_name, { weight_kg: l.weight_kg, reps: l.reps ?? 0 });
-    }
-    // Machine/cable PRs are compared within the current Studio only (loads differ per gym).
-    const equipmentByName = new Map((lib ?? []).map((e) => [e.name, e.equipment]));
-    const detected: { exercise_name: string; weight_kg: number; reps: number; gym: string | null }[] = [];
-    for (const [name, best] of bestByExercise) {
-      const prGym = gym && isGymDependent(equipmentByName.get(name)) ? gym : null;
-      const prevMax = prs
-        .filter((p) => p.exercise_name === name && (prGym ? p.gym === prGym : true))
-        .reduce((m, p) => Math.max(m, p.weight_kg), 0);
-      if (best.weight_kg > prevMax) detected.push({ exercise_name: name, weight_kg: best.weight_kg, reps: best.reps, gym: prGym });
-    }
     if (detected.length > 0) {
-      const rows = detected.map((d) => ({ client_id: profile.id, exercise_name: d.exercise_name, weight_kg: d.weight_kg, reps: d.reps, gym: d.gym }));
-      const { error: prErr } = await supabase.from('personal_records').insert(rows);
-      // gym column not migrated yet — retry without it so the PR itself is never lost
-      if (prErr) await supabase.from('personal_records').insert(rows.map(({ gym: _g, ...r }) => r));
+      if (!savedOffline) {
+        const rows = detected.map((d) => ({ client_id: profile.id, exercise_name: d.exercise_name, weight_kg: d.weight_kg, reps: d.reps, gym: d.gym }));
+        const { error: prErr } = await supabase.from('personal_records').insert(rows);
+        // gym column not migrated yet — retry without it so the PR itself is never lost
+        if (prErr) await supabase.from('personal_records').insert(rows.map(({ gym: _g, ...r }) => r));
+      }
       setNewPRs(detected);
     }
     // Recompute the consistency streak (consecutive calendar days with a completed
@@ -589,7 +651,7 @@ export default function PlanScreen() {
     else setMilestoneMsg(null);
     haptic.success();
     setCelebrate(true);
-    const doneComp: WorkoutCompletion = { ...(wc as WorkoutCompletion), duration_sec: durationSec, gym, title: day.is_free ? day.workout_name : null };
+    const doneComp: WorkoutCompletion = { id: wc.id, client_id: profile.id, plan_day_id: day.is_free ? null : day.id, completed_at: completedAt, duration_sec: durationSec, gym, title: day.is_free ? day.workout_name : null };
     const now = new Date().toISOString();
     const sessionLogs: ExerciseSetLog[] = logsToInsert.map((l, i) => ({ ...l, id: `local-${i}`, created_at: now }));
     const muscleByName = new Map((lib ?? []).map((e) => [e.name, e.muscle_group]));
@@ -786,6 +848,23 @@ export default function PlanScreen() {
           </div>
         </div>
       )}
+
+      {(offline || queuedCount > 0) && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-4 text-xs" style={{ background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.6)' }}>
+          <CloudOff size={14} className="shrink-0" />
+          <span>
+            {offline ? t('Offline — du kannst trotzdem trainieren.') : null}
+            {queuedCount > 0 ? ` ${t(queuedCount === 1 ? '1 Training wird synchronisiert, sobald du online bist.' : '{n} Trainings werden synchronisiert, sobald du online bist.', { n: queuedCount })}` : null}
+          </span>
+        </div>
+      )}
+
+      {/* Guided first workout: intro card before, one-tip-at-a-time during */}
+      {activeDayIdx !== null && completions.length === 0 && <FirstWorkoutTips />}
+      {activeDayIdx === null && completions.length === 0 && nextRecommendedDayId && (() => {
+        const idx = days.findIndex((d) => d.id === nextRecommendedDayId);
+        return <FirstWorkoutIntro dayName={t(days[idx]?.workout_name ?? 'Training')} onStart={() => startTraining(idx)} />;
+      })()}
 
       {activeDayIdx === null && recap && !recapSeen && (
         <button

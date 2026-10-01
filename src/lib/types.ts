@@ -57,6 +57,8 @@ export interface IntakeData {
   whyNow?: string;
   commitmentLevel?: number;
   referralSource?: string;
+  /** detailed questionnaire done (Profil → "Profil vervollständigen") */
+  extended?: boolean;
 }
 
 export interface Plan {

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
 import { syncHealth } from '@/lib/health';
 import { useIncomingMessages } from '@/lib/chat';
+import { flushOutbox, outbox } from '@/lib/offline';
 import { t, useLang } from '@/lib/i18n';
 
 // Coach tab = chat + next session + the trainer's own extras (replaces the old Upgrades tab).
@@ -47,10 +48,15 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   // Background health sync (throttled inside syncHealth) on open and when the app returns.
   useEffect(() => {
     if (!profile?.id) return;
-    const run = () => { if (document.visibilityState === 'visible') syncHealth(profile.id).catch(() => {}); };
+    const run = () => {
+      if (document.visibilityState !== 'visible') return;
+      syncHealth(profile.id).catch(() => {});
+      if (outbox().length > 0) flushOutbox().catch(() => {}); // workouts finished offline
+    };
     run();
     document.addEventListener('visibilitychange', run);
-    return () => document.removeEventListener('visibilitychange', run);
+    window.addEventListener('online', run);
+    return () => { document.removeEventListener('visibilitychange', run); window.removeEventListener('online', run); };
   }, [profile?.id]);
 
   useEffect(() => {

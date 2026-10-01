@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { Profile } from './types';
 import { t } from './i18n';
+import { cacheGet, cacheSet, isNetworkError } from './offline';
 
 /** The client's own coach (or, for a trainer, themselves) — shown instead of a hardcoded name. */
 export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }
@@ -30,14 +31,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadCoach = async (p: Profile) => {
     if (p.role === 'trainer') { setCoach({ id: p.id, first_name: p.first_name, last_name: p.last_name, avatar_url: p.avatar_url }); return; }
     if (!p.trainer_id) { setCoach(null); return; }
-    const { data } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url').eq('id', p.trainer_id).maybeSingle();
+    const { data, error } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url').eq('id', p.trainer_id).maybeSingle();
+    if (error && isNetworkError(error)) { setCoach(cacheGet<CoachInfo>(p.id, 'coach')); return; }
     setCoach((data as CoachInfo | null) ?? null);
+    if (data) cacheSet(p.id, 'coach', data);
   };
 
   const loadProfile = async (uid: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
-    if (error) { console.error('profile load', error); return; }
-    if (data) { setProfile(data as Profile); loadCoach(data as Profile); return; }
+    if (error) {
+      // Offline start: keep working from the last known profile (training works offline).
+      const cached = isNetworkError(error) ? cacheGet<Profile>(uid, 'profile') : null;
+      if (cached) { setProfile(cached); loadCoach(cached); return; }
+      console.error('profile load', error);
+      return;
+    }
+    if (data) { setProfile(data as Profile); cacheSet(uid, 'profile', data); loadCoach(data as Profile); return; }
     // Profile row missing — create a minimal client profile so the app works.
     const { data: user } = await supabase.auth.getUser();
     const email = user?.user?.email ?? '';
