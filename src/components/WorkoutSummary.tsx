@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Share2 } from 'lucide-react';
+import { useCoachName } from '@/lib/auth';
+import { drawShareCard, shareCanvas, fmtVolume } from '@/lib/shareCard';
 import { Trophy, X, Truck, TramFront, Ship, Bus, Tractor, Forklift, Caravan, Car, Piano, Refrigerator } from 'lucide-react';
 import type { ComparisonIcon } from '@/lib/workoutSummary';
 import type { WorkoutCompletion } from '@/lib/types';
@@ -28,6 +31,32 @@ export default function WorkoutSummary({ summary, allCompletions, mode, newPRs =
   const when = new Date(summary.completion.completed_at);
   const nth = workoutNumber(summary.completion, allCompletions);
   const trained = useMemo(() => trainedDateKeys(allCompletions), [allCompletions]);
+  const coach = useCoachName();
+  const [sharing, setSharing] = useState(false);
+  const share = async () => {
+    setSharing(true);
+    const prNames = new Set(newPRs.map((p) => p.exercise_name));
+    const best = summary.exercises.filter((e) => (e.best || e.cardio) && !prNames.has(e.name)).map((e): [string, string] => [
+      t(e.name),
+      e.best ? `${fmtNum(e.best.weight_kg)} kg × ${e.best.reps}` : `${e.cardio!.minutes} min${e.cardio!.km ? ` · ${fmtNum(e.cardio!.km)} km` : ''}`,
+    ]);
+    const canvas = drawShareCard({
+      kicker: t('Training #{n}', { n: nth }),
+      title: t(summary.name),
+      date: when,
+      stats: [
+        ...(summary.durationMin ? [{ label: t('Dauer'), value: `${summary.durationMin} min` }] : []),
+        ...(summary.volumeKg > 0 ? [{ label: t('Volumen'), value: fmtVolume(summary.volumeKg) }] : []),
+        { label: t('Übungen'), value: String(summary.exercises.length) },
+        { label: t('Sätze'), value: String(summary.sets) },
+      ],
+      highlight: newPRs.length ? { label: t('Neuer Rekord'), lines: newPRs.map((p) => `${t(p.exercise_name)}: ${fmtNum(p.weight_kg)} kg × ${p.reps}`) } : undefined,
+      list: best.length ? { label: t('Übungen'), lines: best } : undefined,
+      coach,
+    });
+    await shareCanvas(canvas, `adlr-training-${nth}.png`, t('Training #{n} geschafft 💪', { n: nth }));
+    setSharing(false);
+  };
 
   const cards: { key: string; node: JSX.Element }[] = [
     { key: 'overview', node: <OverviewCard summary={summary} newPRs={newPRs} milestoneMsg={milestoneMsg} /> },
@@ -85,10 +114,18 @@ export default function WorkoutSummary({ summary, allCompletions, mode, newPRs =
           ))}
         </div>
 
-        <div className="px-5 pb-5">
+        <div className="px-5 pb-5 flex gap-2">
+          <button
+            onClick={share}
+            disabled={sharing}
+            className="adlr-tap px-4 py-3.5 rounded-xl font-semibold text-sm flex items-center gap-2 border disabled:opacity-50"
+            style={{ borderColor: 'rgb(var(--adlr-gold) / 0.5)', color: 'rgb(var(--adlr-gold))' }}
+          >
+            <Share2 size={16} /> {t('Teilen')}
+          </button>
           <button
             onClick={onClose}
-            className="adlr-tap w-full py-3.5 rounded-xl font-semibold text-sm"
+            className="adlr-tap flex-1 py-3.5 rounded-xl font-semibold text-sm"
             style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
           >
             {mode === 'finished' ? t('Fertig') : t('Schließen')}

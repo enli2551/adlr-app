@@ -995,6 +995,9 @@ const dict: Record<string, string> = {
   "Neu laden": "Reload",
   "Plan konnte nicht gelöscht werden.": "The plan could not be deleted.",
   "Klient konnte nicht entfernt werden.": "The client could not be removed.",
+  "Coach: {coach}": "Coach: {coach}",
+  "Training #{n}": "Workout #{n}",
+  "Training #{n} geschafft 💪": "Workout #{n} done 💪",
 };
 
 export default dict;

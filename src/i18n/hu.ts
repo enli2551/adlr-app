@@ -996,6 +996,9 @@ const dict: Record<string, string> = {
   "Neu laden": "Újratöltés",
   "Plan konnte nicht gelöscht werden.": "A tervet nem sikerült törölni.",
   "Klient konnte nicht entfernt werden.": "A klienst nem sikerült eltávolítani.",
+  "Coach: {coach}": "Edző: {coach}",
+  "Training #{n}": "{n}. edzés",
+  "Training #{n} geschafft 💪": "Megvan a {n}. edzés 💪",
 };
 
 export default dict;
