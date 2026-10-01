@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { supabase, isMissingFunction } from '@/lib/supabase';
+import { captureError } from '@/lib/monitoring';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
 import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
@@ -83,10 +84,22 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
 
 
   // Remove client from this trainer's roster (unlink — keeps the account + data, RLS-safe).
+  const [removeErr, setRemoveErr] = useState<string | null>(null);
   const removeClient = async () => {
     if (!confirmRemove) { setConfirmRemove(true); setTimeout(() => setConfirmRemove(false), 3500); return; }
-    await supabase.from('client_plans').update({ is_active: false }).eq('client_id', clientId);
-    await supabase.from('profiles').update({ trainer_id: null }).eq('id', clientId);
+    setRemoveErr(null);
+    let { error } = await supabase.rpc('trainer_remove_client', { p_client: clientId });
+    if (error && isMissingFunction(error)) {
+      // Migration 20261002_trainer_delete_fix.sql not run yet — old client-side path.
+      await supabase.from('client_plans').update({ is_active: false }).eq('client_id', clientId);
+      const res = await supabase.from('profiles').update({ trainer_id: null }).eq('id', clientId).select('id');
+      error = res.error ?? (res.data?.length ? null : { message: 'nothing updated' } as typeof error);
+    }
+    if (error) {
+      captureError(error, { action: 'trainer_remove_client' });
+      setRemoveErr(t('Klient konnte nicht entfernt werden.'));
+      return;
+    }
     onBack();
   };
 
@@ -283,6 +296,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       >
         <UserMinus size={15} /> {confirmRemove ? t('Wirklich entfernen? Nochmal tippen') : t('Klient entfernen')}
       </button>
+      {removeErr && <p className="text-xs text-red-400 text-center mb-2">{removeErr}</p>}
       <p className="text-xs text-white/30 text-center mb-4">{t('Entfernt den Klienten aus deiner Liste — Konto und Daten bleiben erhalten.')}</p>
     </div>
   );

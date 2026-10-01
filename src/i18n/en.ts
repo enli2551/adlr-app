@@ -993,6 +993,8 @@ const dict: Record<string, string> = {
   "Da ist etwas schiefgelaufen.": "Something went wrong.",
   "Der Fehler wurde gemeldet. Bitte lade die App neu.": "The error has been reported. Please reload the app.",
   "Neu laden": "Reload",
+  "Plan konnte nicht gelöscht werden.": "The plan could not be deleted.",
+  "Klient konnte nicht entfernt werden.": "The client could not be removed.",
 };
 
 export default dict;

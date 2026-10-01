@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
+import { supabase, isMissingFunction } from '@/lib/supabase';
+import { captureError } from '@/lib/monitoring';
 import type { Plan, PlanDay, Exercise, Profile } from '@/lib/types';
 import { Loading } from '@/components/ui';
 import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
@@ -36,6 +37,7 @@ export default function PlanBuilderScreen() {
   const [renamingPlanId, setRenamingPlanId] = useState<string | null>(null);
   const [templateMsg, setTemplateMsg] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const { data: lib } = useAsyncData(fetchExercises, []);
   const libByName = useMemo(() => (lib ? new Map(lib.map((e) => [e.name, e])) : null), [lib]);
 
@@ -233,10 +235,22 @@ export default function PlanBuilderScreen() {
   };
 
   const deletePlan = async (plan: Plan) => {
-    await supabase.from('client_plans').delete().eq('plan_id', plan.id);
-    await supabase.from('plan_days').delete().eq('plan_id', plan.id);
-    const { error } = await supabase.from('plans').delete().eq('id', plan.id);
-    if (error) { console.error('deletePlan', error); return; }
+    setDeleteErr(null);
+    // Server-side delete (checks ownership, removes days + all assignments in one go).
+    let { error } = await supabase.rpc('trainer_delete_plan', { p_plan: plan.id });
+    if (error && isMissingFunction(error)) {
+      // Migration 20261002_trainer_delete_fix.sql not run yet — old client-side path.
+      await supabase.from('client_plans').delete().eq('plan_id', plan.id);
+      await supabase.from('plan_days').delete().eq('plan_id', plan.id);
+      const res = await supabase.from('plans').delete().eq('id', plan.id).select('id');
+      error = res.error ?? (res.data?.length ? null : { message: 'nothing deleted' } as typeof error);
+    }
+    if (error) {
+      captureError(error, { action: 'trainer_delete_plan' });
+      setDeleteErr(t('Plan konnte nicht gelöscht werden.'));
+      setTimeout(() => setDeleteErr(null), 5000);
+      return;
+    }
     if (activePlan?.id === plan.id) { setActivePlan(null); setMode('list'); }
     await load();
   };
@@ -290,6 +304,7 @@ export default function PlanBuilderScreen() {
   if (mode === 'list') {
     return (
       <div className="adlr-fade-in pb-6">
+      {deleteErr && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-white">{t('Plan Builder')}</h1>
@@ -506,6 +521,7 @@ export default function PlanBuilderScreen() {
 
   return (
     <div className="adlr-fade-in pb-6">
+      {deleteErr && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
       <div className="flex items-center gap-3 mb-5">
         <button onClick={() => { setMode('list'); setActivePlan(null); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.4)' }}>
           <ChevronDown size={18} className="rotate-90" />

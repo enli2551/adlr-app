@@ -80,3 +80,8 @@ export const supabase = createClient(url, anonKey, {
     lock: (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
   },
 });
+
+/** RPC not deployed yet (migration pending) — callers fall back to the old path. */
+export function isMissingFunction(err: { code?: string; message?: string } | null | undefined): boolean {
+  return !!err && (err.code === 'PGRST202' || err.code === '42883' || /could not find the function/i.test(err.message ?? ''));
+}

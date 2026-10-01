@@ -994,6 +994,8 @@ const dict: Record<string, string> = {
   "Da ist etwas schiefgelaufen.": "Valami hiba történt.",
   "Der Fehler wurde gemeldet. Bitte lade die App neu.": "A hibát jelentettük. Kérjük, töltsd újra az appot.",
   "Neu laden": "Újratöltés",
+  "Plan konnte nicht gelöscht werden.": "A tervet nem sikerült törölni.",
+  "Klient konnte nicht entfernt werden.": "A klienst nem sikerült eltávolítani.",
 };
 
 export default dict;
