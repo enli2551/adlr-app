@@ -942,6 +942,15 @@ const dict: Record<string, string> = {
   "Ort eingeben, z. B. dein Studio": "Helyszín megadása, pl. a termed",
   "Willkommen zurück.": "Üdv újra.",
   "Dein Name (für Klienten sichtbar)": "A neved (az ügyfeleid látják)",
+  "Extras von {coach}": "Extrák az edződtől",
+  " / Monat": " / hó",
+  " / Einheit": " / alkalom",
+  "{w} Wochen gültig": "{w} hétig érvényes",
+  "Angefragt": "Elküldve",
+  "Anfragen": "Érdekel",
+  "Kurzbeschreibung für Klienten (optional)": "Rövid leírás a klienseknek (opcionális)",
+  "Klienten im Coach-Tab anbieten": "Ajánlás a klienseknek az Edző fülön",
+  "intern": "belső",
 };
 
 export default dict;

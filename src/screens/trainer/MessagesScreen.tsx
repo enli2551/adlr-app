@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import type { Message, Profile, UpsellRequest } from '@/lib/types';
+import type { Profile, UpsellRequest } from '@/lib/types';
 import { SectionHeader, Loading, Card, Button, Input } from '@/components/ui';
 import { ArrowLeft, Star } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t, fmtTime } from '@/lib/i18n';
+import { useChatThread } from '@/lib/chat';
 
 const TEMPLATES = [
   'Alles klar. Wir machen das.',
@@ -18,7 +19,7 @@ export default function MessagesScreen() {
   const [clients, setClients] = useState<Profile[]>([]);
   const [upsells, setUpsells] = useState<UpsellRequest[]>([]);
   const [activeClient, setActiveClient] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, send: sendMessage } = useChatThread(activeClient);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -35,20 +36,12 @@ export default function MessagesScreen() {
     setLoading(false);
   };
 
-  const loadMessages = async (clientId: string) => {
-    const { data } = await supabase.from('messages').select('*').eq('client_id', clientId).order('sent_at', { ascending: true });
-    setMessages((data ?? []) as Message[]);
-  };
-
   useEffect(() => { load(); }, [profile?.id]);
-  useEffect(() => { if (activeClient) loadMessages(activeClient); }, [activeClient]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [messages]);
 
   const send = async () => {
     if (!profile || !activeClient || !text.trim()) return;
-    await supabase.from('messages').insert({ client_id: activeClient, sender: 'trainer', body: text.trim() });
-    setText('');
-    loadMessages(activeClient);
+    if (await sendMessage('trainer', text)) setText('');
   };
 
   if (loading) return <Loading />;
@@ -74,6 +67,7 @@ export default function MessagesScreen() {
               <div key={m.id} className={`flex ${m.sender === 'trainer' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${m.sender === 'trainer' ? 'bg-adlr-gold text-black rounded-br-sm' : 'bg-white/10 text-white rounded-bl-sm'}`}>
                   {m.body}
+                  <span className={`block text-[10px] mt-1 ${m.sender === 'trainer' ? 'text-black/50' : 'text-white/30'}`}>{fmtTime(m.sent_at)}</span>
                 </div>
               </div>
             ))}

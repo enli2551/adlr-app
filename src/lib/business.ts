@@ -13,6 +13,9 @@ export interface Package {
   sessions_included: number | null;
   validity_weeks: number | null;
   active: boolean;
+  /** Shown to clients on the Coach tab (migration 20261002). */
+  description?: string | null;
+  show_to_clients?: boolean;
   created_at: string;
 }
 

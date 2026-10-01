@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useIncomingMessages } from '@/lib/chat';
 import Logo from '@/components/Logo';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t } from '@/lib/i18n';
@@ -30,6 +31,11 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
   const [menuOpen, setMenuOpen] = useState(false);
   const [msgUnread, setMsgUnread] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Live: a client message while the app is open lights the Nachrichten dot (RLS limits the stream to my clients).
+  useIncomingMessages('client', () => {
+    if (window.location.pathname !== '/trainer/nachrichten') setMsgUnread(true);
+  }, profile?.id);
 
   // Unread indicator for Nachrichten: any client message newer than last-seen.
   useEffect(() => {

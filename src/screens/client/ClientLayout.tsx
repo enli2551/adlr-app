@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { CalendarDays, Dumbbell, Apple, MessageSquare, Gem, User } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { CalendarDays, Dumbbell, Apple, MessageSquare, User } from 'lucide-react';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import Logo from '@/components/Logo';
 import { syncHealth } from '@/lib/health';
+import { useIncomingMessages } from '@/lib/chat';
 import { t, useLang } from '@/lib/i18n';
 
-// Coach (messaging) lives in the header as a chat icon — underused, kept out of the bottom bar.
+// Coach tab = chat + next session + the trainer's own extras (replaces the old Upgrades tab).
 const TABS = [
   { to: '/app', label: 'Training', icon: Dumbbell, end: true },
   { to: '/app/fortschritt', label: 'Fortschritt', icon: CalendarDays, end: false },
+  { to: '/app/coach', label: 'Coach', icon: MessageSquare, end: false },
   { to: '/app/ernaehrung', label: 'Ernährung', icon: Apple, end: false },
   { to: '/app/profil', label: 'Profil', icon: User, end: false },
-  { to: '/app/upgrades', label: 'Upgrades', icon: Gem, end: false },
 ];
 
 let syncedLang = '';
@@ -23,7 +24,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const nav = useNavigate();
   const location = useLocation();
   const [coachUnread, setCoachUnread] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
+  const coach = useCoachName();
   const lang = useLang();
+
+  // Live: a trainer message arriving while the app is open → dot + short banner.
+  useIncomingMessages('trainer', (m) => {
+    if (m.client_id !== profile?.id || window.location.pathname === '/app/coach') return;
+    setCoachUnread(true);
+    setBanner(m.body);
+    window.setTimeout(() => setBanner(null), 5000);
+  }, profile?.id);
 
   // Keep the client's language on the profile so Peter's AI summaries are written in it.
   useEffect(() => {
@@ -79,16 +90,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <Logo size={18} />
           </button>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => nav('/app/coach')}
-              className="relative w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 adlr-tap"
-              aria-label={t('Coach / Nachrichten')}
-            >
-              <MessageSquare size={17} />
-              {coachUnread && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-adlr-gold" style={{ border: '1.5px solid rgb(var(--adlr-black))' }} />
-              )}
-            </button>
             <div className="text-right">
               <p className="text-xs font-medium text-white/80">{profile?.first_name ?? t('Klient')}</p>
               <p className="text-[10px] text-adlr-gold/70">{t('Klient')}</p>
@@ -107,6 +108,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         <div key={location.pathname} className="adlr-route">{children}</div>
       </main>
 
+      {banner && (
+        <button
+          onClick={() => { setBanner(null); nav('/app/coach'); }}
+          className="fixed left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-[26rem] z-40 adlr-card adlr-gold-border px-4 py-3 text-left adlr-fade-in safe-top"
+          style={{ top: 12 }}
+        >
+          <p className="text-[11px] text-adlr-gold uppercase tracking-wide flex items-center gap-1.5"><MessageSquare size={12} /> {coach}</p>
+          <p className="text-sm text-white/90 truncate">{banner}</p>
+        </button>
+      )}
+
       {/* Bottom nav */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite border-t border-white/5 safe-bottom z-30">
         <div className="flex justify-around items-center py-2">
@@ -119,7 +131,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 `flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg transition-all ${isActive ? 'text-adlr-gold' : 'text-white/40'}`
               }
             >
-              <tab.icon size={20} strokeWidth={1.8} />
+              <span className="relative">
+                <tab.icon size={20} strokeWidth={1.8} />
+                {tab.to === '/app/coach' && coachUnread && (
+                  <span className="absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full bg-adlr-gold" style={{ border: '1.5px solid rgb(var(--adlr-anthracite))' }} />
+                )}
+              </span>
               <span className="text-[10px] font-medium">{t(tab.label)}</span>
             </NavLink>
           ))}

@@ -9,7 +9,7 @@ interface Props {
   onChange: () => void;
 }
 
-const EMPTY = { name: '', kind: 'pack' as PackageKind, price: '', sessions: '10', weeks: '12' };
+const EMPTY = { name: '', kind: 'pack' as PackageKind, price: '', sessions: '10', weeks: '12', description: '', visible: true };
 
 /** Trainer's price list: single sessions, session packs, monthly subscriptions. */
 export default function PackageCatalog({ packages, onChange }: Props) {
@@ -20,7 +20,7 @@ export default function PackageCatalog({ packages, onChange }: Props) {
 
   const startNew = () => { setForm(EMPTY); setEditing('new'); setErr(null); };
   const startEdit = (p: Package) => {
-    setForm({ name: p.name, kind: p.kind, price: String(p.price), sessions: p.sessions_included ? String(p.sessions_included) : '', weeks: p.validity_weeks ? String(p.validity_weeks) : '' });
+    setForm({ name: p.name, kind: p.kind, price: String(p.price), sessions: p.sessions_included ? String(p.sessions_included) : '', weeks: p.validity_weeks ? String(p.validity_weeks) : '', description: p.description ?? '', visible: p.show_to_clients !== false });
     setEditing(p.id); setErr(null);
   };
   const save = async () => {
@@ -33,9 +33,12 @@ export default function PackageCatalog({ packages, onChange }: Props) {
       sessions_included: form.kind === 'pack' && form.sessions ? Number(form.sessions) : null,
       validity_weeks: form.kind !== 'single' && form.weeks ? Number(form.weeks) : null,
     };
-    const { error } = editing === 'new'
-      ? await supabase.from('packages').insert(row)
-      : await supabase.from('packages').update(row).eq('id', editing!);
+    const write = (r: object) => editing === 'new'
+      ? supabase.from('packages').insert(r)
+      : supabase.from('packages').update(r).eq('id', editing!);
+    // description/show_to_clients come with 20261002_realtime_chat.sql — fall back on older schemas.
+    let { error } = await write({ ...row, description: form.description.trim() || null, show_to_clients: form.visible });
+    if (error) ({ error } = await write(row));
     if (error) { setErr(t('Speichern fehlgeschlagen (Migration ausgeführt?)')); return; }
     setEditing(null);
     onChange();
@@ -76,6 +79,12 @@ export default function PackageCatalog({ packages, onChange }: Props) {
           </label>
         )}
       </div>
+      <textarea className={input + ' resize-none'} rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+        placeholder={t('Kurzbeschreibung für Klienten (optional)')} />
+      <label className="flex items-center gap-2 text-xs text-white/60">
+        <input type="checkbox" checked={form.visible} onChange={(e) => setForm({ ...form, visible: e.target.checked })} />
+        {t('Klienten im Coach-Tab anbieten')}
+      </label>
       {err && <p className="text-xs text-red-400">{err}</p>}
       <div className="flex gap-2">
         <button onClick={save} className="adlr-tap flex-1 py-2 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{t('Speichern')}</button>
@@ -106,6 +115,7 @@ export default function PackageCatalog({ packages, onChange }: Props) {
                 {p.sessions_included ? ` · ${t('{n} Einheiten', { n: p.sessions_included })}` : ''}
                 {p.validity_weeks ? ` · ${t('{n} Wochen', { n: p.validity_weeks })}` : ''}
                 {perSession(p) != null ? ` · ${t('{price} / Einheit', { price: fmtEUR(perSession(p)!) })}` : ''}
+                {p.show_to_clients === false ? ` · ${t('intern')}` : ''}
               </p>
             </div>
             <p className="text-sm font-bold text-adlr-gold shrink-0">{fmtEUR(p.price)}{p.kind === 'subscription' ? t('/Mo') : ''}</p>

@@ -16,7 +16,6 @@ const PlanScreen = lazy(() => import('@/screens/client/PlanScreen'));
 const ProgressScreen = lazy(() => import('@/screens/client/ProgressScreen'));
 const NutritionScreen = lazy(() => import('@/screens/client/NutritionScreen'));
 const CoachScreen = lazy(() => import('@/screens/client/CoachScreen'));
-const UpgradesScreen = lazy(() => import('@/screens/client/UpgradesScreen'));
 const ProfileScreen = lazy(() => import('@/screens/client/ProfileScreen'));
 const HistoryScreen = lazy(() => import('@/screens/client/HistoryScreen'));
 const OverviewScreen = lazy(() => import('@/screens/trainer/OverviewScreen'));
@@ -75,7 +74,7 @@ export default function App() {
           <Route path="/app/fortschritt" element={<ProtectedClient><ProgressScreen /></ProtectedClient>} />
           <Route path="/app/ernaehrung" element={<ProtectedClient><NutritionScreen /></ProtectedClient>} />
           <Route path="/app/coach" element={<ProtectedClient><CoachScreen /></ProtectedClient>} />
-          <Route path="/app/upgrades" element={<ProtectedClient><UpgradesScreen /></ProtectedClient>} />
+          <Route path="/app/upgrades" element={<Navigate to="/app/coach" replace />} />
           <Route path="/app/profil" element={<ProtectedClient><ProfileScreen /></ProtectedClient>} />
           <Route path="/app/verlauf" element={<ProtectedClient><HistoryScreen /></ProtectedClient>} />
 

@@ -941,6 +941,15 @@ const dict: Record<string, string> = {
   "Ort eingeben, z. B. dein Studio": "Enter a location, e.g. your gym",
   "Willkommen zurück.": "Welcome back.",
   "Dein Name (für Klienten sichtbar)": "Your name (visible to clients)",
+  "Extras von {coach}": "Extras from {coach}",
+  " / Monat": " / month",
+  " / Einheit": " / session",
+  "{w} Wochen gültig": "valid for {w} weeks",
+  "Angefragt": "Requested",
+  "Anfragen": "Request",
+  "Kurzbeschreibung für Klienten (optional)": "Short description for clients (optional)",
+  "Klienten im Coach-Tab anbieten": "Offer to clients on the Coach tab",
+  "intern": "internal",
 };
 
 export default dict;
