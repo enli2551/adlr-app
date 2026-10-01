@@ -69,6 +69,8 @@ export interface Plan {
   is_template: boolean;
   created_at: string;
   client_edited_at?: string | null; // last time the client changed the plan themselves
+  ai_generated?: boolean;             // drafted by the AI plan builder
+  ai_rationale?: string | null;       // the AI's reasoning, shown to the trainer
 }
 
 export interface PlanDay {

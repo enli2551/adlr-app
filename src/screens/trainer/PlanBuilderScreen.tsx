@@ -8,6 +8,9 @@ import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, 
 import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
+import { useSearchParams } from 'react-router-dom';
+import AiPlanSheet, { type AiPlanResult } from '@/components/AiPlanSheet';
+import { Sparkles } from 'lucide-react';
 import { t } from '@/lib/i18n';
 
 type Mode = 'list' | 'edit';
@@ -38,6 +41,21 @@ export default function PlanBuilderScreen() {
   const [templateMsg, setTemplateMsg] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [aiOpen, setAiOpen] = useState<{ clientId: string | null } | null>(() => (params.get('ai') !== null ? { clientId: params.get('ai') || null } : null));
+  const [aiInfo, setAiInfo] = useState<{ unknown: string[]; used: number; limit: number } | null>(null);
+  const [showRationale, setShowRationale] = useState(true);
+  const onAiCreated = async (r: AiPlanResult, clientId: string) => {
+    setAiOpen(null);
+    if (params.get('ai') !== null) { params.delete('ai'); setParams(params, { replace: true }); }
+    const { data } = await supabase.from('plans').select('*').eq('id', r.plan_id).single();
+    if (!data) return;
+    setPlans((prev) => [data as Plan, ...prev]);
+    setAiInfo({ unknown: r.unknown, used: r.used, limit: r.limit });
+    setShowRationale(true);
+    setSelectedClientId(clientId);
+    await selectPlan(data as Plan);
+  };
   const { data: lib } = useAsyncData(fetchExercises, []);
   const libByName = useMemo(() => (lib ? new Map(lib.map((e) => [e.name, e])) : null), [lib]);
 
@@ -305,20 +323,30 @@ export default function PlanBuilderScreen() {
     return (
       <div className="adlr-fade-in pb-6">
       {deleteErr && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
-        <div className="flex items-start justify-between mb-6">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+          <div className="flex-1 min-w-[11rem]">
             <h1 className="text-2xl font-bold text-white">{t('Plan Builder')}</h1>
             <p className="text-sm text-white/40 mt-0.5">{t('Baue Wochenpläne für deine Klienten')}</p>
           </div>
+          <div className="flex gap-2 shrink-0">
+          <button
+            onClick={() => setAiOpen({ clientId: null })}
+            className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap"
+            style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}
+          >
+            <Sparkles size={15} /> {t('KI-Plan')}
+          </button>
           <button
             onClick={async () => { setNewPlanName(t('Neuer Plan')); await createPlan(t('Neuer Plan')); }}
             disabled={creating}
-            className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50"
+            className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 whitespace-nowrap"
             style={{ background: 'rgb(var(--adlr-gold) / 0.08)', borderColor: 'rgb(var(--adlr-gold) / 0.3)', color: 'rgb(var(--adlr-gold))' }}
           >
             {creating ? <span className="animate-pulse">…</span> : <Plus size={15} />} {t('Neuer Plan')}
           </button>
+          </div>
         </div>
+        {aiOpen && <AiPlanSheet clients={clients} initialClientId={aiOpen.clientId} onClose={() => { setAiOpen(null); if (params.get('ai') !== null) { params.delete('ai'); setParams(params, { replace: true }); } }} onCreated={onAiCreated} />}
 
         <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
           <input
@@ -587,6 +615,20 @@ export default function PlanBuilderScreen() {
           >
             {assignError ? t('Fehler') : assignSuccess ? <><Check size={12} /> {t('Zugewiesen')}</> : t('Zuweisen')}
           </button>
+        </div>
+      )}
+
+      {activePlan?.ai_generated && (
+        <div className="rounded-xl px-4 py-3 mb-5 adlr-gold-border" style={{ background: 'rgb(var(--adlr-gold) / 0.06)' }}>
+          <button onClick={() => setShowRationale(!showRationale)} className="adlr-tap w-full flex items-center justify-between text-left">
+            <span className="text-xs font-semibold text-adlr-gold flex items-center gap-1.5"><Sparkles size={13} /> {t('KI-Entwurf — bitte prüfen, dann zuweisen')}</span>
+            {showRationale ? <ChevronUp size={14} className="text-white/40" /> : <ChevronDown size={14} className="text-white/40" />}
+          </button>
+          {showRationale && activePlan.ai_rationale && <p className="text-xs text-white/70 leading-relaxed mt-2">{activePlan.ai_rationale}</p>}
+          {showRationale && aiInfo && aiInfo.unknown.length > 0 && (
+            <p className="text-[11px] text-white/45 mt-2">{t('Nicht in deiner Bibliothek, daher weggelassen: {list}', { list: aiInfo.unknown.join(', ') })}</p>
+          )}
+          {showRationale && aiInfo && <p className="text-[10px] text-white/30 mt-2">{t('KI-Pläne diesen Monat: {u} / {l}', { u: aiInfo.used, l: aiInfo.limit })}</p>}
         </div>
       )}
 

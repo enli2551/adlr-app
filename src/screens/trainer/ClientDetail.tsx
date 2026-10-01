@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
 import { captureError } from '@/lib/monitoring';
+import { useNavigate } from 'react-router-dom';
 import ClientCheckins from '@/components/ClientCheckins';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
@@ -29,6 +30,7 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 export default function ClientDetail({ clientId, onBack }: { clientId: string; onBack: () => void }) {
+  const nav = useNavigate();
   const { profile } = useAuth();
   const [client, setClient] = useState<Profile | null>(null);
   const [entries, setEntries] = useState<ProgressEntry[]>([]);
@@ -150,6 +152,17 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
 
       {/* At-a-glance summary + private trainer notes */}
       <ClientSummary client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />
+      <button
+        onClick={() => nav(`/trainer/plan-builder?ai=${client.id}`)}
+        className="adlr-tap w-full text-left adlr-card adlr-gold-border p-4 mb-4 flex items-center gap-3"
+      >
+        <Sparkles size={18} className="text-adlr-gold shrink-0" />
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-white">{t('Plan mit KI erstellen')}</span>
+          <span className="block text-xs text-white/50">{t('Entwurf für {name} in ~30 Sekunden — du prüfst vor dem Zuweisen.', { name: client.first_name ?? '' })}</span>
+        </span>
+        <ChevronRight size={16} className="text-white/30" />
+      </button>
       <ClientCheckins clientId={client.id} />
 
       {/* Package, sessions used, payments */}
