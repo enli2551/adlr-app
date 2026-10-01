@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import type { Profile } from './types';
 import { t } from './i18n';
 import { cacheGet, cacheSet, isNetworkError } from './offline';
+import { setMonitoringUser } from './monitoring';
 
 /** The client's own coach (or, for a trainer, themselves) — shown instead of a hardcoded name. */
 export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [coach, setCoach] = useState<CoachInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  useEffect(() => { setMonitoringUser(profile?.id ?? null, profile?.role); }, [profile?.id, profile?.role]);
 
   // Clients: their trainer's name/avatar (RLS lets a client read their own trainer's row).
   const loadCoach = async (p: Profile) => {

@@ -990,6 +990,9 @@ const dict: Record<string, string> = {
   "Offline — du kannst trotzdem trainieren.": "Offline — you can still train.",
   "1 Training wird synchronisiert, sobald du online bist.": "1 workout will sync once you're online.",
   "{n} Trainings werden synchronisiert, sobald du online bist.": "{n} workouts will sync once you're online.",
+  "Da ist etwas schiefgelaufen.": "Something went wrong.",
+  "Der Fehler wurde gemeldet. Bitte lade die App neu.": "The error has been reported. Please reload the app.",
+  "Neu laden": "Reload",
 };
 
 export default dict;

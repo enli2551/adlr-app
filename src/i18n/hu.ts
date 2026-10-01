@@ -991,6 +991,9 @@ const dict: Record<string, string> = {
   "Offline — du kannst trotzdem trainieren.": "Offline — ettől még tudsz edzeni.",
   "1 Training wird synchronisiert, sobald du online bist.": "1 edzés szinkronizálódik, amint újra online vagy.",
   "{n} Trainings werden synchronisiert, sobald du online bist.": "{n} edzés szinkronizálódik, amint újra online vagy.",
+  "Da ist etwas schiefgelaufen.": "Valami hiba történt.",
+  "Der Fehler wurde gemeldet. Bitte lade die App neu.": "A hibát jelentettük. Kérjük, töltsd újra az appot.",
+  "Neu laden": "Újratöltés",
 };
 
 export default dict;
