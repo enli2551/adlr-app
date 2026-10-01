@@ -8,8 +8,10 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff } from 'lucide-react';
+import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
+import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
+import { loadFrozenWeeks, applyStreakFreeze, mondayKey, scheduleStreakReminder } from '@/lib/engagement';
 import { cacheGet, cacheSet, flushOutbox, isNetworkError, onOutboxChange, outbox, queueWorkout, type QueuedWorkout } from '@/lib/offline';
 import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/components/ExerciseLibrary';
 import { fetchExercises, isGymDependent, type ExerciseRow } from '@/lib/exercises';
@@ -125,6 +127,8 @@ export default function PlanScreen() {
   const nav = useNavigate();
   const [demoEx, setDemoEx] = useState<ExerciseRow | null>(null);
   const [offline, setOffline] = useState(false);
+  const [frozen, setFrozen] = useState<{ weeks: Set<string>; usedThisMonth: boolean }>({ weeks: new Set(), usedThisMonth: false });
+  const [freezeMsg, setFreezeMsg] = useState<string | null>(null);
   const [queuedCount, setQueuedCount] = useState(() => outbox().length);
   const { data: lib } = useAsyncData(fetchExercises, []);
   // Cardio exercises log time/distance instead of kg × reps.
@@ -223,6 +227,7 @@ export default function PlanScreen() {
       return;
     }
     setOffline(false);
+    loadFrozenWeeks(profile.id).then(setFrozen).catch(() => {});
     let planDays: PlanDay[] = [];
     if (cp) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week');
@@ -257,6 +262,14 @@ export default function PlanScreen() {
 
   useEffect(() => { load(); }, [profile?.id]);
   useEffect(() => onOutboxChange(() => setQueuedCount(outbox().length)), []);
+  // Saturday nudge while this week's goal is still open (recomputed on every load).
+  useEffect(() => {
+    if (loading || days.length === 0) return;
+    const target = days.filter((d) => !d.is_rest_day && !d.is_free).length;
+    const monday = mondayKey(new Date());
+    const doneThisWeek = completions.filter((c) => localDateKey(c.completed_at) >= monday).length;
+    scheduleStreakReminder(weeklyStreak(completions.map((c) => c.completed_at), target, frozen.weeks), frozen.weeks.has(monday) ? 0 : target - doneThisWeek);
+  }, [loading, days, completions, frozen]);
   // Back online with an open screen: sync queued workouts, then refresh from the server.
   useEffect(() => {
     const onOnline = () => { if (outbox().length > 0 || offline) load(); };
@@ -781,7 +794,24 @@ export default function PlanScreen() {
     const k = localDateKey(c.completed_at);
     return k >= weekStartKey && k <= weekEndKey;
   }).length;
-  const weekStreak = weeklyStreak(completions.map((c) => c.completed_at), plannedDays.length);
+  const doneAt = completions.map((c) => c.completed_at);
+  const weekStreak = weeklyStreak(doneAt, plannedDays.length, frozen.weeks);
+  // Streak saver: how much is missing this week, can it still be reached, can a freeze help?
+  const missingThisWeek = Math.max(0, plannedDays.length - completedThisWeek);
+  const daysLeftThisWeek = 7 - ((new Date().getDay() + 6) % 7); // incl. today
+  const thisMonday = mondayKey(new Date());
+  const lastMonday = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return mondayKey(d); })();
+  const thisWeekFrozen = frozen.weeks.has(thisMonday);
+  const weekUnreachable = missingThisWeek > daysLeftThisWeek;
+  const reviveStreak = !frozen.usedThisMonth && !frozen.weeks.has(lastMonday) && plannedDays.length > 0
+    ? weeklyStreak(doneAt, plannedDays.length, new Set([...frozen.weeks, lastMonday])) : 0;
+  const canRevive = reviveStreak > weekStreak;
+  const freezeWeek = async (week: string) => {
+    const err = await applyStreakFreeze(week);
+    if (err) { setFreezeMsg(err); return; }
+    setFreezeMsg(null);
+    if (profile) setFrozen(await loadFrozenWeeks(profile.id));
+  };
   const knownGyms = [...new Set([...savedGyms, ...completions.map((c) => c.gym).filter((g): g is string => !!g)])];
   const addGym = () => {
     const name = newGym.trim();
@@ -858,6 +888,8 @@ export default function PlanScreen() {
           </span>
         </div>
       )}
+
+      {activeDayIdx === null && profile && <WeeklyCheckinCard clientId={profile.id} lastWeight={profile.weight_kg ?? null} />}
 
       {/* Guided first workout: intro card before, one-tip-at-a-time during */}
       {activeDayIdx !== null && completions.length === 0 && <FirstWorkoutTips />}
@@ -961,6 +993,27 @@ export default function PlanScreen() {
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full bg-adlr-gold transition-all duration-500" style={{ width: `${weeklyProgress}%` }} />
           </div>
+          {thisWeekFrozen && missingThisWeek > 0 ? (
+            <p className="text-xs text-white/55 mt-2.5 flex items-center gap-1.5"><ShieldCheck size={13} className="text-adlr-gold" /> {t('Diese Woche ist geschützt — deine Serie bleibt.')}</p>
+          ) : weekStreak > 0 && missingThisWeek > 0 && weekUnreachable ? (
+            <div className="mt-3 rounded-xl p-3" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}>
+              <p className="text-xs text-white/75 leading-relaxed">{t('Diese Woche wird zu knapp. Schütze deine Serie von {n} Wochen — einmal pro Monat möglich.', { n: weekStreak })}</p>
+              <button onClick={() => freezeWeek(thisMonday)} disabled={frozen.usedThisMonth} className="adlr-tap mt-2 text-xs font-semibold text-adlr-gold flex items-center gap-1.5 disabled:opacity-40">
+                <ShieldCheck size={13} /> {frozen.usedThisMonth ? t('Diesen Monat schon verwendet.') : t('Serie schützen')}
+              </button>
+            </div>
+          ) : weekStreak > 0 && missingThisWeek > 0 && missingThisWeek >= daysLeftThisWeek - 1 ? (
+            <p className="text-xs text-white/55 mt-2.5">{t(missingThisWeek === 1 ? 'Noch 1 Training bis Sonntag, um deine Serie zu halten.' : 'Noch {n} Trainings bis Sonntag, um deine Serie zu halten.', { n: missingThisWeek })}</p>
+          ) : null}
+          {canRevive && (
+            <div className="mt-3 rounded-xl p-3" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}>
+              <p className="text-xs text-white/75 leading-relaxed">{t('Letzte Woche hat nicht gereicht. Rette deine Serie von {n} Wochen mit deinem Monats-Schutz.', { n: reviveStreak })}</p>
+              <button onClick={() => freezeWeek(lastMonday)} className="adlr-tap mt-2 text-xs font-semibold text-adlr-gold flex items-center gap-1.5">
+                <ShieldCheck size={13} /> {t('Serie retten')}
+              </button>
+            </div>
+          )}
+          {freezeMsg && <p className="text-xs text-red-400 mt-2">{freezeMsg}</p>}
           <button
             onClick={() => nav('/app/verlauf')}
             className="adlr-tap w-full mt-3.5 pt-3 flex items-center justify-between text-sm"

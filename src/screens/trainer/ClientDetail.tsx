@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
 import { captureError } from '@/lib/monitoring';
+import ClientCheckins from '@/components/ClientCheckins';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
 import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
@@ -149,6 +150,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
 
       {/* At-a-glance summary + private trainer notes */}
       <ClientSummary client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />
+      <ClientCheckins clientId={client.id} />
 
       {/* Package, sessions used, payments */}
       <ClientPackageCard clientId={clientId} />

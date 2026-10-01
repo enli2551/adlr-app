@@ -15,7 +15,8 @@ function weekBounds(ref: Date) {
   return { startKey: localDateKey(start), endKey: localDateKey(end) };
 }
 
-export function weeklyStreak(completedAt: string[], trainingsPerWeek: number): number {
+/** `frozen`: Monday keys of weeks protected with a streak freeze — they keep the streak alive but don't add to it. */
+export function weeklyStreak(completedAt: string[], trainingsPerWeek: number, frozen?: Set<string>): number {
   if (trainingsPerWeek <= 0) return 0;
   const keys = completedAt.map((c) => localDateKey(c));
   const today = new Date();
@@ -26,6 +27,7 @@ export function weeklyStreak(completedAt: string[], trainingsPerWeek: number): n
     const { startKey, endKey } = weekBounds(ref);
     const n = keys.filter((k) => k >= startKey && k <= endKey).length;
     if (n >= trainingsPerWeek) weeks++;
+    else if (frozen?.has(startKey)) continue;
     else if (w > 0) break;
   }
   return weeks;

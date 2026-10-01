@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { ProgressEntry, PersonalRecord, DailyCheckin, ProgressPhoto, ExerciseSetLog, WorkoutCompletion } from '@/lib/types';
+import ChallengeCard from '@/components/ChallengeCard';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { Plus, Award, Camera, TrendingUp, Ruler, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
@@ -119,6 +120,7 @@ export default function ProgressScreen() {
   return (
     <div className="adlr-fade-in">
       <SectionHeader title={t('Fortschritt')} subtitle={t('Zahlen lügen nicht.')} />
+      <ChallengeCard mode="client" />
 
       {/* Goal-driven personal progress report (+ Peter's approved summary) */}
       <button

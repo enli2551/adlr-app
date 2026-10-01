@@ -6,6 +6,7 @@ import { SectionHeader, Loading, StatCard, Card } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Users, Calendar, TrendingUp, AlertTriangle, MessageCircle, ClipboardX, Moon, Target, BatteryLow, ChevronRight } from 'lucide-react';
 import WeeklyMessagesCard from '@/components/WeeklyMessagesCard';
+import ChallengeCard from '@/components/ChallengeCard';
 import { computeAttention, type AttentionItem, type AttentionKind } from '@/lib/attention';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -136,6 +137,7 @@ export default function OverviewScreen() {
       </Card>
 
       {/* Clients still missing this week's personal line for their weekly recap */}
+      <ChallengeCard mode="trainer" />
       <WeeklyMessagesCard clients={clients} />
 
       {/* Upsell requests */}

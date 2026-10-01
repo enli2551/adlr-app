@@ -13,6 +13,7 @@ export interface Profile {
   gender: string | null;
   kcal_target?: number | null; // daily calorie target (set by the trainer)
   can_edit_plan?: boolean; // trainer allows this client to edit their own plan
+  leaderboard_opt_in?: boolean; // shows up (first name + initial) in the coach's monthly ranking
   lang?: string | null; // client's app language (de/en/hu), synced by the app
   email: string | null;
   phone: string | null;

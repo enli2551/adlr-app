@@ -10,6 +10,8 @@ import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
 import HealthConnectCard from '@/components/HealthConnectCard';
 import WorkoutImportCard from '@/components/WorkoutImportCard';
+import { weeklyStreak } from '@/lib/streak';
+import { loadFrozenWeeks } from '@/lib/engagement';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t, fmtDate } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -159,20 +161,13 @@ export default function ProfileScreen() {
 
   // ---- Streak: consecutive weeks where the weekly target was reached ----
   // The current week never breaks the streak (it's still in progress).
-  const streak = useMemo(() => {
-    if (trainingsPerWeek === 0) return 0;
-    const today = new Date();
-    let weeks = 0;
-    for (let w = 0; w < 52; w++) {
-      const ref = new Date(today);
-      ref.setDate(today.getDate() - w * 7);
-      const { startKey, endKey } = weekBounds(ref);
-      const reached = countInRange(startKey, endKey) >= trainingsPerWeek;
-      if (reached) weeks++;
-      else if (w > 0) break;
-    }
-    return weeks;
-  }, [planDays, completions]);
+  // Weeks protected with a streak freeze keep the streak alive (same rule as the Training screen).
+  const [frozenWeeks, setFrozenWeeks] = useState<Set<string>>(new Set());
+  useEffect(() => { if (profile?.id) loadFrozenWeeks(profile.id).then((f) => setFrozenWeeks(f.weeks)).catch(() => {}); }, [profile?.id]);
+  const streak = useMemo(
+    () => weeklyStreak(completions.map((c) => c.completed_at), trainingsPerWeek, frozenWeeks),
+    [planDays, completions, frozenWeeks],
+  );
 
   // Missed = the remaining trainings of this week no longer fit into the days left.
   const hasMissedThisWeek = useMemo(() => {
