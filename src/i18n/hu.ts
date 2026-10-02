@@ -452,6 +452,8 @@ const dict: Record<string, string> = {
   "Ruhepuls": "Nyugalmi pulzus",
   "Gewicht · zuletzt": "Testsúly · legutóbbi",
   "Ø pro Tag · letzte 7 abgeschlossene Tage": "Napi átlag · utolsó 7 lezárt nap",
+  "Verbunden": "Csatlakoztatva",
+  "Nicht verbunden": "Nincs csatlakoztatva",
   "Ø Schritte": "Átl. lépés",
   "Ø kcal gegessen": "Átl. bevitt kcal",
   "Ø Schlaf": "Átl. alvás",

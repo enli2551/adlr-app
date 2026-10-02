@@ -44,6 +44,7 @@ import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapN
 import { weeklyStreak } from '@/lib/streak';
 import { captureError } from '@/lib/monitoring';
 import { takeRepeat, type RepeatWorkout } from '@/lib/repeatWorkout';
+import { guessMuscle } from '@/lib/muscleGuess';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
 const ACTIVE_TRAINING_KEY = 'adlr_active_training';
@@ -752,7 +753,7 @@ export default function PlanScreen() {
     const sessionLogs: ExerciseSetLog[] = logsToInsert.map((l, i) => ({ ...l, id: `local-${i}`, created_at: now }));
     const muscleByName = new Map((lib ?? []).map((e) => [e.name, e.muscle_group]));
     setFinished({
-      summary: summarizeSession(doneComp, sessionLogs, day.workout_name ?? t('Training'), (n) => muscleByName.get(n) ?? 'Sonstige'),
+      summary: summarizeSession(doneComp, sessionLogs, day.workout_name ?? t('Training'), (n) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige'),
       all: [...completions, doneComp],
     });
     setTimeout(() => setCelebrate(false), 2800);

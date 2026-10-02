@@ -3,6 +3,7 @@ import { Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { fetchAll } from '@/lib/fetchAll';
 import { t, fmtDate, fmtNum } from '@/lib/i18n';
+import { CollapsibleCard } from '@/components/ui';
 import { parseWorkoutExport, type ImportResult, type ImportedWorkout } from '@/lib/workoutImport';
 
 const SOURCE_LABEL = { hevy: 'Hevy', strong: 'Strong' } as const;
@@ -85,8 +86,7 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
   const mappedCount = mapped.filter(([, v]) => v).length;
 
   return (
-    <div className="adlr-card p-5 mb-5">
-      <p className="text-sm font-medium text-white/80 flex items-center gap-2 mb-1"><Upload size={16} className="text-adlr-gold" /> {t('Trainingsdaten importieren')}</p>
+    <CollapsibleCard id="import" className="mb-5" icon={Upload} title={t('Trainingsdaten importieren')} summary="Hevy · Strong" defaultOpen={false}>
       <p className="text-xs text-white/45 leading-relaxed mb-3">{t('Übernimm deine Historie aus Hevy oder Strong — Kraftkurven und Rekorde laufen nahtlos weiter.')}</p>
       <input ref={fileRef} type="file" accept=".csv,text/csv,text/comma-separated-values" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
 
@@ -152,7 +152,7 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
           </div>
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }
 

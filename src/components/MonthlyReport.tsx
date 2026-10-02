@@ -18,6 +18,7 @@ import {
   fmtVolume, fmtDuration, fmtDelta, monthName, type ReportMetric, type MonthStats,
 } from '@/lib/reportStats';
 import { t } from '@/lib/i18n';
+import { guessMuscle } from '@/lib/muscleGuess';
 
 const METRICS: { id: ReportMetric; label: string }[] = [
   { id: 'workouts', label: 'Workouts' },
@@ -42,7 +43,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
       fetchExercises(),
     ]);
     const byName = new Map((lib ?? []).map((e) => [e.name, e]));
-    const muscleOf = (name: string) => byName.get(name)?.muscle_group ?? 'Sonstige';
+    const muscleOf = (name: string) => byName.get(name)?.muscle_group ?? guessMuscle(name) ?? 'Sonstige';
     const idOf = (name: string) => byName.get(name)?.exercise_id;
     return { comps: (wc.data ?? []) as WorkoutCompletion[], logs: (sl.data ?? []) as ExerciseSetLog[], muscleOf, idOf };
   }, [targetId]);

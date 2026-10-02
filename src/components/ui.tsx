@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode, type CSSProperties, useState } from 'react';
+import { ChevronDown, type LucideIcon } from 'lucide-react';
 
 const baseBtn = 'adlr-tap font-semibold rounded-xl px-5 py-3.5 text-sm tracking-wide transition-all disabled:cursor-not-allowed';
 
@@ -131,22 +132,50 @@ export function StatCard({ label, value, accent }: { label: string; value: React
   );
 }
 
-/** Card with a tappable header; body is only mounted when open (lazy content like photos). */
-export function CollapsibleCard({ title, subtitle, defaultOpen = false, className = '', children }: {
-  title: ReactNode; subtitle?: ReactNode; defaultOpen?: boolean; className?: string; children: ReactNode;
+/** Card with a tappable header that folds the body away; the body is only mounted when open
+ *  (lazy content like photos). With an id the open/closed choice is remembered per card
+ *  (localStorage), so rarely used blocks stay out of the way. */
+export function CollapsibleCard({
+  id, icon: Icon, title, subtitle, summary, actions, defaultOpen = false, className = '', children,
+}: {
+  id?: string;
+  icon?: LucideIcon;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  /** shown on the right while collapsed */
+  summary?: ReactNode;
+  /** header buttons, shown while open */
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const key = id ? `adlr_card_open_${id}` : null;
+  const [open, setOpen] = useState(() => {
+    if (!key) return defaultOpen;
+    try { const v = localStorage.getItem(key); return v == null ? defaultOpen : v === '1'; } catch { return defaultOpen; }
+  });
+  const toggle = () => setOpen((o) => {
+    if (key) try { localStorage.setItem(key, o ? '0' : '1'); } catch { /* ignore */ }
+    return !o;
+  });
   return (
     <div className={`adlr-card p-5 ${className}`}>
-      <button onClick={() => setOpen(!open)} className="adlr-tap w-full flex items-center justify-between text-left">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white/80">{title}</p>
-          {subtitle && <p className="text-xs text-white/40 mt-0.5 truncate">{subtitle}</p>}
-        </div>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          className="shrink-0 text-white/35 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }}><path d="m6 9 6 6 6-6" /></svg>
-      </button>
-      {open && <div className="mt-3 adlr-fade-in">{children}</div>}
+      <div className="flex items-center gap-2">
+        <button onClick={toggle} aria-expanded={open} className="adlr-tap flex-1 min-w-0 flex items-center gap-2 text-left">
+          {Icon && <Icon size={16} className="text-adlr-gold shrink-0" />}
+          <span className={!open && summary != null ? "shrink-0 max-w-[75%]" : "min-w-0"}>
+            <span className="block text-sm font-medium text-white/80 truncate">{title}</span>
+            {subtitle && <span className="block text-xs text-white/40 mt-0.5 truncate">{subtitle}</span>}
+          </span>
+          {!open && summary != null && <span className="ml-auto pl-2 min-w-0 text-xs text-white/40 truncate">{summary}</span>}
+        </button>
+        {open && actions}
+        <button onClick={toggle} aria-hidden tabIndex={-1} className="adlr-tap p-1 -mr-1 text-white/35 shrink-0">
+          <ChevronDown size={16} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      {open && <div className="mt-4 adlr-fade-in">{children}</div>}
     </div>
   );
 }

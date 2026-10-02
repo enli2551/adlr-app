@@ -4,7 +4,7 @@ import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { fetchAll } from '@/lib/fetchAll';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
-import { Card, Loading } from '@/components/ui';
+import { Card, CollapsibleCard, Loading } from '@/components/ui';
 import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
@@ -21,6 +21,7 @@ import { THEMES, getTheme } from '@/lib/theme';
 import { LANGS, useLang } from '@/lib/i18n';
 import { JoinCoachSheet } from '@/components/CoachLink';
 import { requestRepeat } from '@/lib/repeatWorkout';
+import { guessMuscle } from '@/lib/muscleGuess';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -194,7 +195,7 @@ export default function ProfileScreen() {
       const logDate = localDateKey(log.created_at);
       if (logDate < weekStartStr) continue;
       const exercise = libMap?.get(log.exercise_name);
-      const group = exercise?.muscle_group ?? 'Sonstiges';
+      const group = exercise?.muscle_group ?? guessMuscle(log.exercise_name) ?? 'Sonstiges';
       groupSets.set(group, (groupSets.get(group) ?? 0) + 1);
     }
     return Array.from(groupSets.entries())
@@ -359,9 +360,14 @@ export default function ProfileScreen() {
       </Card>
 
       {/* Monthly calendar */}
-      <Card className="mb-5">
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Calendar size={16} className="text-adlr-gold" /> {t('Kalender')}</p>
+      <CollapsibleCard
+        id="calendar"
+        defaultOpen
+        className="mb-5"
+        icon={Calendar}
+        title={t('Kalender')}
+        summary={t('{n} Trainings', { n: calendarDays.filter((d) => d.isCurrentMonth && d.status === 'completed').length }) + ' · ' + fmtDate(calMonth, { month: 'short' })}
+        actions={
           <div className="flex items-center gap-2">
             <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1))} className="adlr-tap p-1.5 rounded-lg bg-white/5 text-white/50">
               <ChevronLeft size={16} />
@@ -371,7 +377,8 @@ export default function ProfileScreen() {
               <ChevronRight size={16} />
             </button>
           </div>
-        </div>
+        }
+      >
         <div className="grid grid-cols-7 gap-1 mb-2">
           {DAY_NAMES.map((d) => (
             <div key={d} className="text-center text-[10px] text-white/30 uppercase">{t(d)}</div>
@@ -410,12 +417,18 @@ export default function ProfileScreen() {
         <div className="flex flex-wrap gap-3 mt-4 text-[10px] text-white/40">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> {t('Training')}</span>
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* Muscle group heatmap */}
       {muscleHeatmap.length > 0 && (
-        <Card className="mb-5">
-          <p className="text-sm font-medium text-white/80 mb-3 flex items-center gap-2"><TrendingUp size={16} className="text-adlr-gold" /> {t('Muskelgruppen diese Woche')}</p>
+        <CollapsibleCard
+          id="muscles"
+          defaultOpen
+          className="mb-5"
+          icon={TrendingUp}
+          title={t('Muskelgruppen diese Woche')}
+          summary={t([...muscleHeatmap].sort((a, b) => b.sets - a.sets)[0]?.group ?? '')}
+        >
           <div className="space-y-2.5">
             {muscleHeatmap.map((m) => {
               const maxSets = Math.max(...muscleHeatmap.map((x) => x.sets));
@@ -434,7 +447,7 @@ export default function ProfileScreen() {
               );
             })}
           </div>
-        </Card>
+        </CollapsibleCard>
       )}
 
       {/* Plateau detection */}

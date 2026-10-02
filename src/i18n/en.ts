@@ -451,6 +451,8 @@ const dict: Record<string, string> = {
   "Ruhepuls": "Resting HR",
   "Gewicht · zuletzt": "Weight · latest",
   "Ø pro Tag · letzte 7 abgeschlossene Tage": "Daily average · last 7 complete days",
+  "Verbunden": "Connected",
+  "Nicht verbunden": "Not connected",
   "Ø Schritte": "Avg steps",
   "Ø kcal gegessen": "Avg kcal eaten",
   "Ø Schlaf": "Avg sleep",

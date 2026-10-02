@@ -11,6 +11,7 @@ import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { t } from '@/lib/i18n';
 import { requestRepeat } from '@/lib/repeatWorkout';
+import { guessMuscle } from '@/lib/muscleGuess';
 
 // Client's full training log ("Verlauf"): every completed session, tap for the recap.
 export default function HistoryScreen() {
@@ -43,7 +44,7 @@ export default function HistoryScreen() {
   }, [profile?.id]);
 
   const muscleByName = useMemo(() => new Map((library ?? []).map((e) => [e.name, e.muscle_group])), [library]);
-  const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? 'Sonstige', [muscleByName]);
+  const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige', [muscleByName]);
 
   return (
     <div className="adlr-fade-in">

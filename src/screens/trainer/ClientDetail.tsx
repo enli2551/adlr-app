@@ -21,6 +21,7 @@ import SignedPhoto from '@/components/SignedPhoto';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { t, fmtDate } from '@/lib/i18n';
 import ProgressReport from '@/components/ProgressReport';
+import { guessMuscle } from '@/lib/muscleGuess';
 
 const GOAL_LABELS: Record<string, string> = {
   nutrition: 'Ernährungs-Analyse',
@@ -42,7 +43,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const [planDays, setPlanDays] = useState<{ id: string; workout_name: string | null }[]>([]);
   const { data: library } = useAsyncData(fetchExercises, []);
   const muscleByName = useMemo(() => new Map((library ?? []).map((e) => [e.name, e.muscle_group])), [library]);
-  const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? 'Sonstige', [muscleByName]);
+  const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige', [muscleByName]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
