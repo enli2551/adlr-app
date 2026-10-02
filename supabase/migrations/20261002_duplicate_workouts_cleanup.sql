@@ -31,12 +31,12 @@ dup as (
    and b.completed_at - a.completed_at < interval '10 minutes'
    and (b.completed_at > a.completed_at or b.id > a.id)
 )
-select p.full_name, p.email, wc.completed_at, wc.title,
+select concat_ws(' ', p.first_name, p.last_name) as name, p.email, wc.completed_at, wc.title,
        (select count(*) from exercise_set_logs l where l.workout_completion_id = wc.id) as sets
 from dup
 join workout_completions wc on wc.id = dup.dup_id
 join profiles p on p.id = wc.client_id
-order by p.full_name, wc.completed_at;
+order by name, wc.completed_at;
 
 -- ── STEP 2 ────────────────────────────────────────────────────────────────────
 /*
