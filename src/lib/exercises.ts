@@ -21,7 +21,7 @@ export const MUSCLE_GROUPS = [
 // it on every app cold-start was the main driver of Supabase egress, so we persist it
 // in localStorage and only hit the network once per device (until CACHE_VERSION bumps).
 // BUMP CACHE_VERSION whenever the exercises table changes (new exercises via migration).
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
 const CACHE_KEY = 'adlr_exercises_cache';
 const COLUMNS = 'id, name, muscle_group, equipment, tempo, default_sets, default_reps, default_rest_sec, exercise_id, cues';
 
