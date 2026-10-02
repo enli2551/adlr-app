@@ -13,11 +13,12 @@ interface Props {
   muscleOf: (exercise: string) => string;
   limit?: number; // show only the newest N (with a "show all" toggle)
   collapsible?: boolean; // render its own header and start collapsed (trainer ClientDetail)
+  onRepeat?: (s: SessionSummary) => void; // client: "Nochmal trainieren"
 }
 
 // Chronological, month-grouped list of every completed training. Tapping a row opens
 // the same swipeable recap the client sees right after finishing a workout.
-export default function TrainingHistory({ completions, setLogs, dayNameById, muscleOf, limit, collapsible = false }: Props) {
+export default function TrainingHistory({ completions, setLogs, dayNameById, muscleOf, limit, collapsible = false, onRepeat }: Props) {
   const [cardOpen, setCardOpen] = useState(!collapsible);
   const [closedMonths, setClosedMonths] = useState<Set<string> | null>(null); // null = only newest month open
   const [open, setOpen] = useState<SessionSummary | null>(null);
@@ -128,7 +129,7 @@ export default function TrainingHistory({ completions, setLogs, dayNameById, mus
           {showAll ? t('Weniger anzeigen') : t('Alle {n} Trainings anzeigen', { n: summaries.length })}
         </button>
       )}
-      {open && <WorkoutSummary summary={open} allCompletions={completions} mode="history" onClose={() => setOpen(null)} />}
+      {open && <WorkoutSummary summary={open} allCompletions={completions} mode="history" onClose={() => setOpen(null)} onRepeat={onRepeat ? () => { onRepeat(open); setOpen(null); } : undefined} />}
     </>
   );
 }

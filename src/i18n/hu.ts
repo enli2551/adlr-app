@@ -1078,6 +1078,13 @@ const dict: Record<string, string> = {
   "Nicht in deiner Bibliothek, daher weggelassen: {list}": "Nincs a könyvtáradban, ezért kimaradt: {list}",
   "KI-Pläne diesen Monat: {u} / {l}": "AI-tervek ebben a hónapban: {u} / {l}",
   "Entwurf für {name} in ~30 Sekunden — du prüfst vor dem Zuweisen.": "Vázlat {name} számára ~30 mp alatt — hozzárendelés előtt átnézed.",
+
+  // ── Free workout editing, repeat ──
+  "Nochmal": "Újra",
+  "Training konnte nicht gespeichert werden ({msg}). Deine Eingaben bleiben erhalten — bitte versuche es erneut.": "Az edzést nem sikerült menteni ({msg}). A bejegyzéseid megmaradtak — próbáld újra.",
+  "Satz entfernen": "Sorozat törlése",
+  "Satz hinzufügen": "Sorozat hozzáadása",
+  "Übung entfernen": "Gyakorlat törlése",
 };
 
 export default dict;

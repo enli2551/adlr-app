@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Share2 } from 'lucide-react';
+import { Share2, Repeat } from 'lucide-react';
 import { useCoachName } from '@/lib/auth';
 import { drawShareCard, shareCanvas, fmtVolume } from '@/lib/shareCard';
 import { Trophy, X, Truck, TramFront, Ship, Bus, Tractor, Forklift, Caravan, Car, Piano, Refrigerator } from 'lucide-react';
@@ -19,13 +19,14 @@ interface Props {
   newPRs?: { exercise_name: string; weight_kg: number; reps: number; gym?: string | null }[];
   milestoneMsg?: string | null;
   onClose: () => void;
+  onRepeat?: () => void; // history: start this session again as a free workout
 }
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const CARD_STYLE = { background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' };
 
 // Full-screen, swipeable post-workout recap (also opened from the Trainings-Historie).
-export default function WorkoutSummary({ summary, allCompletions, mode, newPRs = [], milestoneMsg, onClose }: Props) {
+export default function WorkoutSummary({ summary, allCompletions, mode, newPRs = [], milestoneMsg, onClose, onRepeat }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const when = new Date(summary.completion.completed_at);
@@ -123,6 +124,16 @@ export default function WorkoutSummary({ summary, allCompletions, mode, newPRs =
           >
             <Share2 size={16} /> {t('Teilen')}
           </button>
+          {onRepeat && mode === 'history' && summary.exercises.length > 0 && (
+            <button
+              onClick={onRepeat}
+              className="adlr-tap px-4 py-3.5 rounded-xl font-semibold text-sm flex items-center gap-2 border"
+              style={{ borderColor: 'rgb(var(--adlr-gold) / 0.5)', color: 'rgb(var(--adlr-gold))' }}
+              aria-label={t('Nochmal trainieren')}
+            >
+              <Repeat size={16} /> {t('Nochmal')}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="adlr-tap flex-1 py-3.5 rounded-xl font-semibold text-sm"

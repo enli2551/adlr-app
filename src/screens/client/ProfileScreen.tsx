@@ -4,7 +4,7 @@ import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -19,6 +19,7 @@ import { createPortal } from 'react-dom';
 import { THEMES, getTheme } from '@/lib/theme';
 import { LANGS, useLang } from '@/lib/i18n';
 import { JoinCoachSheet } from '@/components/CoachLink';
+import { requestRepeat } from '@/lib/repeatWorkout';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -148,7 +149,7 @@ export default function ProfileScreen() {
       const dayCompletions = completions.filter((c) => localDateKey(c.completed_at) === dateStr);
       const completion = dayCompletions[0];
       const workoutName = dayCompletions.length > 0
-        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || t('Training')).join(' + ')
+        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || (c.title ? t(c.title) : t('Training'))).join(' + ')
         : undefined;
       days.push({
         date: dateStr, dayInMonth: d, isCurrentMonth: true,
@@ -516,7 +517,9 @@ export default function ProfileScreen() {
       )}
 
       {/* Day detail modal */}
-      {selectedDay && selectedDayInfo && (
+      {/* Portaled: inside the animated route container a fixed overlay is positioned
+          relative to that transform instead of the viewport (opens in the wrong place). */}
+      {selectedDay && selectedDayInfo && createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedDay(null)}>
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto adlr-card rounded-t-2xl sm:rounded-2xl p-5 adlr-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -579,6 +582,23 @@ export default function ProfileScreen() {
               <p className="text-sm text-white/30 mb-4">{t('Keine Übungsdaten für dieses Training.')}</p>
             ) : null}
 
+            {/* Repeat this day's session as a free workout (same exercises, sets, weights) */}
+            {selectedDayLogs.length > 0 && (
+              <button
+                onClick={() => {
+                  const byEx = new Map<string, ExerciseSetLog[]>();
+                  for (const l of selectedDayLogs) byEx.set(l.exercise_name, [...(byEx.get(l.exercise_name) ?? []), l]);
+                  requestRepeat(selectedDayInfo.workoutName ?? t('Training'), [...byEx.entries()].map(([name, logs]) => ({ name, logs })));
+                  setSelectedDay(null);
+                  nav('/app');
+                }}
+                className="adlr-tap w-full mb-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}
+              >
+                <Repeat size={16} /> {t('Nochmal trainieren')}
+              </button>
+            )}
+
             {/* Check-in for this day */}
             {selectedDayCheckin && (
               <div className="pt-3 border-t border-white/5">
@@ -596,7 +616,8 @@ export default function ProfileScreen() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

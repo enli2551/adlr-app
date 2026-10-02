@@ -9,6 +9,7 @@ import TrainingHistory from '@/components/TrainingHistory';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { t } from '@/lib/i18n';
+import { requestRepeat } from '@/lib/repeatWorkout';
 
 // Client's full training log ("Verlauf"): every completed session, tap for the recap.
 export default function HistoryScreen() {
@@ -50,7 +51,8 @@ export default function HistoryScreen() {
       </button>
       <SectionHeader title={t('Verlauf')} subtitle={t(completions.length === 1 ? '{n} Training insgesamt' : '{n} Trainings insgesamt', { n: completions.length })} />
       {loading ? <Loading /> : (
-        <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf} />
+        <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf}
+          onRepeat={(s) => { requestRepeat(s.name, s.exercises); nav('/app'); }} />
       )}
     </div>
   );

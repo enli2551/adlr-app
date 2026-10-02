@@ -1077,6 +1077,13 @@ const dict: Record<string, string> = {
   "Nicht in deiner Bibliothek, daher weggelassen: {list}": "Not in your library, so left out: {list}",
   "KI-Pläne diesen Monat: {u} / {l}": "AI plans this month: {u} / {l}",
   "Entwurf für {name} in ~30 Sekunden — du prüfst vor dem Zuweisen.": "Draft for {name} in ~30 seconds — you review before assigning.",
+
+  // ── Free workout editing, repeat ──
+  "Nochmal": "Again",
+  "Training konnte nicht gespeichert werden ({msg}). Deine Eingaben bleiben erhalten — bitte versuche es erneut.": "The workout couldn't be saved ({msg}). Your entries are kept — please try again.",
+  "Satz entfernen": "Remove set",
+  "Satz hinzufügen": "Add set",
+  "Übung entfernen": "Remove exercise",
 };
 
 export default dict;

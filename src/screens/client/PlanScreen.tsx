@@ -8,7 +8,7 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck } from 'lucide-react';
+import { Flame, ChevronDown, Clock, Target, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, Trophy, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
 import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
 import { loadFrozenWeeks, applyStreakFreeze, mondayKey, scheduleStreakReminder } from '@/lib/engagement';
@@ -41,6 +41,8 @@ import ClientDayEditor from '@/components/ClientDayEditor';
 import WeeklyRecap from '@/components/WeeklyRecap';
 import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapNotification, type WeeklyRecapData } from '@/lib/weeklyRecap';
 import { weeklyStreak } from '@/lib/streak';
+import { captureError } from '@/lib/monitoring';
+import { takeRepeat, type RepeatWorkout } from '@/lib/repeatWorkout';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
 const ACTIVE_TRAINING_KEY = 'adlr_active_training';
@@ -135,6 +137,7 @@ export default function PlanScreen() {
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Weekly recap of LAST week: banner + auto-shown before the first workout of the week.
   const [recap, setRecap] = useState<WeeklyRecapData | null>(null);
   const [recapSeen, setRecapSeen] = useState(recapSeenThisWeek());
@@ -261,6 +264,13 @@ export default function PlanScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+
+  // A repeat request from the history ("Nochmal trainieren") — start it once the screen is ready.
+  useEffect(() => {
+    if (loading || activeDayIdx !== null) return;
+    const rep = takeRepeat();
+    if (rep && rep.exercises.length > 0) startRepeatTraining(rep);
+  }, [loading]);
   useEffect(() => onOutboxChange(() => setQueuedCount(outbox().length)), []);
   // Saturday nudge while this week's goal is still open (recomputed on every load).
   useEffect(() => {
@@ -474,6 +484,23 @@ export default function PlanScreen() {
     setPickerOpen(true);
     haptic.medium();
   };
+  // "Nochmal trainieren": start a past session again as a free workout, prefilled.
+  const startRepeatTraining = (rep: RepeatWorkout) => {
+    const fd: PlanDay = {
+      id: `free-${Date.now()}`, plan_id: '', day_of_week: 99, workout_name: rep.title || 'Freies Training', focus: null,
+      difficulty: 1, duration_min: null, notes: null, is_rest_day: false, is_free: true,
+      exercises: rep.exercises.map((e) => ({ name: e.name, sets: e.sets.length, reps: Number(e.sets[0]?.reps) || undefined, rest_sec: libMap?.get(e.name)?.default_rest_sec || 90 })),
+    };
+    ensureNotificationPermission();
+    const idx = days.filter((d) => !d.is_free).length;
+    setDays((prev) => [...prev.filter((d) => !d.is_free), fd]);
+    setSetInputs(Object.fromEntries(rep.exercises.map((e) => [e.name, e.sets.map((s) => ({ ...s }))])));
+    setCheckedSets(new Set());
+    setActiveDayIdx(idx);
+    setExpanded(idx);
+    setTrainingStartAt(Date.now());
+    haptic.medium();
+  };
   const addFreeExercise = (row: ExerciseRow) => {
     const free = days.find((d) => d.is_free);
     if (!free || free.exercises.some((e) => e.name === row.name)) return;
@@ -492,6 +519,44 @@ export default function PlanScreen() {
         km: lastLogs[i]?.distance_km?.toString() ?? '',
       })),
     }));
+    haptic.light();
+  };
+
+  // Free workout editing: remove an exercise, remove a single set, add a set.
+  // Checked-set keys are "<exercise>#<index>", so they're re-indexed when a set is removed.
+  const remapChecked = (name: string, fn: (i: number) => number | null) => setCheckedSets((prev) => {
+    const next = new Set<string>();
+    for (const k of prev) {
+      const cut = k.lastIndexOf('#');
+      if (k.slice(0, cut) !== name) { next.add(k); continue; }
+      const j = fn(Number(k.slice(cut + 1)));
+      if (j !== null) next.add(setKey(name, j));
+    }
+    return next;
+  });
+  const removeFreeExercise = (name: string) => {
+    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.filter((e) => e.name !== name) } : d)));
+    setSetInputs((prev) => { const next = { ...prev }; delete next[name]; return next; });
+    remapChecked(name, () => null);
+    haptic.light();
+  };
+  const removeFreeSet = (name: string, idx: number) => {
+    const ex = days.find((d) => d.is_free)?.exercises.find((e) => e.name === name);
+    if (!ex) return;
+    if ((ex.sets ?? 1) <= 1) { removeFreeExercise(name); return; }
+    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
+    setSetInputs((prev) => ({ ...prev, [name]: (prev[name] ?? []).filter((_, i) => i !== idx) }));
+    remapChecked(name, (i) => (i === idx ? null : i > idx ? i - 1 : i));
+    haptic.light();
+  };
+  const addFreeSet = (name: string) => {
+    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) + 1 } : e)) } : d)));
+    setSetInputs((prev) => {
+      const arr = [...(prev[name] ?? [])];
+      const last = arr[arr.length - 1];
+      arr.push(last ? { ...last, type: 'working' } : { weight: '', reps: '', type: 'working' });
+      return { ...prev, [name]: arr };
+    });
     haptic.light();
   };
 
@@ -594,10 +659,16 @@ export default function PlanScreen() {
     let wc: { id: string } | null = null;
     if (navigator.onLine !== false) {
       const res = await supabase.from('workout_completions').insert({ client_id: profile.id, plan_day_id: day.is_free ? null : day.id, completed_at: completedAt }).select('*').single();
-      if (res.error && !isNetworkError(res.error)) return;
+      if (res.error && !isNetworkError(res.error)) {
+        // Don't silently drop the workout: keep it open (inputs intact), tell the user, report it.
+        captureError(res.error, { where: 'finishTraining', free: !!day.is_free });
+        setSaveError(t('Training konnte nicht gespeichert werden ({msg}). Deine Eingaben bleiben erhalten — bitte versuche es erneut.', { msg: res.error.message }));
+        return;
+      }
       wc = res.data as { id: string } | null;
     }
     const savedOffline = !wc;
+    setSaveError(null);
     if (!wc) {
       const queued: QueuedWorkout = {
         localId: `offline-${Date.now()}`, client_id: profile.id, plan_day_id: day.is_free ? null : day.id, completed_at: completedAt,
@@ -897,6 +968,13 @@ export default function PlanScreen() {
         const idx = days.findIndex((d) => d.id === nextRecommendedDayId);
         return <FirstWorkoutIntro dayName={t(days[idx]?.workout_name ?? 'Training')} onStart={() => startTraining(idx)} />;
       })()}
+
+      {saveError && (
+        <div className="mb-4 rounded-2xl px-4 py-3 flex items-start gap-3 adlr-fade-in" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)' }}>
+          <p className="flex-1 text-sm text-red-300">{saveError}</p>
+          <button onClick={() => setSaveError(null)} className="adlr-tap p-1 text-red-300/70" aria-label={t('Schließen')}><X size={16} /></button>
+        </div>
+      )}
 
       {activeDayIdx === null && recap && !recapSeen && (
         <button
@@ -1233,7 +1311,7 @@ export default function PlanScreen() {
                                                   value={inputs[setIdx]?.min ?? ''}
                                                   onChange={(e) => updateSetInput(ex.name, setIdx, 'min', e.target.value)}
                                                   placeholder={t('Min')}
-                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                  className="w-14 bg-inset border border-white/10 rounded-md px-1.5 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
                                                 />
                                                 <span className="text-xs text-white/30">·</span>
                                                 <input
@@ -1242,7 +1320,7 @@ export default function PlanScreen() {
                                                   value={inputs[setIdx]?.km ?? ''}
                                                   onChange={(e) => updateSetInput(ex.name, setIdx, 'km', e.target.value)}
                                                   placeholder="km"
-                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                  className="w-14 bg-inset border border-white/10 rounded-md px-1.5 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
                                                 />
                                               </>
                                             ) : (
@@ -1252,7 +1330,7 @@ export default function PlanScreen() {
                                                   value={inputs[setIdx]?.weight ?? ''}
                                                   onChange={(e) => updateSetInput(ex.name, setIdx, 'weight', e.target.value)}
                                                   placeholder="kg"
-                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                  className="w-14 bg-inset border border-white/10 rounded-md px-1.5 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
                                                 />
                                                 <span className="text-xs text-white/30">×</span>
                                                 <input
@@ -1260,17 +1338,32 @@ export default function PlanScreen() {
                                                   value={inputs[setIdx]?.reps ?? ''}
                                                   onChange={(e) => updateSetInput(ex.name, setIdx, 'reps', e.target.value)}
                                                   placeholder={t('Wdh')}
-                                                  className="w-16 bg-inset border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
+                                                  className="w-14 bg-inset border border-white/10 rounded-md px-1.5 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
                                                 />
                                               </>
+                                            )}
+                                            {day.is_free && (
+                                              <button onClick={() => removeFreeSet(ex.name, setIdx)} className="adlr-tap ml-auto p-1 shrink-0 rounded-md text-white/30 hover:text-red-400" aria-label={t('Satz entfernen')}>
+                                                <X size={14} />
+                                              </button>
                                             )}
                                           </div>
                                         );
                                       })}
+                                      {day.is_free && (
+                                        <button onClick={() => addFreeSet(ex.name)} className="adlr-tap text-xs font-medium text-adlr-gold flex items-center gap-1 pt-1">
+                                          <Plus size={13} /> {t('Satz hinzufügen')}
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                 </div>
                               </div>
+                              {day.is_free && isTraining && (
+                                <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap shrink-0 ml-1 p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                               {(() => { const r = libMap?.get(ex.name); return r?.exercise_id && hasDemo(r.exercise_id) ? r : null; })() && (
                                 <button onClick={() => setDemoEx(libMap!.get(ex.name)!)} className="adlr-tap shrink-0 ml-1" style={{ color: 'rgb(var(--adlr-gold))' }} title={t('Demo anzeigen')}>
                                   <Play size={16} />
