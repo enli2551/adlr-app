@@ -960,6 +960,7 @@ const dict: Record<string, string> = {
   "Wo finde ich den Export?": "Where do I find the export?",
   "Profil → Einstellungen → Daten exportieren & importieren → Workouts exportieren": "Profile → Settings → Export & Import Data → Export workouts",
   "Einstellungen → Strong-Daten exportieren": "Settings → Export Strong Data",
+  "{n} Zeilen mit unlesbarem Datum übersprungen": "{n} rows skipped (unreadable date)",
   "{n} bereits vorhanden — werden übersprungen": "{n} already there — will be skipped",
   "{a} von {b} Übungen zugeordnet": "{a} of {b} exercises matched",
   "übernommen": "kept as is",

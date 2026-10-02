@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading } from '@/components/ui';
 import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut } from 'lucide-react';
@@ -93,7 +94,7 @@ export default function ProfileScreen() {
       supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false }),
       supabase.from('daily_checkins').select('*').eq('client_id', profile.id).order('logged_at', { ascending: false }),
       supabase.from('progress_entries').select('*').eq('client_id', profile.id).order('logged_at', { ascending: true }),
-      supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
     ]);
     if (cpRes.data) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cpRes.data.plan_id).order('day_of_week');

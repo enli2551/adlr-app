@@ -34,6 +34,8 @@ export interface ImportResult {
   workouts: ImportedWorkout[];
   /** original name → ADLR name (null = no match, kept as is) */
   mapping: Map<string, string | null>;
+  /** rows dropped because their date could not be read — shown to the user instead of silently lost */
+  skippedRows: number;
 }
 
 /** RFC-4180-ish CSV parser (quoted fields, escaped quotes, CRLF); auto-detects , or ; */
@@ -65,13 +67,22 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const MONTHS: Record<string, number> = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+// Hevy writes month names in the app language: "1 Okt 2026", "11 Sept 2026", "3 Juli 2026",
+// "5 Mai", "2 März", "3 Dez"; Hungarian "okt.", "márc." … matched by their first 3 letters.
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, mär: 2, már: 2, apr: 3, ápr: 3, may: 4, mai: 4, máj: 4, jun: 5, jún: 5, jul: 6, júl: 6,
+  aug: 7, sep: 8, sze: 8, oct: 9, okt: 9, nov: 10, dec: 11, dez: 11,
+};
+const monthOf = (name: string): number | undefined => MONTHS[name.toLowerCase().slice(0, 3)];
 
-/** Local wall-clock dates: "8 Jan 2024, 18:02" (Hevy), "2024-01-08 18:02:11" (Strong), or ISO. */
+/** Local wall-clock dates: "8 Jan 2024, 18:02" / "1 Okt 2026, 12:15" (Hevy), "2026. okt. 1. 12:15",
+ *  "2024-01-08 18:02:11" (Strong), or ISO. */
 export function parseDate(s: string): Date | null {
   const v = s.trim();
-  let m = /^(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4}),? (\d{1,2}):(\d{2})/.exec(v);
-  if (m && MONTHS[m[2].toLowerCase()] != null) return new Date(+m[3], MONTHS[m[2].toLowerCase()], +m[1], +m[4], +m[5]);
+  let m = /^(\d{1,2})\.? ([^\d\s,.]+)\.? (\d{4}),? (\d{1,2}):(\d{2})/.exec(v);
+  if (m && monthOf(m[2]) != null) return new Date(+m[3], monthOf(m[2])!, +m[1], +m[4], +m[5]);
+  m = /^(\d{4})\. ?([^\d\s,.]+)\.? ?(\d{1,2})\.?,? (\d{1,2}):(\d{2})/.exec(v);
+  if (m && monthOf(m[2]) != null) return new Date(+m[1], monthOf(m[2])!, +m[3], +m[4], +m[5]);
   m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(v);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0));
   const d = new Date(v);
@@ -106,7 +117,24 @@ const ALIASES: Record<string, string> = {
   'chest dip': 'Dips', 'triceps dip': 'Trizeps Dips', 'tricep pushdown': 'Trizepsdrücken', 'triceps pushdown': 'Trizepsdrücken',
   'hip thrust': 'Hip Thrusts', 'standing calf raise': 'Wadenheben', 'push up': 'Liegestütze',
   'lunge': 'Ausfallschritte', 'hammer curl dumbbell': 'Hammer Curls', 'face pull': 'Face Pulls', 'lateral raise': 'Seitheben',
+  // German Hevy names (Hevy exports exercise names in the app language)
+  'klimmzug': 'Klimmzüge', 'bizepscurl': 'Bizeps Curls', 'bizepscurl langhantel': 'Langhantel Curls',
+  'hackenschmidt squat': 'Hackenschmidt Kniebeuge', 'beinstrecken': 'Beinstrecker', 'beinbeugen': 'Beinbeuger',
+  'beinbeugen stehend': 'Beinbeuger', 'beinbeugen liegend': 'Beinbeuger', 'beinbeugen sitzend': 'Beinbeuger',
+  'butterfly': 'Pec Fly (Maschine)', 'trizep pushdown mit seil': 'Kabel Pushdown (Seil)', 'trizepsdrücken mit dem seil': 'Kabel Pushdown (Seil)',
+  'trizep pushdown': 'Kabel Pushdown', 'überkopf trizepsstrecken': 'Kabel Overhead Trizeps Extension (Seil)',
+  'hyperextension': 'Hyperextension (Rückenstrecker)', 'wadenheben sitzend': 'Maschine Sitz Wadenheben',
+  'sitzendes schulterdrücken': 'Langhantel Sitz Overhead Press', 'stirndrücken': 'Skull Crusher',
+  'reverse fliegende': 'Reverse Fly', 'fliegende auf der schrägbank (kurzhantel)': 'Kurzhantel Schrägbank Fly',
+  'iso laterales rudern von oben': 'Iso-Lateral High Row',
 };
+
+// Equipment in brackets — German Hevy names use these instead of the English ones.
+const EQUIP_DE: Record<string, string> = {
+  langhantel: 'barbell', kurzhantel: 'dumbbell', maschine: 'machine', kabelzug: 'cable', kabel: 'cable',
+  körpergewicht: 'bodyweight', gewichtet: 'weighted',
+};
+const EQUIP_PREFIX: Record<string, string> = { dumbbell: 'kurzhantel', barbell: 'langhantel', cable: 'kabel' };
 
 let index: Map<string, string> | null = null;
 function exerciseIndex(): Map<string, string> {
@@ -128,9 +156,11 @@ export function mapExerciseName(name: string): string | null {
   if (idx.has(full)) return idx.get(full)!;
   const m = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(name);
   if (!m) return null;
-  const base = norm(m[1]), equip = norm(m[2]);
-  const candidates = [`${equip} ${base}`, `${base} ${equip}`];
-  if (['barbell', 'machine', 'cable', 'bodyweight'].includes(equip)) candidates.push(base);
+  const base = norm(m[1]), raw = norm(m[2]), equip = EQUIP_DE[raw] ?? raw;
+  const candidates = [`${equip} ${base}`, `${base} ${equip}`, `${base} ${raw}`];
+  if (EQUIP_PREFIX[equip]) candidates.push(`${EQUIP_PREFIX[equip]} ${base}`);
+  // barbell/machine/cable are the library defaults; "weighted" bodyweight moves log added load
+  if (['barbell', 'machine', 'cable', 'bodyweight', 'weighted'].includes(equip)) candidates.push(base);
   for (const c of candidates) if (idx.has(c)) return idx.get(c)!;
   return null;
 }
@@ -154,6 +184,7 @@ export function parseWorkoutExport(text: string): ImportResult {
     return mapping.get(n) ?? n;
   };
   const byKey = new Map<string, ImportedWorkout>();
+  let skippedRows = 0;
 
   if (header.includes('exercise_title')) {
     const c = {
@@ -162,8 +193,10 @@ export function parseWorkoutExport(text: string): ImportResult {
       reps: col('reps'), km: col('distance_km'), mi: col('distance_miles'), dur: col('duration_seconds'),
     };
     for (const r of rows.slice(1)) {
+      if (!(r[c.ex] ?? '').trim()) continue;
+      r[c.ex] = r[c.ex].trim();
       const start = parseDate(r[c.start] ?? '');
-      if (!start || !r[c.ex]) continue;
+      if (!start) { skippedRows++; continue; }
       const end = parseDate(r[c.end] ?? '') ?? start;
       const key = `${r[c.start]}|${r[c.title]}`;
       let w = byKey.get(key);
@@ -177,7 +210,7 @@ export function parseWorkoutExport(text: string): ImportResult {
         duration_sec: num(r[c.dur]), distance_km: km,
       });
     }
-    return { source: 'hevy', workouts: finish(byKey), mapping };
+    return { source: 'hevy', workouts: finish(byKey), mapping, skippedRows };
   }
 
   if (header.includes('exercise name') && header.includes('date')) {
@@ -186,8 +219,10 @@ export function parseWorkoutExport(text: string): ImportResult {
       order: col('set order'), w: col('weight'), unit: col('weight unit'), reps: col('reps'), dist: col('distance'), sec: col('seconds'),
     };
     for (const r of rows.slice(1)) {
+      if (!(r[c.ex] ?? '').trim()) continue;
+      r[c.ex] = r[c.ex].trim();
       const start = parseDate(r[c.date] ?? '');
-      if (!start || !r[c.ex]) continue;
+      if (!start) { skippedRows++; continue; }
       const order = (r[c.order] ?? '').trim();
       if (/rest timer/i.test(order)) continue; // Strong logs rest-timer rows
       const key = `${r[c.date]}|${r[c.title]}`;
@@ -207,7 +242,7 @@ export function parseWorkoutExport(text: string): ImportResult {
         duration_sec: num(r[c.sec]) || null, distance_km: num(r[c.dist]) || null,
       });
     }
-    return { source: 'strong', workouts: finish(byKey), mapping };
+    return { source: 'strong', workouts: finish(byKey), mapping, skippedRows };
   }
 
   throw new Error('unknown');

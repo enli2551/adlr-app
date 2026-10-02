@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { captureError } from '@/lib/monitoring';
 import { useNavigate } from 'react-router-dom';
 import ClientCheckins from '@/components/ClientCheckins';
@@ -61,7 +62,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       supabase.from('workout_completions').select('*').eq('client_id', clientId).order('completed_at', { ascending: false }),
       supabase.from('client_plans').select('*').eq('client_id', clientId).eq('is_active', true).maybeSingle(),
       supabase.from('plans').select('*').eq('trainer_id', profile.id),
-      supabase.from('exercise_set_logs').select('*').eq('client_id', clientId).order('created_at', { ascending: true }),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', clientId).order('created_at', { ascending: true }).order('id').range(a, b)),
     ]);
     setClient(c.data as Profile | null);
     setEntries((e.data ?? []) as ProgressEntry[]);

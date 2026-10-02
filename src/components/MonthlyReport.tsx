@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { fetchExercises } from '@/lib/exercises';
 import type { WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { LOCAL_DEMO_IMAGES } from '@/components/ExerciseLibrary';
@@ -37,7 +38,7 @@ export default function MonthlyReport({ onClose, clientId, clientName }: { onClo
     if (!targetId) return { comps: [] as WorkoutCompletion[], logs: [] as ExerciseSetLog[], muscleOf: (_: string) => 'Sonstige', idOf: (_: string) => undefined as string | undefined };
     const [wc, sl, lib] = await Promise.all([
       supabase.from('workout_completions').select('*').eq('client_id', targetId),
-      supabase.from('exercise_set_logs').select('*').eq('client_id', targetId),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', targetId).order('created_at', { ascending: true }).order('id').range(a, b)),
       fetchExercises(),
     ]);
     const byName = new Map((lib ?? []).map((e) => [e.name, e]));

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import type { WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { SectionHeader, Loading } from '@/components/ui';
 import TrainingHistory from '@/components/TrainingHistory';
@@ -26,7 +27,7 @@ export default function HistoryScreen() {
     (async () => {
       const [wc, sl] = await Promise.all([
         supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false }),
-        supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }),
+        fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
       ]);
       const comps = (wc.data ?? []) as WorkoutCompletion[];
       // Names come from the plan day each session was done from (also older plans).

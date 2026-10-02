@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import type { PlanDay, WorkoutCompletion, ExerciseSetLog, PersonalRecord, Exercise, Session } from '@/lib/types';
 import Celebration from '@/components/Celebration';
 import WorkoutSummary from '@/components/WorkoutSummary';
@@ -138,6 +139,10 @@ export default function PlanScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Saving takes a moment (notification + several requests); repeated taps on "Beenden" used to
+  // store the same workout several times ("Training + Training + Training" with tripled sets).
+  const finishingRef = useRef(false);
+  const [finishing, setFinishing] = useState(false);
   // Weekly recap of LAST week: banner + auto-shown before the first workout of the week.
   const [recap, setRecap] = useState<WeeklyRecapData | null>(null);
   const [recapSeen, setRecapSeen] = useState(recapSeenThisWeek());
@@ -239,7 +244,7 @@ export default function PlanScreen() {
       applyPlanDays(planDays);
     }
     const { data: wc } = await supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false });
-    const { data: sl } = await supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: false });
+    const { data: sl } = await fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: false }).order('id').range(a, b));
     const merged = withPending((wc ?? []) as WorkoutCompletion[], (sl ?? []) as ExerciseSetLog[]);
     setCompletions(merged.completions);
     setSetLogs(merged.logs);
@@ -595,6 +600,13 @@ export default function PlanScreen() {
   };
 
   const finishTraining = async (dayIdx: number) => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setFinishing(true);
+    try { await saveFinishedTraining(dayIdx); } finally { finishingRef.current = false; setFinishing(false); }
+  };
+
+  const saveFinishedTraining = async (dayIdx: number) => {
     const day = days[dayIdx];
     if (!profile || !day) return;
     // Schedule workout-complete notification if this was the last set
@@ -1189,6 +1201,7 @@ export default function PlanScreen() {
                               if (open.length > 0) setConfirm({ kind: 'finish', dayIdx: idx, open });
                               else finishTraining(idx);
                             }}
+                            disabled={finishing}
                             className={`adlr-tap flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
                               allExercisesChecked
                                 ? 'bg-green-500 text-white'
@@ -1503,7 +1516,7 @@ export default function PlanScreen() {
                   <button onClick={() => setConfirm(null)} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}>
                     {t('Weiter trainieren')}
                   </button>
-                  <button onClick={() => { const i = confirm.dayIdx; setConfirm(null); finishTraining(i); }} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-white/70">
+                  <button disabled={finishing} onClick={() => { const i = confirm.dayIdx; setConfirm(null); finishTraining(i); }} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-white/70">
                     {t('Trotzdem beenden')}
                   </button>
                 </div>

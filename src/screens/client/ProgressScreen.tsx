@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import type { ProgressEntry, PersonalRecord, DailyCheckin, ProgressPhoto, ExerciseSetLog, WorkoutCompletion } from '@/lib/types';
 import ChallengeCard from '@/components/ChallengeCard';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
@@ -47,7 +48,7 @@ export default function ProgressScreen() {
       supabase.from('personal_records').select('*').eq('client_id', profile.id).order('achieved_at', { ascending: false }),
       supabase.from('daily_checkins').select('*').eq('client_id', profile.id).order('logged_at', { ascending: false }).limit(7),
       supabase.from('progress_photos').select('*').eq('client_id', profile.id).order('photo_date', { ascending: false }),
-      supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
       supabase.from('workout_completions').select('*').eq('client_id', profile.id),
     ]);
     setCompletions((wc.data ?? []) as WorkoutCompletion[]);

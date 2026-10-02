@@ -961,6 +961,7 @@ const dict: Record<string, string> = {
   "Wo finde ich den Export?": "Hol találom az exportot?",
   "Profil → Einstellungen → Daten exportieren & importieren → Workouts exportieren": "Profil → Beállítások → Export & Import Data → Export workouts",
   "Einstellungen → Strong-Daten exportieren": "Beállítások → Export Strong Data",
+  "{n} Zeilen mit unlesbarem Datum übersprungen": "{n} sor kihagyva (olvashatatlan dátum)",
   "{n} bereits vorhanden — werden übersprungen": "{n} már megvan — kihagyjuk",
   "{a} von {b} Übungen zugeordnet": "{b} gyakorlatból {a} párosítva",
   "übernommen": "változatlanul",

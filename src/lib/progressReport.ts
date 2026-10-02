@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { localDateKey } from '@/lib/dates';
 import { mondayOf } from '@/lib/weeklyRecap';
 import type { Profile } from '@/lib/types';
@@ -47,7 +48,7 @@ export async function computeProgress(client: Profile): Promise<ProgressStats> {
   const since56 = localDateKey(new Date(Date.now() - 56 * DAY));
   const [wc, sl, pe, hd, ph, cp] = await Promise.all([
     supabase.from('workout_completions').select('id, completed_at').eq('client_id', id).order('completed_at', { ascending: true }),
-    supabase.from('exercise_set_logs').select('workout_completion_id, exercise_name, weight_kg, reps, set_type, created_at').eq('client_id', id).order('created_at', { ascending: true }),
+    fetchAll((a, b) => supabase.from('exercise_set_logs').select('workout_completion_id, exercise_name, weight_kg, reps, set_type, created_at').eq('client_id', id).order('created_at', { ascending: true }).order('id').range(a, b)),
     supabase.from('progress_entries').select('*').eq('client_id', id).order('logged_at', { ascending: true }),
     supabase.from('health_daily').select('day, steps, sleep_min, resting_hr, kcal_in').eq('client_id', id).gte('day', since56),
     supabase.from('progress_photos').select('storage_path, photo_date').eq('client_id', id).order('photo_date', { ascending: true }),

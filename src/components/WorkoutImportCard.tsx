@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Upload, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { t, fmtDate, fmtNum } from '@/lib/i18n';
 import { parseWorkoutExport, type ImportResult, type ImportedWorkout } from '@/lib/workoutImport';
 
@@ -19,6 +20,7 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const [showMap, setShowMap] = useState(false);
+  const runningRef = useRef(false); // a fast double tap must not import everything twice
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -26,7 +28,7 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
       const result = parseWorkoutExport(await f.text());
       if (result.workouts.length === 0) throw new Error('empty');
       // Re-importing the same file is safe: skip workouts that already exist (same end time ±2 min).
-      const { data } = await supabase.from('workout_completions').select('completed_at').eq('client_id', clientId);
+      const { data } = await fetchAll((a, b) => supabase.from('workout_completions').select('id, completed_at').eq('client_id', clientId).order('id').range(a, b));
       const existing = (data ?? []).map((c: { completed_at: string }) => new Date(c.completed_at).getTime());
       const fresh = result.workouts.filter((w) => !existing.some((e) => Math.abs(e - w.end.getTime()) < DUP_WINDOW_MS));
       setStage({ kind: 'preview', result, fresh, dupes: result.workouts.length - fresh.length });
@@ -37,6 +39,8 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
   };
 
   const run = async (fresh: ImportedWorkout[]) => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setStage({ kind: 'running', done: 0, total: fresh.length });
     let sets = 0;
     const CHUNK = 50;
@@ -72,6 +76,8 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
       setStage({ kind: 'done', workouts: fresh.length, sets, prs });
     } catch {
       setStage({ kind: 'error', msg: t('Import abgebrochen — bereits importierte Trainings bleiben erhalten. Einfach erneut versuchen.') });
+    } finally {
+      runningRef.current = false;
     }
   };
 
@@ -113,6 +119,7 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
                 {' · '}{t('{n} Sätze', { n: fmtNum(stage.fresh.reduce((a, w) => a + w.sets.length, 0)) })}
               </p>
             )}
+            {stage.result.skippedRows > 0 && <p className="text-xs text-amber-400/80 mt-0.5">{t('{n} Zeilen mit unlesbarem Datum übersprungen', { n: stage.result.skippedRows })}</p>}
             {stage.dupes > 0 && <p className="text-xs text-white/40 mt-0.5">{t('{n} bereits vorhanden — werden übersprungen', { n: stage.dupes })}</p>}
             <button onClick={() => setShowMap(!showMap)} className="adlr-tap text-xs text-adlr-gold mt-2 flex items-center gap-1">
               {t('{a} von {b} Übungen zugeordnet', { a: mappedCount, b: mapped.length })} <ChevronDown size={12} className={showMap ? 'rotate-180' : ''} />
