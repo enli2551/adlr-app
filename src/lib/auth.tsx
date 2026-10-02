@@ -150,7 +150,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 /** Display name of the coach: the client's trainer, or the trainer themselves. */
 export function useCoachName(): string {
   const { coach } = useAuth();
-  return coach?.first_name?.trim() || t('dein Coach');
+  const name = coach?.first_name?.trim() ?? '';
+  // Some trainer profiles carry the e-mail as first name (signup fallback) — show "Peter", not "peter@adlr.at".
+  if (name.includes('@')) {
+    const local = name.split('@')[0].split(/[._-]/)[0];
+    return local ? local.charAt(0).toUpperCase() + local.slice(1) : t('dein Coach');
+  }
+  return name || t('dein Coach');
 }
 
 export function useAuth() {

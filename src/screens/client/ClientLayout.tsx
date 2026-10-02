@@ -90,7 +90,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto">
       {/* Top bar */}
-      <header className="sticky top-0 z-20 bg-adlr-black/90 safe-top">
+      <header className="sticky top-0 z-20 bg-adlr-black safe-top">
         <div className="flex items-center justify-between px-5 py-3">
           <button onClick={() => nav('/app')} className="flex items-center">
             <Logo size={18} />
