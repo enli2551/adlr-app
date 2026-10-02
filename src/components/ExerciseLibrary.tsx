@@ -185,7 +185,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
     : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exercise-gif?id=${ex.exercise_id}&res=180`;
 
   return createPortal((
-    <div className="fixed inset-0 z-50 overflow-y-auto adlr-fade-in" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-[80] overflow-y-auto adlr-fade-in" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="adlr-card p-6 max-w-md w-full" style={{ background: 'rgb(var(--surface-2))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }} onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
