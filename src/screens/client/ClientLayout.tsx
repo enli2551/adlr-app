@@ -21,7 +21,7 @@ const TABS = [
 let syncedLang = '';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { profile, signOut } = useAuth();
+  const { profile } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [coachUnread, setCoachUnread] = useState(false);
@@ -101,7 +101,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               <p className="text-[10px] text-adlr-gold/70">{t('Klient')}</p>
             </div>
             <button
-              onClick={() => { signOut(); nav('/auth'); }}
+              onClick={() => nav('/app/profil')}
+              aria-label={t('Profil')}
               className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/50 text-xs font-bold adlr-tap"
             >
               {(profile?.first_name?.[0] ?? 'K').toUpperCase()}

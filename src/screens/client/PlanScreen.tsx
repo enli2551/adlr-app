@@ -837,6 +837,17 @@ export default function PlanScreen() {
             {starterBusy ? '…' : <><Dumbbell size={16} /> {t('Starter-Plan starten')}</>}
           </button>
         </div>
+        <button
+          onClick={startFreeTraining}
+          className="adlr-tap w-full mt-3 px-4 py-3.5 rounded-2xl flex items-center gap-3 text-left border border-dashed"
+          style={{ borderColor: 'rgb(var(--text) / 0.15)', background: 'rgb(var(--text) / 0.02)' }}
+        >
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white/5 text-adlr-gold"><Shuffle size={19} /></div>
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-white/90">{t('Freies Training')}</p>
+            <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
+          </div>
+        </button>
       </div>
     );
   }
@@ -1099,6 +1110,14 @@ export default function PlanScreen() {
           >
             <span className="flex items-center gap-2 text-white/80"><History size={15} className="text-adlr-gold" /> {t('Trainings-Verlauf')}</span>
             <span className="flex items-center gap-1 text-xs text-white/40">{t('{n} gesamt', { n: completions.length })} <ChevronRight size={14} /></span>
+          </button>
+          <button
+            onClick={startFreeTraining}
+            className="adlr-tap w-full mt-3 pt-3 flex items-center justify-between text-sm"
+            style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}
+          >
+            <span className="flex items-center gap-2 text-white/80"><Shuffle size={15} className="text-adlr-gold" /> {t('Freies Training')}</span>
+            <span className="flex items-center gap-1 text-xs text-white/40">{t('außerhalb des Plans')} <ChevronRight size={14} /></span>
           </button>
         </div>
       )}
@@ -1398,19 +1417,6 @@ export default function PlanScreen() {
           );
         })}
       </div>
-      {activeDayIdx === null && (
-        <button
-          onClick={startFreeTraining}
-          className="adlr-tap w-full mt-4 mb-2 px-4 py-3.5 rounded-2xl flex items-center gap-3 text-left border border-dashed"
-          style={{ borderColor: 'rgb(var(--text) / 0.15)', background: 'rgb(var(--text) / 0.02)' }}
-        >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-white/5 text-adlr-gold"><Shuffle size={19} /></div>
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-white/90">{t('Freies Training')}</p>
-            <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
-          </div>
-        </button>
-      )}
 
       {gymSheet && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => { setGymSheet(false); setAddingGym(false); }}>

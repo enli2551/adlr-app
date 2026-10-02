@@ -1085,6 +1085,11 @@ const dict: Record<string, string> = {
   "Satz entfernen": "Sorozat törlése",
   "Satz hinzufügen": "Sorozat hozzáadása",
   "Übung entfernen": "Gyakorlat törlése",
+
+  // ── Logout, free-training row ──
+  "außerhalb des Plans": "terven kívül",
+  "Möchtest du dich wirklich abmelden? Deine Daten bleiben gespeichert.": "Biztosan kijelentkezel? Az adataid megmaradnak.",
+  "Ja, abmelden": "Igen, kijelentkezem",
 };
 
 export default dict;

@@ -120,11 +120,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  // Sign out locally FIRST and never wait on the network: on iOS the token-revoke call
+  // could hang, and the screens kept bouncing between /auth and /app while the session
+  // still existed — the app froze. 'local' scope clears the stored session immediately;
+  // the server-side revoke is best-effort with a timeout.
   const signOut = async () => {
-    await supabase.auth.signOut();
     setProfile(null);
     setCoach(null);
     setSession(null);
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    } catch { /* ignore — local state is already cleared */ }
   };
 
   const refreshProfile = async () => {

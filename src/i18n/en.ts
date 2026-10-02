@@ -1084,6 +1084,11 @@ const dict: Record<string, string> = {
   "Satz entfernen": "Remove set",
   "Satz hinzufügen": "Add set",
   "Übung entfernen": "Remove exercise",
+
+  // ── Logout, free-training row ──
+  "außerhalb des Plans": "outside the plan",
+  "Möchtest du dich wirklich abmelden? Deine Daten bleiben gespeichert.": "Do you really want to sign out? Your data stays saved.",
+  "Ja, abmelden": "Yes, sign out",
 };
 
 export default dict;

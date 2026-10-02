@@ -119,7 +119,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                   </div>
                   <LanguageSwitcher />
                   <button
-                    onClick={() => { setMenuOpen(false); signOut(); nav('/trainer-auth'); }}
+                    onClick={async () => { setMenuOpen(false); await signOut(); nav('/trainer-auth', { replace: true }); }}
                     className="adlr-tap w-full flex items-center gap-2 mt-3 pt-3 border-t border-white/10 text-sm text-white/60 hover:text-white/90 px-1"
                   >
                     <LogOut size={15} /> {t('Abmelden')}

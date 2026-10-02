@@ -4,7 +4,7 @@ import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -46,7 +46,8 @@ export default function ProfileScreen() {
   const coachName = useCoachName();
   const nav = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'logout' | 'delete' | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [themeId, setThemeId] = useState(getTheme());
   const lang = useLang();
   const [deleting, setDeleting] = useState(false);
@@ -459,6 +460,7 @@ export default function ProfileScreen() {
           { key: 'coach' as const, icon: UserPlus, label: t('Coach'), value: coach?.first_name ?? t('Code eingeben'), danger: false },
           { key: 'theme' as const, icon: Palette, label: t('Erscheinungsbild'), value: THEMES.find((x) => x.id === themeId)?.label ?? '', danger: false },
           { key: 'lang' as const, icon: Languages, label: t('Sprache'), value: LANGS.find((l) => l.id === lang)?.label ?? '', danger: false },
+          { key: 'logout' as const, icon: LogOut, label: t('Abmelden'), value: '', danger: false },
           { key: 'delete' as const, icon: Trash2, label: t('Konto löschen'), value: '', danger: true },
         ].map((row, i) => (
           <button
@@ -489,6 +491,20 @@ export default function ProfileScreen() {
               <>
                 <p className="text-base font-semibold text-white mb-3 flex items-center gap-2"><Languages size={16} className="text-adlr-gold" /> {t('Sprache')}</p>
                 <LanguageSwitcher />
+              </>
+            )}
+            {sheet === 'logout' && (
+              <>
+                <p className="text-base font-semibold text-white mb-2 flex items-center gap-2"><LogOut size={16} className="text-adlr-gold" /> {t('Abmelden')}</p>
+                <p className="text-xs text-white/55 leading-relaxed mb-4">{t('Möchtest du dich wirklich abmelden? Deine Daten bleiben gespeichert.')}</p>
+                <button
+                  onClick={async () => { setLoggingOut(true); await signOut(); nav('/auth', { replace: true }); }}
+                  disabled={loggingOut}
+                  className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
+                  style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}
+                >
+                  {loggingOut ? '…' : t('Ja, abmelden')}
+                </button>
               </>
             )}
             {sheet === 'delete' && (
