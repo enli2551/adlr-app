@@ -4,6 +4,7 @@ import { Search, Dumbbell, Play, Plus, X, Loader2, Activity, Target, Clock } fro
 import { fetchExercises, MUSCLE_GROUPS, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { t } from '@/lib/i18n';
+import { demoVideoFor } from '@/lib/demoVideos';
 
 interface Props {
   onAdd: (ex: ExerciseRow) => void;
@@ -77,7 +78,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
               <p className="text-xs text-white/40">{t(s.muscle_group)} · {s.default_sets}×{s.default_reps} · {t(s.equipment)}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {hasDemo(s.exercise_id) && (
+              {hasDemo(s) && (
                 <button
                   onClick={() => onDemo(s)}
                   className="adlr-tap flex items-center gap-1 text-xs"
@@ -160,60 +161,10 @@ export const LOCAL_DEMO_IMAGES: Record<string, string> = {
   '0007': 'latzug.webp',                     // Wechselnder Latzug
 };
 
-// Locally bundled animated demos (Vital Animations, licensed) — offline MP4 loops.
-// Keyed by the app's exercise_id → Vital clip filename in /public/exercises-anim/.
-// The Vital ids are their own numbering; matched here by exercise meaning, not id.
-export const LOCAL_DEMO_VIDEOS: Record<string, string> = {
-  '0003': '0053.mp4', // Air Bike ← air bike sprint
-  '0102': '0054.mp4', // Kniebeugen ← barbell back squat
-  '2809': '0055.mp4', // Langhantel Split Kniebeuge (V2) ← barbell bulgarian split squat
-  '0024': '0056.mp4', // Frontkniebeugen ← barbell front squat
-  '1409': '0057.mp4', // Hip Thrusts / Glute Bridges ← barbell hip thrust
-  '0078': '0059.mp4', // Langhantel Hintere Ausfallschritte ← barbell reverse lunges
-  '0085': '0060.mp4', // Rumänisches Kreuzheben ← barbell romanian deadlift
-  '0228': '0061.mp4', // Cable Kickbacks ← cable leg kickback
-  '0798': '0062.mp4', // Stationäres Fahrrad ← cycling
-  '0410': '0063.mp4', // Kurzhantel Einbein Split Kniebeuge ← dumbbell bulgarian split squat
-  '1760': '0064.mp4', // Kurzhantel Kelch-Kniebeuge ← dumbbell goblet squat
-  '0534': '0064.mp4', // Kelch-Kniebeuge ← dumbbell goblet squat
-  '1459': '0065.mp4', // Kurzhantel Rumänisches Kreuzheben ← dumbbell hip hinge
-  '0371': '0066.mp4', // Kurzhantel Plyo Kniebeuge ← dumbbell jump squat
-  '2331': '0067.mp4', // Crosstrainer ← elliptical hiit machine
-  '2141': '0067.mp4', // Elliptical Crosstrainer ← elliptical hiit machine
-  '0046': '0068.mp4', // Hackenschmidt Kniebeuge ← hack squat machine
-  '1427': '0069.mp4', // Hüftabduktoren ← hip abduction machine
-  '0549': '0072.mp4', // Kettlebell Swings ← kettlebell swing
-  '0585': '0073.mp4', // Beinstrecker ← leg extension machine
-  '0739': '0074.mp4', // Beinpresse ← leg press machine
-  '0496': '0075.mp4', // Beinbeuger ← lying leg curl machine
-  '0128': '0076.mp4', // Battle Ropes ← rope wave
-  '0684': '0078.mp4', // Laufen (mit Gerät) ← run on treadmill
-  '0091': '0080.mp4', // Langhantel Sitz Overhead Press ← seated overhead press
-  '0431': '0081.mp4', // Kurzhantel Step-ups ← step-ups (weighted)
-  '1684': '0081.mp4', // Step-ups ← step-ups (weighted)
-  '2311': '0082.mp4', // Stepmill Laufen ← stepmill machine
-  '0116': '0084.mp4', // Langhantel Steifbein Kreuzheben ← stiff-legged deadlift
-  '0241': '0085.mp4', // Trizepsdrücken ← triceps pushdown (cable-rope)
-  '0200': '0085.mp4', // Kabel Pushdown (Seil) ← triceps pushdown (cable-rope)
-  '0685': '0086.mp4', // Laufen ← walk on treadmill
-  '0287': '0087.mp4', // Arnold Press ← arnold press dumbbell
-  '0086': '0088.mp4', // Schulterdrücken ← barbell overhead press standing
-  '0119': '0089.mp4', // Upright Row ← barbell upright row
-  '0120': '0089.mp4', // Langhantel Upright Row ← barbell upright row
-  '0290': '0090.mp4', // Kurzhantel Bank Sitz Drücken ← dumbbell overhead press
-  '0040': '0092.mp4', // Frontheben ← front raise (dumbbell)
-  '0310': '0092.mp4', // Kurzhantel Frontheben ← front raise (dumbbell)
-  '0192': '0095.mp4', // Kabel Einarmig Seitheben ← cable cross lateral raise
-  '0178': '0096.mp4', // Seitheben ← lateral raises (dumbbell)
-  '0334': '0096.mp4', // Kurzhantel Seitheben ← lateral raises (dumbbell)
-  '0154': '0099.mp4', // Reverse Fly ← rear delt fly (reverse pec deck)
-  '0225': '0100.mp4', // Kabel Stehend Crossover Reverse Fly ← rear delt cable fly
-  '9051': '0051.mp4', // Pec Fly (Maschine) ← pec deck machine fly (custom id, see migration)
-};
 
 // True if the exercise has any local demo (animation preferred, else static image).
-export function hasDemo(exerciseId: string): boolean {
-  return !!(LOCAL_DEMO_VIDEOS[exerciseId] || LOCAL_DEMO_IMAGES[exerciseId]);
+export function hasDemo(ex: { name: string; exercise_id?: string | null }): boolean {
+  return !!(demoVideoFor(ex.name) || (ex.exercise_id && LOCAL_DEMO_IMAGES[ex.exercise_id]));
 }
 
 export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: () => void }) {
@@ -227,7 +178,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
     return () => clearInterval(interval);
   });
 
-  const localVid = LOCAL_DEMO_VIDEOS[ex.exercise_id];
+  const localVid = demoVideoFor(ex.name);
   const localImg = LOCAL_DEMO_IMAGES[ex.exercise_id];
   const gifUrl = localImg
     ? `/exercises/${localImg}`
@@ -260,7 +211,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
               )}
               {localVid ? (
                 <video
-                  src={`/exercises-anim/${localVid}`}
+                  src={localVid}
                   autoPlay
                   loop
                   muted

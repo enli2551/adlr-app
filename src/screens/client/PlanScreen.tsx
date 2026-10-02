@@ -1397,7 +1397,7 @@ export default function PlanScreen() {
                                   <Trash2 size={16} />
                                 </button>
                               )}
-                              {(() => { const r = libMap?.get(ex.name); return r?.exercise_id && hasDemo(r.exercise_id) ? r : null; })() && (
+                              {(() => { const r = libMap?.get(ex.name); return r && hasDemo(r) ? r : null; })() && (
                                 <button onClick={() => setDemoEx(libMap!.get(ex.name)!)} className="adlr-tap shrink-0 ml-1" style={{ color: 'rgb(var(--adlr-gold))' }} title={t('Demo anzeigen')}>
                                   <Play size={16} />
                                 </button>
