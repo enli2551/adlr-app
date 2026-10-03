@@ -1,4 +1,4 @@
--- 70 new library exercises with Vital Animations demos (movements the library did not have).
+-- 71 new library exercises with Vital Animations demos (movements the library did not have).
 -- Only INSERTs into the shared exercise library: existing exercises, plans, logs and accounts are untouched.
 -- Skips any name that already exists, so it is safe to run twice.
 -- Non-ASCII text is written as Unicode escapes (U&'...') so umlauts survive copy/paste into the SQL editor.
@@ -44,6 +44,7 @@ select v.* from (values
   ('Kurzhantel Y-Raise', 'Schultern', 'Kurzhantel', '2-1-2', 3, 12, 45, 'va0290', ARRAY['Leichtes Gewicht', 'Arme gestreckt', U&'Schulterbl\00E4tter nach unten']),
   (U&'Pike Liegest\00FCtze', 'Schultern', U&'K\00F6rpergewicht', '2-1-1', 3, 10, 60, 'va1172', ARRAY[U&'H\00FCfte nach oben', 'Kontrolliert absenken', U&'Explosiv dr\00FCcken']),
   (U&'Handstand Liegest\00FCtze', 'Schultern', U&'K\00F6rpergewicht', '2-1-1', 3, 5, 120, 'va0228', ARRAY[U&'K\00F6rper anspannen', 'Kontrolliert absenken', U&'Explosiv dr\00FCcken']),
+  ('Reverse Butterfly (Maschine)', 'Schultern', 'Maschine', '2-1-2', 3, 15, 45, 'va0099', ARRAY['Leicht gebeugte Ellenbogen', U&'Schulterbl\00E4tter zusammen', U&'Kontrolliert zur\00FCck']),
   ('Widerstandsband Pull-Apart', 'Schultern', 'Widerstandsband', '2-1-2', 3, 15, 30, 'va0186', ARRAY['Arme gestreckt', U&'Schulterbl\00E4tter zusammen', U&'Kontrolliert zur\00FCck']),
   ('Widerstandsband Seitheben', 'Schultern', 'Widerstandsband', '2-1-2', 3, 15, 45, 'va0285', ARRAY[U&'Bis Schulterh\00F6he heben', 'Kein Schwung', 'Kontrolliert absenken']),
   (U&'Widerstandsband Schulterdr\00FCcken', 'Schultern', 'Widerstandsband', '2-1-2', 3, 15, 45, 'va0185', ARRAY['Rumpf anspannen', U&'\00DCber Kopf strecken', 'Kontrolliert absenken']),
@@ -83,5 +84,5 @@ where not exists (select 1 from exercises e where e.name = v.name);
 
 commit;
 
--- Check: should print 70
+-- Check: should print 71
 select count(*) from exercises where exercise_id like 'va%';

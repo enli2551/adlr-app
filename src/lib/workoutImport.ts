@@ -1,4 +1,5 @@
 import { EXERCISE_EN } from '@/i18n/exercises';
+import { canonicalExercise } from '@/lib/exerciseAliases';
 
 // Import workout history from other tracking apps (CSV exports).
 //  • Hevy:   Profile → Settings → Export & Import Data → Export workouts (CSV)
@@ -181,7 +182,7 @@ export function parseWorkoutExport(text: string): ImportResult {
   const col = (...names: string[]) => names.map((n) => header.indexOf(n)).find((i) => i >= 0) ?? -1;
   const mapping = new Map<string, string | null>();
   const mapName = (n: string) => {
-    if (!mapping.has(n)) mapping.set(n, mapExerciseName(n));
+    if (!mapping.has(n)) { const m = mapExerciseName(n); mapping.set(n, m ? canonicalExercise(m) : null); }
     return mapping.get(n) ?? n;
   };
   const byKey = new Map<string, ImportedWorkout>();

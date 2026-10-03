@@ -846,6 +846,8 @@ export const EXERCISE_EN: Record<string, string> = {
   "Hocksprünge": "Tuck Jumps",
   "Medizinball Slam": "Medicine Ball Slam",
   "Medizinball": "Medicine Ball",
+  // Vital Animations exercises (2026-10-03)
+  "Reverse Butterfly (Maschine)": "Reverse Pec Deck (Machine)",
 };
 
 export const EXERCISE_HU: Record<string, string> = {
@@ -1691,4 +1693,6 @@ export const EXERCISE_HU: Record<string, string> = {
   "Hocksprünge": "Térdfelhúzásos ugrás",
   "Medizinball Slam": "Medicinlabda-csapás",
   "Medizinball": "Medicinlabda",
+  // Vital Animations exercises (2026-10-03)
+  "Reverse Butterfly (Maschine)": "Fordított pillangó (gép)",
 };

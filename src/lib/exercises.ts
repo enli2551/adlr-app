@@ -11,6 +11,8 @@ export interface ExerciseRow {
   default_rest_sec: number;
   exercise_id: string;
   cues: string[];
+  /** set on duplicate entries: name of the exercise to use instead (hidden from pickers) */
+  alias_of?: string | null;
 }
 
 export const MUSCLE_GROUPS = [
@@ -21,7 +23,7 @@ export const MUSCLE_GROUPS = [
 // it on every app cold-start was the main driver of Supabase egress, so we persist it
 // in localStorage and only hit the network once per device (until CACHE_VERSION bumps).
 // BUMP CACHE_VERSION whenever the exercises table changes (new exercises via migration).
-const CACHE_VERSION = 9;
+const CACHE_VERSION = 10;
 const CACHE_KEY = 'adlr_exercises_cache';
 const COLUMNS = 'id, name, muscle_group, equipment, tempo, default_sets, default_reps, default_rest_sec, exercise_id, cues';
 

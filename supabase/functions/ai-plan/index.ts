@@ -113,13 +113,14 @@ Deno.serve(async (req) => {
     // Library, history, records, style examples.
     const since = new Date(); since.setDate(since.getDate() - 70);
     const [lib, logs, prs, templates] = await Promise.all([
-      admin.from('exercises').select('name, muscle_group, equipment').order('muscle_group').order('name'),
+      admin.from('exercises').select('*').order('muscle_group').order('name'),
       admin.from('exercise_set_logs').select('exercise_name, weight_kg, reps, set_type, created_at')
         .eq('client_id', client_id).gte('created_at', since.toISOString()).order('created_at', { ascending: false }).limit(1500),
       admin.from('personal_records').select('exercise_name, weight_kg, reps').eq('client_id', client_id),
       admin.from('plans').select('id, name').eq('trainer_id', me.id).eq('is_template', true).order('created_at', { ascending: false }).limit(2),
     ]);
-    const libraryRows = (lib.data ?? []) as { name: string; muscle_group: string; equipment: string }[];
+    // duplicates carry alias_of (migration 20261003b) — never offer them to the model
+    const libraryRows = ((lib.data ?? []) as { name: string; muscle_group: string; equipment: string; alias_of?: string | null }[]).filter((e) => !e.alias_of);
     const library = libraryRows.map((e) => `${e.name} | ${e.muscle_group} | ${e.equipment}`).join('\n');
     const byLower = new Map(libraryRows.map((e) => [e.name.toLowerCase(), e.name]));
 

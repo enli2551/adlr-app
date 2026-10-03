@@ -5,6 +5,7 @@ import { fetchExercises, MUSCLE_GROUPS, type ExerciseRow } from '@/lib/exercises
 import { useAsyncData } from '@/lib/useAsyncData';
 import { t } from '@/lib/i18n';
 import { demoVideoFor } from '@/lib/demoVideos';
+import { EXERCISE_ALIASES } from '@/lib/exerciseAliases';
 
 interface Props {
   onAdd: (ex: ExerciseRow) => void;
@@ -23,6 +24,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
     if (!exercises) return [];
     const q = search.toLowerCase();
     return exercises.filter((s) => {
+      if (s.alias_of || EXERCISE_ALIASES[s.name]) return false; // duplicate entry — use the kept one
       const matchGroup = filter === 'Alle' || s.muscle_group === filter;
       const matchSearch = !q || s.name.toLowerCase().includes(q) || t(s.name).toLowerCase().includes(q);
       return matchGroup && matchSearch;

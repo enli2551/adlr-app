@@ -165,7 +165,7 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Plyo Liegestütze": '0222', // clap push-up
   "Preacher Curls": '0022', // preacher curl ez bar
   "Push-ups": '1192', // standard push up
-  "Reverse Fly": '0099', // rear delt fly (reverse pec deck)
+  "Reverse Fly": '0100', // rear delt cable fly
   "Rudern": '0188', // bent over barbell row
   "Rudern (Langhantel)": '0188', // bent over barbell row
   "Rumänisches Kreuzheben": '0247', // barbell romanian deadlift
@@ -267,6 +267,7 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Anfersen": '0212', // butt kick (new exercise)
   "Hocksprünge": '0221', // tuck jump (new exercise)
   "Medizinball Slam": '0217', // medicine ball slam (new exercise)
+  "Reverse Butterfly (Maschine)": '0099', // rear delt fly (reverse pec deck) (new exercise)
 };
 
 export const demoVideoFor = (name: string | undefined | null): string | null =>
