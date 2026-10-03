@@ -127,6 +127,7 @@ const ALIASES: Record<string, string> = {
   'sitzendes schulterdrücken': 'Langhantel Sitz Overhead Press', 'stirndrücken': 'Skull Crusher',
   'reverse fliegende': 'Reverse Fly', 'fliegende auf der schrägbank (kurzhantel)': 'Kurzhantel Schrägbank Fly',
   'iso laterales rudern von oben': 'Iso-Lateral High Row',
+  'schulterpresse kurzhantel': 'Kurzhantel Bank Sitz Drücken',
 };
 
 // Equipment in brackets — German Hevy names use these instead of the English ones.
