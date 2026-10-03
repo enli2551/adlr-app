@@ -16,14 +16,14 @@ export interface ExerciseRow {
 }
 
 export const MUSCLE_GROUPS = [
-  'Brust', 'Rücken', 'Beine', 'Schultern', 'Arme', 'Core', 'Po', 'Cardio', 'Nacken', 'Unterarme',
+  'Brust', 'Rücken', 'Beine', 'Schultern', 'Arme', 'Core', 'Po', 'Cardio', 'Mobilität', 'Nacken', 'Unterarme',
 ];
 
 // The exercise library is essentially static reference data (~439 rows). Re-fetching
 // it on every app cold-start was the main driver of Supabase egress, so we persist it
 // in localStorage and only hit the network once per device (until CACHE_VERSION bumps).
 // BUMP CACHE_VERSION whenever the exercises table changes (new exercises via migration).
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 11;
 const CACHE_KEY = 'adlr_exercises_cache';
 const COLUMNS = 'id, name, muscle_group, equipment, tempo, default_sets, default_reps, default_rest_sec, exercise_id, cues';
 
