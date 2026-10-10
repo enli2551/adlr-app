@@ -809,6 +809,10 @@ const dict: Record<string, string> = {
 
   // ── Plan editing, weekly recap, progress report ──
   "Dein Coach hat die Bearbeitung nicht freigegeben.": "Az edződ nem engedélyezte a terv szerkesztését.",
+  "Änderungen in den Plan übernehmen?": "Mentsük a változtatásokat a tervedbe?",
+  "Du hast in diesem Training Übungen oder Sätze geändert. Sollen sie auch beim nächsten Mal so im Plan stehen?": "Ebben az edzésben gyakorlatokat vagy sorozatokat módosítottál. A következő alkalommal is így szerepeljenek a tervben?",
+  "Ja, im Plan speichern": "Igen, mentés a tervbe",
+  "Nein, nur heute": "Nem, csak ma",
   "Speichern fehlgeschlagen. Bitte versuche es erneut.": "A mentés nem sikerült. Próbáld újra.",
   "Tag bearbeiten": "Nap szerkesztése",
   "Übung tauschen": "Gyakorlat cseréje",

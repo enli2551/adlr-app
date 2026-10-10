@@ -141,6 +141,11 @@ export default function PlanScreen() {
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
+  // Clients the coach allows to edit their plan get asked whether this session's changes
+  // (added/removed exercises or sets) should stay in the plan.
+  const [planSaveOffer, setPlanSaveOffer] = useState<{ dayId: string; exercises: Exercise[] } | null>(null);
+  const [planSaveBusy, setPlanSaveBusy] = useState(false);
+  const [planSaveError, setPlanSaveError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Saving takes a moment (notification + several requests); repeated taps on "Beenden" used to
   // store the same workout several times ("Training + Training + Training" with tripled sets).
@@ -784,6 +789,12 @@ export default function PlanScreen() {
       all: [...completions, doneComp],
     });
     setTimeout(() => setCelebrate(false), 2800);
+    const original = planExercises.current.get(day.id);
+    const shape = (xs: Exercise[] | undefined) => JSON.stringify((xs ?? []).map((e) => [e.name, e.sets ?? 1]));
+    if (profile.can_edit_plan && !day.is_free && original && shape(original) !== shape(day.exercises)) {
+      setPlanSaveError(null);
+      setPlanSaveOffer({ dayId: day.id, exercises: day.exercises });
+    }
     stopTraining();
     await load();
   };
@@ -1521,6 +1532,47 @@ export default function PlanScreen() {
           onClose={() => { markRecapSeen(); setRecapSeen(true); const i = recapOpen.startIdx; setRecapOpen(null); if (i !== null) startTraining(i); }}
           onStart={() => { markRecapSeen(); setRecapSeen(true); const i = recapOpen.startIdx; setRecapOpen(null); if (i !== null) startTraining(i); }}
         />
+      )}
+      {planSaveOffer && createPortal(
+        <div className="fixed inset-0 z-[85] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in">
+          <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }}>
+            <p className="text-base font-semibold text-white">{t('Änderungen in den Plan übernehmen?')}</p>
+            <p className="text-sm text-white/55 mt-1 mb-4">{t('Du hast in diesem Training Übungen oder Sätze geändert. Sollen sie auch beim nächsten Mal so im Plan stehen?')}</p>
+            {planSaveError && <p className="text-xs text-red-400 mb-3">{planSaveError}</p>}
+            <div className="flex gap-2">
+              <button
+                disabled={planSaveBusy}
+                onClick={async () => {
+                  setPlanSaveBusy(true);
+                  // same normalisation as the day editor: set count 1–20, per-set details trimmed to it
+                  const payload = planSaveOffer.exercises.map((e) => {
+                    const sets = Math.max(1, Math.min(20, Math.round(e.sets ?? 1)));
+                    const out: Exercise = { ...e, sets };
+                    if (out.set_details) out.set_details = out.set_details.slice(0, sets);
+                    return out;
+                  });
+                  const { error } = await supabase.rpc('client_update_plan_day', { p_day_id: planSaveOffer.dayId, p_exercises: payload });
+                  setPlanSaveBusy(false);
+                  if (error) {
+                    setPlanSaveError(/not_allowed/.test(error.message) ? t('Dein Coach hat die Bearbeitung nicht freigegeben.') : t('Speichern fehlgeschlagen. Bitte versuche es erneut.'));
+                    return;
+                  }
+                  haptic.success();
+                  setPlanSaveOffer(null);
+                  load();
+                }}
+                className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
+              >
+                {planSaveBusy ? '…' : t('Ja, im Plan speichern')}
+              </button>
+              <button onClick={() => setPlanSaveOffer(null)} className="adlr-tap flex-1 py-3 rounded-xl text-sm font-medium bg-white/5 border border-white/10 text-white/70">
+                {t('Nein, nur heute')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
       {editingDay && <ClientDayEditor day={editingDay} onClose={() => setEditingDay(null)} onSaved={() => { setEditingDay(null); load(); }} />}
       {confirm && createPortal(

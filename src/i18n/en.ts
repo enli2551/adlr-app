@@ -808,6 +808,10 @@ const dict: Record<string, string> = {
 
   // ── Plan editing, weekly recap, progress report ──
   "Dein Coach hat die Bearbeitung nicht freigegeben.": "Your coach hasn't enabled plan editing for you.",
+  "Änderungen in den Plan übernehmen?": "Save the changes to your plan?",
+  "Du hast in diesem Training Übungen oder Sätze geändert. Sollen sie auch beim nächsten Mal so im Plan stehen?": "You changed exercises or sets in this workout. Keep them in your plan for next time?",
+  "Ja, im Plan speichern": "Yes, save to plan",
+  "Nein, nur heute": "No, just today",
   "Speichern fehlgeschlagen. Bitte versuche es erneut.": "Saving failed. Please try again.",
   "Tag bearbeiten": "Edit day",
   "Übung tauschen": "Swap exercise",
