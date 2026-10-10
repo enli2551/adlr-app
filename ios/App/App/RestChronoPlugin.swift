@@ -1,7 +1,7 @@
 // iOS implementation of the "RestChrono" Capacitor plugin (see src/lib/restChrono.ts):
-// a Live Activity with a native countdown on the lock screen / Dynamic Island.
-// Same JS API as the Android plugin: start({ endTime, title, body, doneLabel }),
-// stop(), and the `restAction` event ({ action: 'done' | 'add_30s' }).
+// the lock-screen workout flow as a Live Activity (logic in RestTimerShared.swift → RestFlow).
+// Same JS API as the Android plugin: start({ endTime, steps, labels }), stop(), drain(),
+// setForeground({ value }) and the `restAction` event.
 import Foundation
 import Capacitor
 import ActivityKit
@@ -13,6 +13,8 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "drain", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setForeground", returnType: CAPPluginReturnPromise),
     ]
 
     private var observer: NSObjectProtocol?
@@ -28,34 +30,75 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
         if let observer = observer { NotificationCenter.default.removeObserver(observer) }
     }
 
+    private func number(_ value: JSValue?) -> Double {
+        if let d = value as? Double { return d }
+        if let i = value as? Int { return Double(i) }
+        if let n = value as? NSNumber { return n.doubleValue }
+        return 0
+    }
+
     @objc func start(_ call: CAPPluginCall) {
-        guard #available(iOS 16.2, *) else { call.resolve(); return }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { call.resolve(); return }
-        let endMs = call.getDouble("endTime") ?? Date().timeIntervalSince1970 * 1000
-        let state = RestTimerAttributes.ContentState(
-            endTime: Date(timeIntervalSince1970: endMs / 1000),
-            title: call.getString("title") ?? "Pause",
-            body: call.getString("body") ?? "",
-            doneLabel: call.getString("doneLabel") ?? "✓"
-        )
-        let content = ActivityContent(state: state, staleDate: state.endTime.addingTimeInterval(120))
+        let now = Date().timeIntervalSince1970 * 1000
+        let endTime = call.getDouble("endTime") ?? now
+        let rawSteps = call.getArray("steps") ?? []
+        let steps: [RestStep] = rawSteps.compactMap { item in
+            guard let o = item as? JSObject else { return nil }
+            return RestStep(
+                key: (o["key"] as? String) ?? "",
+                title: (o["title"] as? String) ?? "",
+                body: (o["body"] as? String) ?? "",
+                rest: number(o["rest"])
+            )
+        }
+        var labels: [String: String] = [:]
+        for (k, v) in call.getObject("labels") ?? [:] {
+            if let s = v as? String { labels[k] = s }
+        }
+        let phase = steps.isEmpty ? "done" : (endTime > now + 300 ? "rest" : "set")
+        let state = RestFlowState(phase: phase, endTime: endTime, steps: steps, labels: labels)
+        RestFlow.save(state)
+        guard #available(iOS 16.2, *) else {
+            RestFlow.scheduleAlert(state)
+            call.resolve()
+            return
+        }
         Task {
-            if let current = Activity<RestTimerAttributes>.activities.first {
-                await current.update(content)
-            } else {
-                _ = try? Activity.request(attributes: RestTimerAttributes(), content: content, pushType: nil)
-            }
+            await RestFlow.apply(state, allowCreate: true)
             call.resolve()
         }
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        guard #available(iOS 16.2, *) else { call.resolve(); return }
+        guard #available(iOS 16.2, *) else {
+            RestFlow.save(nil)
+            RestFlow.scheduleAlert(nil)
+            call.resolve()
+            return
+        }
         Task {
-            for activity in Activity<RestTimerAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
+            await RestFlow.end()
             call.resolve()
         }
+    }
+
+    @objc func drain(_ call: CAPPluginCall) {
+        var events = JSArray()
+        for e in RestFlow.takeEvents() {
+            var o: JSObject = ["type": e.type, "at": e.at]
+            if let key = e.key { o["key"] = key }
+            events.append(o)
+        }
+        let state = RestFlow.load()
+        call.resolve([
+            "events": events,
+            "phase": state?.phase ?? "none",
+            "endTime": state?.endTime ?? 0,
+        ])
+    }
+
+    @objc func setForeground(_ call: CAPPluginCall) {
+        RestFlow.foreground = call.getBool("value") ?? false
+        RestFlow.scheduleAlert(RestFlow.load())
+        call.resolve()
     }
 }

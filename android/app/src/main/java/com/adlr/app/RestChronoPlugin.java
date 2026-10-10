@@ -1,152 +1,83 @@
 package com.adlr.app;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.os.Build;
-
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
-
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
- * RestChrono — live countdown notification for rest between sets.
+ * RestChrono — JS bridge for the lock-screen workout flow (logic in {@link RestFlow}).
  *
- * Uses Android's native chronometer (setUsesChronometer + setChronometerCountDown +
- * setWhen(endTime)) so the MM:SS ticks down on the lock screen even while the app is
- * asleep — the system updates it, no foreground service required. Action buttons
- * (✓ Erledigt / +30s) are delivered back to JS via notifyListeners("restAction", ...),
- * reusing the same best-effort delivery path the existing rest-timer already relies on.
+ * start({ endTime, steps: [{ key, title, body, rest }], labels }) shows the rest countdown
+ * (Android chronometer, ticks without the app running) followed by the next set with ✓.
+ * Taps are stored natively; the "restAction" event only tells JS to call drain().
  */
 @CapacitorPlugin(name = "RestChrono")
 public class RestChronoPlugin extends Plugin {
-    // Own channel, separate from the JS-side "rest-timer" (IMPORTANCE_HIGH) channel used
-    // for the "Pause vorbei" alert. Android channel importance is fixed at first creation
-    // and can't be changed later, so sharing one id between a LOW-importance ongoing
-    // chronometer and a HIGH-importance alert silently downgrades whichever is created
-    // second — since this plugin loads before the JS app runs, it always created first.
-    private static final String CHANNEL_ID = "rest-timer-live";
-    private static final int NOTIF_ID = 8002;
-    static final String ACTION_DONE = "com.adlr.app.REST_DONE";
-    static final String ACTION_ADD30 = "com.adlr.app.REST_ADD30";
-
-    private BroadcastReceiver receiver;
 
     @Override
     public void load() {
-        createChannel();
-        receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context ctx, Intent intent) {
-                String a = intent.getAction();
-                JSObject data = new JSObject();
-                if (ACTION_DONE.equals(a)) {
-                    data.put("action", "done");
-                    notifyListeners("restAction", data);
-                } else if (ACTION_ADD30.equals(a)) {
-                    data.put("action", "add_30s");
-                    notifyListeners("restAction", data);
-                }
-            }
+        RestFlow.ensureChannels(getContext(), null);
+        RestFlow.listener = action -> {
+            JSObject data = new JSObject();
+            data.put("action", action);
+            notifyListeners("restAction", data);
         };
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(ACTION_DONE);
-        filter.addAction(ACTION_ADD30);
-        if (Build.VERSION.SDK_INT >= 33) {
-            getContext().registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            getContext().registerReceiver(receiver, filter);
-        }
     }
 
     @Override
     protected void handleOnDestroy() {
-        try {
-            if (receiver != null) getContext().unregisterReceiver(receiver);
-        } catch (Exception ignored) {
-        }
+        RestFlow.listener = null;
     }
 
-    private void createChannel() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
-                NotificationChannel ch = new NotificationChannel(
-                        CHANNEL_ID,
-                        getContext().getString(R.string.rest_channel_name),
-                        NotificationManager.IMPORTANCE_LOW);
-                ch.setDescription(getContext().getString(R.string.rest_channel_desc));
-                nm.createNotificationChannel(ch);
-            }
-        }
-    }
-
-    /** start({ endTime: epochMillis, title, body, ongoing }) */
     @PluginMethod
     public void start(PluginCall call) {
-        Long endTime = call.getLong("endTime");
-        if (endTime == null) endTime = System.currentTimeMillis();
-        String title = call.getString("title", "Pause läuft");
-        String body = call.getString("body", "");
-        String doneLabel = call.getString("doneLabel", "✓ Erledigt");
-        boolean ongoing = Boolean.TRUE.equals(call.getBoolean("ongoing", true));
-
-        PendingIntent donePi = actionIntent(ACTION_DONE, 1);
-        PendingIntent add30Pi = actionIntent(ACTION_ADD30, 2);
-
-        PendingIntent contentPi = null;
-        Intent launch = getContext().getPackageManager().getLaunchIntentForPackage(getContext().getPackageName());
-        if (launch != null) {
-            contentPi = PendingIntent.getActivity(getContext(), 0, launch, pendingFlags());
-        }
-
-        NotificationCompat.Builder b = new NotificationCompat.Builder(getContext(), CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setOngoing(ongoing)
-                .setOnlyAlertOnce(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setUsesChronometer(true)
-                .setWhen(endTime)
-                .addAction(0, doneLabel, donePi)
-                .addAction(0, "+30s", add30Pi);
-        if (contentPi != null) b.setContentIntent(contentPi);
-        if (Build.VERSION.SDK_INT >= 24) {
-            b.setChronometerCountDown(true);
-        }
-
         try {
-            NotificationManagerCompat.from(getContext()).notify(NOTIF_ID, b.build());
-        } catch (SecurityException ignored) {
-            // POST_NOTIFICATIONS not granted
+            JSONObject s = new JSONObject();
+            Long endTime = call.getLong("endTime");
+            s.put("endTime", endTime != null ? endTime : System.currentTimeMillis());
+            JSArray steps = call.getArray("steps");
+            s.put("steps", steps != null ? new JSONArray(steps.toString()) : new JSONArray());
+            JSObject labels = call.getObject("labels");
+            s.put("labels", labels != null ? new JSONObject(labels.toString()) : new JSONObject());
+            RestFlow.start(getContext(), s);
+            call.resolve();
+        } catch (JSONException e) {
+            call.reject("invalid options");
         }
-        call.resolve();
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
-        NotificationManagerCompat.from(getContext()).cancel(NOTIF_ID);
+        RestFlow.stop(getContext());
         call.resolve();
     }
 
-    private PendingIntent actionIntent(String action, int requestCode) {
-        Intent i = new Intent(action).setPackage(getContext().getPackageName());
-        return PendingIntent.getBroadcast(getContext(), requestCode, i, pendingFlags());
+    @PluginMethod
+    public void drain(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            ret.put("events", new JSArray(RestFlow.takeEvents(getContext()).toString()));
+        } catch (JSONException e) {
+            ret.put("events", new JSArray());
+        }
+        JSONObject s = RestFlow.load(getContext());
+        ret.put("phase", s != null ? s.optString("phase", "none") : "none");
+        ret.put("endTime", s != null ? s.optLong("endTime", 0) : 0);
+        call.resolve(ret);
     }
 
-    private int pendingFlags() {
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-        return flags;
+    @PluginMethod
+    public void setForeground(PluginCall call) {
+        boolean value = Boolean.TRUE.equals(call.getBoolean("value", false));
+        RestFlow.foreground = value;
+        if (value) RestFlow.cancelAlert(getContext());
+        call.resolve();
     }
 }

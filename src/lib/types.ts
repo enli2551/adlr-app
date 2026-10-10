@@ -115,6 +115,7 @@ export interface WorkoutCompletion {
   duration_sec?: number | null;
   gym?: string | null; // Studio the session was done in (machine weights differ per gym)
   title?: string | null; // name of a free workout (plan_day_id is null then)
+  exercise_notes?: Record<string, string> | null; // client's note per exercise for this session
 }
 
 export interface ProgressEntry {

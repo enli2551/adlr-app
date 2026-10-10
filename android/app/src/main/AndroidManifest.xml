@@ -21,6 +21,9 @@
             </intent-filter>
         </activity>
 
+        <!-- Lock-screen workout flow: ✓ / ±15s buttons and the end-of-rest alarm (RestFlow.java) -->
+        <receiver android:name=".RestFlowReceiver" android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

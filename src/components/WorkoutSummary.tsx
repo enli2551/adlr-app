@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Share2, Repeat } from 'lucide-react';
+import { Share2, Repeat, StickyNote } from 'lucide-react';
 import { useCoachName } from '@/lib/auth';
 import { drawShareCard, shareCanvas, fmtVolume } from '@/lib/shareCard';
 import { Trophy, X, Truck, TramFront, Ship, Bus, Tractor, Forklift, Caravan, Car, Piano, Refrigerator } from 'lucide-react';
@@ -198,6 +198,9 @@ function ExercisesCard({ summary }: { summary: SessionSummary }) {
               {ex.cardio ? (
                 <p className="text-xs text-white/45 mt-0.5">{ex.cardio.minutes} min{ex.cardio.km > 0 ? ` · ${fmtNum(ex.cardio.km)} km` : ''}</p>
               ) : ex.best && <p className="text-xs text-white/45 mt-0.5">{t('Bester Satz')}: {ex.best.weight_kg} kg × {ex.best.reps}</p>}
+              {summary.completion.exercise_notes?.[ex.name] && (
+                <p className="text-xs text-adlr-gold/70 mt-0.5 flex items-start gap-1"><StickyNote size={11} className="shrink-0 mt-0.5" /> {summary.completion.exercise_notes[ex.name]}</p>
+              )}
             </div>
           </div>
         ))}

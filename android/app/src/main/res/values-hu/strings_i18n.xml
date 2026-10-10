@@ -2,4 +2,5 @@
 <resources>
     <string name="rest_channel_name">Élő pihenő-visszaszámláló</string>
     <string name="rest_channel_desc">Futó visszaszámláló a sorozatok közötti pihenőhöz</string>
+    <string name="rest_alert_channel_name">Pihenő vége</string>
 </resources>

@@ -2,4 +2,5 @@
 <resources>
     <string name="rest_channel_name">Live-Pausen-Countdown</string>
     <string name="rest_channel_desc">Laufender Countdown-Timer für Pausen zwischen Sätzen</string>
+    <string name="rest_alert_channel_name">Pausen-Ende</string>
 </resources>
