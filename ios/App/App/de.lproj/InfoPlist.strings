@@ -2,5 +2,6 @@
 "NSCameraUsageDescription" = "ADLR verwendet die Kamera, um Fortschrittsfotos aufzunehmen.";
 "NSPhotoLibraryUsageDescription" = "ADLR benötigt Zugriff auf deine Fotos, um Fortschrittsfotos hochzuladen.";
 "NSPhotoLibraryAddUsageDescription" = "ADLR speichert Fortschrittsfotos in deiner Fotomediathek.";
-"NSHealthShareUsageDescription" = "ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls und gegessene Kalorien, damit du und dein Coach deinen Fortschritt sehen.";
+"NSHealthShareUsageDescription" = "ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls, gegessene Kalorien und Makronährstoffe (Eiweiß, Kohlenhydrate, Fett), damit du und dein Coach deinen Fortschritt sehen.";
 "NSHealthUpdateUsageDescription" = "ADLR schreibt keine Daten in Apple Health.";
+"NSMicrophoneUsageDescription" = "ADLR nutzt das Mikrofon für Sprach- und Videonachrichten an deine Klienten.";

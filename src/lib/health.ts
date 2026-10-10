@@ -7,6 +7,11 @@ import { localDateKey } from '@/lib/dates';
 // are requested — the Android manifest strips every other Health Connect permission
 // the plugin would declare, so the Play health-permission review stays minimal.
 export const HEALTH_TYPES: HealthDataType[] = ['steps', 'dietaryEnergyConsumed', 'sleep', 'weight', 'restingHeartRate'];
+// Macros (written by Yazio, MyFitnessPal, Cronometer …). Health Connect: same READ_NUTRITION
+// permission as kcal; Apple Health: three extra read types. Read via our plugin patch
+// (patches/@capgo+capacitor-health+*.patch).
+export const MACRO_TYPES: HealthDataType[] = ['dietaryProtein', 'dietaryCarbohydrates', 'dietaryFatTotal'];
+const MACROS_ASKED_KEY = 'adlr_health_macros_asked';
 
 const ENABLED_KEY = 'adlr_health_enabled';
 const LAST_SYNC_KEY = 'adlr_health_last_sync';
@@ -21,6 +26,9 @@ export interface HealthDay {
   sleep_min: number | null;
   weight_kg: number | null;
   resting_hr: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
 }
 
 export const healthPlatformName = () => (Capacitor.getPlatform() === 'ios' ? 'Apple Health' : 'Health Connect');
@@ -44,10 +52,18 @@ export async function healthAvailability(): Promise<{ available: boolean; reason
 
 /** Opens the native permission sheet; returns true if at least one type was granted. */
 export async function connectHealth(): Promise<boolean> {
-  const status = await Health.requestAuthorization({ read: HEALTH_TYPES, write: [] });
+  const status = await Health.requestAuthorization({ read: [...HEALTH_TYPES, ...MACRO_TYPES], write: [] });
+  try { localStorage.setItem(MACROS_ASKED_KEY, '1'); } catch { /* ignore */ }
   const ok = status.readAuthorized.length > 0;
   setEnabled(ok);
   return ok;
+}
+
+/** Already-connected users (before macros existed) get asked once for the three macro types. */
+export async function ensureMacroAccess(): Promise<void> {
+  if (!isHealthEnabled() || !Capacitor.isNativePlatform()) return;
+  try { if (localStorage.getItem(MACROS_ASKED_KEY) === '1') return; localStorage.setItem(MACROS_ASKED_KEY, '1'); } catch { return; }
+  try { await Health.requestAuthorization({ read: MACRO_TYPES, write: [] }); } catch { /* unsupported → no macros */ }
 }
 
 export function disconnectHealth() {
@@ -92,9 +108,12 @@ export async function syncHealth(clientId: string, force = false): Promise<boole
   const end = new Date();
   const start = new Date(); start.setDate(start.getDate() - (SYNC_DAYS - 1)); start.setHours(0, 0, 0, 0);
 
-  const [steps, kcal, sleep, weight, rhr] = await Promise.all([
+  const [steps, kcal, protein, carbs, fat, sleep, weight, rhr] = await Promise.all([
     dailySums('steps', start, end),
     dailySums('dietaryEnergyConsumed', start, end),
+    dailySums('dietaryProtein', start, end),
+    dailySums('dietaryCarbohydrates', start, end),
+    dailySums('dietaryFatTotal', start, end),
     samplesByDay('sleep', new Date(start.getTime() - 12 * 3600000), end),
     samplesByDay('weight', start, end),
     samplesByDay('restingHeartRate', start, end),
@@ -128,11 +147,17 @@ export async function syncHealth(clientId: string, force = false): Promise<boole
       sleep_min: sleepMin.has(k) ? Math.round(sleepMin.get(k)!) : null,
       weight_kg: weightByDay.has(k) ? Math.round(weightByDay.get(k)! * 10) / 10 : null,
       resting_hr: rhrByDay.has(k) ? Math.round(rhrByDay.get(k)!) : null,
+      protein_g: protein.has(k) ? Math.round(protein.get(k)!) : null,
+      carbs_g: carbs.has(k) ? Math.round(carbs.get(k)!) : null,
+      fat_g: fat.has(k) ? Math.round(fat.get(k)!) : null,
     };
-    if (row.steps != null || row.kcal_in != null || row.sleep_min != null || row.weight_kg != null || row.resting_hr != null) rows.push(row);
+    if (row.steps != null || row.kcal_in != null || row.sleep_min != null || row.weight_kg != null || row.resting_hr != null || row.protein_g != null) rows.push(row);
   }
   if (rows.length > 0) {
-    const { error } = await supabase.from('health_daily').upsert(rows.map((r) => ({ ...r, updated_at: new Date().toISOString() })), { onConflict: 'client_id,day' });
+    const stamp = new Date().toISOString();
+    let { error } = await supabase.from('health_daily').upsert(rows.map((r) => ({ ...r, updated_at: stamp })), { onConflict: 'client_id,day' });
+    // Macro columns not migrated yet — keep syncing the rest.
+    if (error) ({ error } = await supabase.from('health_daily').upsert(rows.map(({ protein_g: _p, carbs_g: _c, fat_g: _f, ...r }) => ({ ...r, updated_at: stamp })), { onConflict: 'client_id,day' }));
     if (error) return false;
   }
   try { localStorage.setItem(LAST_SYNC_KEY, String(Date.now())); } catch { /* ignore */ }

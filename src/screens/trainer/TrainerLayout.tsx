@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages, Sparkles } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useIncomingMessages } from '@/lib/chat';
-import Logo from '@/components/Logo';
+import BrandLogo from '@/components/BrandLogo';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import BrandingSettings from '@/components/BrandingSettings';
 
 const TABS = [
   { to: '/trainer', label: 'Übersicht', icon: LayoutDashboard, end: true },
@@ -78,7 +79,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
       <header className="sticky top-0 z-20 bg-adlr-black safe-top">
         <div className="flex items-center justify-between px-5 py-3">
           <button onClick={() => nav('/trainer')} className="flex items-center">
-            <Logo size={18} />
+            <BrandLogo size={18} />
           </button>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -94,7 +95,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                 {(profile?.first_name?.[0] ?? 'C').toUpperCase()}
               </button>
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-64 adlr-card p-3 z-40 adlr-fade-in" style={{ background: 'rgb(var(--adlr-anthracite))' }}>
+                <div className="absolute right-0 mt-2 w-72 max-h-[80vh] overflow-y-auto adlr-card p-3 z-40 adlr-fade-in" style={{ background: 'rgb(var(--adlr-anthracite))' }}>
                   <p className="text-xs font-medium uppercase tracking-wider text-white/50 mb-2 px-1">{t('Dein Name (für Klienten sichtbar)')}</p>
                   <div className="flex gap-1.5 mb-4">
                     <input
@@ -108,6 +109,11 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                       <button onClick={saveName} className="adlr-tap px-3 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <Sparkles size={15} className="text-adlr-gold" />
+                    <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Dein Branding')}</p>
+                  </div>
+                  <div className="mb-4"><BrandingSettings /></div>
                   <div className="flex items-center gap-2 mb-2 px-1">
                     <Palette size={15} className="text-adlr-gold" />
                     <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Erscheinungsbild')}</p>

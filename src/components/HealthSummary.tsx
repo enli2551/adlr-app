@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Footprints, Utensils, Moon, Scale, HeartPulse } from 'lucide-react';
+import { Footprints, Utensils, Moon, Scale, HeartPulse, Beef } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { localDateKey } from '@/lib/dates';
 import type { HealthDay } from '@/lib/health';
@@ -38,6 +38,7 @@ export default function HealthSummary({ clientId, refreshKey = 0, emptyText }: P
   const tiles = [
     { icon: Footprints, label: 'Schritte', value: (() => { const v = avg((r) => r.steps); return v != null ? fmtNum(v) : undefined; })() },
     { icon: Utensils, label: 'kcal gegessen', value: (() => { const v = avg((r) => r.kcal_in); return v != null ? fmtNum(v) : undefined; })() },
+    { icon: Beef, label: 'Makros (Eiweiß · KH · Fett)', value: (() => { const p = avg((r) => r.protein_g ?? null); if (p == null) return undefined; const c = avg((r) => r.carbs_g ?? null); const f = avg((r) => r.fat_g ?? null); return `${p} · ${c ?? '—'} · ${f ?? '—'} g`; })() },
     { icon: Moon, label: 'Schlaf', value: (() => { const m = avg((r) => r.sleep_min); return m != null ? fmtSleep(m) : undefined; })() },
     { icon: Scale, label: 'Gewicht · zuletzt', value: latestWeight != null ? `${fmtNum(latestWeight)} kg` : undefined },
     { icon: HeartPulse, label: 'Ruhepuls', value: avg((r) => r.resting_hr) != null ? `${avg((r) => r.resting_hr)} bpm` : undefined },

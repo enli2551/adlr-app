@@ -37,6 +37,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Coach voice/video replies to weekly check-ins (getUserMedia in the WebView) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Health Connect: READ-ONLY steps, nutrition (kcal, e.g. from YAZIO), sleep, weight, resting HR.
          The health plugin declares ~47 permissions; strip every one we do not use so the

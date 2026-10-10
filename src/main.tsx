@@ -3,11 +3,13 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { initTheme } from '@/lib/theme';
+import { initBrand } from '@/lib/branding';
 import { initLang, t } from '@/lib/i18n';
 import { initMonitoring, ErrorBoundary } from '@/lib/monitoring';
 
 initMonitoring();
 initTheme();
+initBrand();
 initLang();
 
 // Last-resort screen instead of a blank app if a render crashes (the error is reported).

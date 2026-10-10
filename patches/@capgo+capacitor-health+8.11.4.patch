@@ -1,0 +1,145 @@
+diff --git a/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthDataType.kt b/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthDataType.kt
+index 422fd74..08fdf6b 100644
+--- a/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthDataType.kt
++++ b/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthDataType.kt
+@@ -61,7 +61,11 @@ enum class HealthDataType(
+     // record, so Android rejects it as an unsupported data type (same
+     // precedent as exerciseTime / appleSleepingWristTemperature).
+     HYDRATION("dietaryWater", HydrationRecord::class, "liter"),
+-    DIETARY_ENERGY("dietaryEnergyConsumed", NutritionRecord::class, "kilocalorie");
++    DIETARY_ENERGY("dietaryEnergyConsumed", NutritionRecord::class, "kilocalorie"),
++    // ADLR patch: macros (same NutritionRecord / READ_NUTRITION permission as energy)
++    DIETARY_PROTEIN("dietaryProtein", NutritionRecord::class, "gram"),
++    DIETARY_CARBS("dietaryCarbohydrates", NutritionRecord::class, "gram"),
++    DIETARY_FAT("dietaryFatTotal", NutritionRecord::class, "gram");
+ 
+     val readPermission: String
+         get() = HealthPermission.getReadPermission(recordClass)
+diff --git a/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthManager.kt b/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthManager.kt
+index 19d5c53..bc54d7c 100644
+--- a/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthManager.kt
++++ b/node_modules/@capgo/capacitor-health/android/src/main/java/app/capgo/plugin/health/HealthManager.kt
+@@ -426,6 +426,17 @@ class HealthManager {
+             // records are skipped below, so counting FETCHED records against the
+             // limit could under-deliver; the shared sort/take(limit) at the end of
+             // readSamples still enforces the requested cap on emitted samples.
++            HealthDataType.DIETARY_PROTEIN, HealthDataType.DIETARY_CARBS, HealthDataType.DIETARY_FAT -> readRecords(client, NutritionRecord::class, startTime, endTime, 0) { record ->
++                val mass = when (dataType) {
++                    HealthDataType.DIETARY_PROTEIN -> record.protein
++                    HealthDataType.DIETARY_CARBS -> record.totalCarbohydrate
++                    else -> record.totalFat
++                }
++                if (mass != null) {
++                    val payload = createSamplePayload(dataType, record.startTime, record.endTime, mass.inGrams, record.metadata)
++                    samples.add(record.startTime to payload)
++                }
++            }
+             HealthDataType.DIETARY_ENERGY -> readRecords(client, NutritionRecord::class, startTime, endTime, 0) { record ->
+                 // NutritionRecord.energy is nullable — skip records without it.
+                 val energy = record.energy
+@@ -734,6 +745,8 @@ class HealthManager {
+                 )
+                 client.insertRecords(listOf(record))
+             }
++            HealthDataType.DIETARY_PROTEIN, HealthDataType.DIETARY_CARBS, HealthDataType.DIETARY_FAT ->
++                throw IllegalArgumentException("Writing ${dataType.identifier} is not supported")
+             HealthDataType.DIETARY_ENERGY -> {
+                 val record = NutritionRecord(
+                     startTime = startTime,
+@@ -842,7 +855,10 @@ private fun createSamplePayload(
+             HealthDataType.DISTANCE,
+             HealthDataType.CALORIES,
+             HealthDataType.HYDRATION,
+-            HealthDataType.DIETARY_ENERGY -> setOf("sum")
++            HealthDataType.DIETARY_ENERGY,
++            HealthDataType.DIETARY_PROTEIN,
++            HealthDataType.DIETARY_CARBS,
++            HealthDataType.DIETARY_FAT -> setOf("sum")
+             HealthDataType.HEART_RATE,
+             HealthDataType.WEIGHT,
+             HealthDataType.RESTING_HEART_RATE -> setOf("average", "min", "max")
+@@ -863,6 +879,9 @@ private fun createSamplePayload(
+         HealthDataType.RESTING_HEART_RATE -> setOf(RestingHeartRateRecord.BPM_AVG, RestingHeartRateRecord.BPM_MAX, RestingHeartRateRecord.BPM_MIN)
+         HealthDataType.HYDRATION -> setOf(HydrationRecord.VOLUME_TOTAL)
+         HealthDataType.DIETARY_ENERGY -> setOf(NutritionRecord.ENERGY_TOTAL)
++        HealthDataType.DIETARY_PROTEIN -> setOf(NutritionRecord.PROTEIN_TOTAL)
++        HealthDataType.DIETARY_CARBS -> setOf(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL)
++        HealthDataType.DIETARY_FAT -> setOf(NutritionRecord.TOTAL_FAT_TOTAL)
+         else -> throw IllegalArgumentException("Unsupported data type for aggregation: ${dataType.identifier}")
+     }
+ 
+@@ -891,6 +910,9 @@ private fun createSamplePayload(
+             }
+             HealthDataType.HYDRATION -> result[HydrationRecord.VOLUME_TOTAL]?.inLiters
+             HealthDataType.DIETARY_ENERGY -> result[NutritionRecord.ENERGY_TOTAL]?.inKilocalories
++            HealthDataType.DIETARY_PROTEIN -> result[NutritionRecord.PROTEIN_TOTAL]?.inGrams
++            HealthDataType.DIETARY_CARBS -> result[NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL]?.inGrams
++            HealthDataType.DIETARY_FAT -> result[NutritionRecord.TOTAL_FAT_TOTAL]?.inGrams
+             else -> null
+         }
+     }
+diff --git a/node_modules/@capgo/capacitor-health/dist/esm/definitions.d.ts b/node_modules/@capgo/capacitor-health/dist/esm/definitions.d.ts
+index 40a053d..a8c4dfd 100644
+--- a/node_modules/@capgo/capacitor-health/dist/esm/definitions.d.ts
++++ b/node_modules/@capgo/capacitor-health/dist/esm/definitions.d.ts
+@@ -1,4 +1,4 @@
+-export type HealthDataType = 'steps' | 'distance' | 'calories' | 'heartRate' | 'weight' | 'sleep' | 'respiratoryRate' | 'oxygenSaturation' | 'restingHeartRate' | 'heartRateVariability' | 'vo2Max' | 'bloodPressure' | 'bloodGlucose' | 'bodyTemperature' | 'height' | 'flightsClimbed' | 'exerciseTime' | 'distanceCycling' | 'bodyFat' | 'basalBodyTemperature' | 'appleSleepingWristTemperature' | 'basalCalories' | 'totalCalories' | 'mindfulness' | 'appleStandHour' | 'dietaryWater' | 'dietaryEnergyConsumed' | 'workouts';
++export type HealthDataType = 'steps' | 'distance' | 'calories' | 'heartRate' | 'weight' | 'sleep' | 'respiratoryRate' | 'oxygenSaturation' | 'restingHeartRate' | 'heartRateVariability' | 'vo2Max' | 'bloodPressure' | 'bloodGlucose' | 'bodyTemperature' | 'height' | 'flightsClimbed' | 'exerciseTime' | 'distanceCycling' | 'bodyFat' | 'basalBodyTemperature' | 'appleSleepingWristTemperature' | 'basalCalories' | 'totalCalories' | 'mindfulness' | 'appleStandHour' | 'dietaryWater' | 'dietaryEnergyConsumed' | 'dietaryProtein' | 'dietaryCarbohydrates' | 'dietaryFatTotal' | 'workouts';
+ export type HealthUnit = 'count' | 'meter' | 'kilocalorie' | 'bpm' | 'kilogram' | 'minute' | 'percent' | 'millisecond' | 'mL/min/kg' | 'mmHg' | 'mg/dL' | 'celsius' | 'fahrenheit' | 'centimeter' | 'liter';
+ export interface AuthorizationOptions {
+     /** Data types that should be readable after authorization. */
+diff --git a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
+index 49fd04f..59cd557 100644
+--- a/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
++++ b/node_modules/@capgo/capacitor-health/ios/Sources/HealthPlugin/Health.swift
+@@ -582,6 +582,10 @@ enum HealthDataType: String, CaseIterable {
+     case appleStandHour
+     case dietaryWater
+     case dietaryEnergyConsumed
++    // ADLR patch: macros
++    case dietaryProtein
++    case dietaryCarbohydrates
++    case dietaryFatTotal
+ 
+     func sampleType() throws -> HKSampleType {
+         switch self {
+@@ -663,6 +667,12 @@ enum HealthDataType: String, CaseIterable {
+             identifier = .dietaryWater
+         case .dietaryEnergyConsumed:
+             identifier = .dietaryEnergyConsumed
++        case .dietaryProtein:
++            identifier = .dietaryProtein
++        case .dietaryCarbohydrates:
++            identifier = .dietaryCarbohydrates
++        case .dietaryFatTotal:
++            identifier = .dietaryFatTotal
+         case .sleep:
+             throw HealthManagerError.invalidDataType("Sleep is a category type, not a quantity type")
+         case .bloodPressure:
+@@ -730,6 +740,8 @@ enum HealthDataType: String, CaseIterable {
+             return HKUnit.liter()
+         case .dietaryEnergyConsumed:
+             return HKUnit.kilocalorie()
++        case .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal:
++            return HKUnit.gram()
+         }
+     }
+ 
+@@ -781,6 +793,8 @@ enum HealthDataType: String, CaseIterable {
+             return "liter"
+         case .dietaryEnergyConsumed:
+             return "kilocalorie"
++        case .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal:
++            return "gram"
+         }
+     }
+ 
+@@ -1556,7 +1570,7 @@ final class Health {
+             let supportedAggregations: Set<String>
+             let defaultAggregation: String
+             switch dataType {
+-            case .steps, .distance, .calories, .dietaryWater, .dietaryEnergyConsumed:
++            case .steps, .distance, .calories, .dietaryWater, .dietaryEnergyConsumed, .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal:
+                 supportedAggregations = ["sum"]
+                 defaultAggregation = "sum"
+             case .heartRate, .weight, .restingHeartRate:

@@ -4,6 +4,8 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ADLR nutzt das Mikrofon für Sprach- und Videonachrichten an deine Klienten.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>ADLR verwendet die Kamera, um Fortschrittsfotos aufzunehmen.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -76,7 +78,7 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls und gegessene Kalorien, damit du und dein Coach deinen Fortschritt sehen.</string>
+	<string>ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls, gegessene Kalorien und Makronährstoffe (Eiweiß, Kohlenhydrate, Fett), damit du und dein Coach deinen Fortschritt sehen.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>ADLR schreibt keine Daten in Apple Health.</string>
 </dict>

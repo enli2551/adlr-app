@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { CalendarDays, Dumbbell, Apple, MessageSquare, User } from 'lucide-react';
 import { useAuth, useCoachName } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
-import Logo from '@/components/Logo';
+import BrandLogo from '@/components/BrandLogo';
 import { syncHealth } from '@/lib/health';
 import { useIncomingMessages } from '@/lib/chat';
 import { flushOutbox, outbox } from '@/lib/offline';
@@ -93,7 +93,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       <header className="sticky top-0 z-20 bg-adlr-black safe-top">
         <div className="flex items-center justify-between px-5 py-3">
           <button onClick={() => nav('/app')} className="flex items-center">
-            <Logo size={18} />
+            <BrandLogo size={18} />
           </button>
           <div className="flex items-center gap-3">
             <div className="text-right">

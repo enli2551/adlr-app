@@ -5,9 +5,10 @@ import type { Profile } from './types';
 import { t } from './i18n';
 import { cacheGet, cacheSet, isNetworkError } from './offline';
 import { setMonitoringUser } from './monitoring';
+import { applyBrand, cacheBrand } from './branding';
 
 /** The client's own coach (or, for a trainer, themselves) — shown instead of a hardcoded name. */
-export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null }
+export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null; brand_logo?: string | null; brand_color?: string | null }
 
 interface AuthContextValue {
   session: Session | null;
@@ -28,12 +29,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [coach, setCoach] = useState<CoachInfo | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => { setMonitoringUser(profile?.id ?? null, profile?.role); }, [profile?.id, profile?.role]);
+  // The coach's colour replaces ADLR gold everywhere; remembered for the next start.
+  useEffect(() => {
+    if (loading) return;
+    applyBrand(coach?.brand_color ?? null);
+    cacheBrand(coach ? { color: coach.brand_color ?? null, logo: coach.brand_logo ?? null } : null);
+  }, [coach?.brand_color, coach?.brand_logo, loading]);
 
   // Clients: their trainer's name/avatar (RLS lets a client read their own trainer's row).
   const loadCoach = async (p: Profile) => {
-    if (p.role === 'trainer') { setCoach({ id: p.id, first_name: p.first_name, last_name: p.last_name, avatar_url: p.avatar_url }); return; }
+    if (p.role === 'trainer') { setCoach({ id: p.id, first_name: p.first_name, last_name: p.last_name, avatar_url: p.avatar_url, brand_logo: p.brand_logo ?? null, brand_color: p.brand_color ?? null }); return; }
     if (!p.trainer_id) { setCoach(null); return; }
-    const { data, error } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url').eq('id', p.trainer_id).maybeSingle();
+    let { data, error } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url, brand_logo, brand_color').eq('id', p.trainer_id).maybeSingle();
+    // Branding columns not migrated yet.
+    if (error && !isNetworkError(error)) ({ data, error } = await supabase.from('profiles').select('id, first_name, last_name, avatar_url').eq('id', p.trainer_id).maybeSingle());
     if (error && isNetworkError(error)) { setCoach(cacheGet<CoachInfo>(p.id, 'coach')); return; }
     setCoach((data as CoachInfo | null) ?? null);
     if (data) cacheSet(p.id, 'coach', data);
@@ -48,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('profile load', error);
       return;
     }
-    if (data) { setProfile(data as Profile); cacheSet(uid, 'profile', data); loadCoach(data as Profile); return; }
+    if (data) { setProfile(data as Profile); cacheSet(uid, 'profile', data); await loadCoach(data as Profile); return; }
     // Profile row missing — create a minimal client profile so the app works.
     const { data: user } = await supabase.auth.getUser();
     const email = user?.user?.email ?? '';

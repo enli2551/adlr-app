@@ -51,13 +51,17 @@ Deno.serve(async (req) => {
     }
     const uid = userData.user.id;
 
-    // Remove the user's progress photos from storage (folder = <uid>/...).
-    try {
-      const { data: files } = await admin.storage.from('photos').list(uid);
-      if (files && files.length) {
-        await admin.storage.from('photos').remove(files.map((f) => `${uid}/${f.name}`));
-      }
-    } catch (_) { /* ignore storage errors */ }
+    // Remove the user's files from storage (folder = <uid>/...): progress + check-in photos,
+    // and the coach's voice/video replies to their check-ins. Paged — list() returns ≤ 1000.
+    for (const bucket of ['photos', 'feedback']) {
+      try {
+        for (let round = 0; round < 50; round++) {
+          const { data: files } = await admin.storage.from(bucket).list(uid, { limit: 1000 });
+          if (!files || files.length === 0) break;
+          await admin.storage.from(bucket).remove(files.map((f) => `${uid}/${f.name}`));
+        }
+      } catch (_) { /* ignore storage errors (e.g. bucket not created yet) */ }
+    }
 
     // Delete the user's data rows (service role bypasses RLS).
     for (const table of CLIENT_TABLES) {

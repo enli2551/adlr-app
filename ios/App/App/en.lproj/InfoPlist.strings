@@ -2,5 +2,6 @@
 "NSCameraUsageDescription" = "ADLR uses the camera to take progress photos.";
 "NSPhotoLibraryUsageDescription" = "ADLR needs access to your photos to upload progress photos.";
 "NSPhotoLibraryAddUsageDescription" = "ADLR saves progress photos to your photo library.";
-"NSHealthShareUsageDescription" = "ADLR reads steps, sleep, weight, resting heart rate and calories eaten so you and your coach can see your progress.";
+"NSHealthShareUsageDescription" = "ADLR reads steps, sleep, weight, resting heart rate, calories eaten and macronutrients (protein, carbs, fat) so you and your coach can see your progress.";
 "NSHealthUpdateUsageDescription" = "ADLR does not write any data to Apple Health.";
+"NSMicrophoneUsageDescription" = "ADLR uses the microphone for voice and video messages to your clients.";

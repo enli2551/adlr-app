@@ -21,7 +21,7 @@ const DAY = 86400000;
 // Protein guidance (g per kg body weight) by the client's primary goal.
 const PROTEIN_PER_KG: Record<string, number> = { 'Muskeln aufbauen': 2.0, 'Gewicht reduzieren': 1.8 };
 
-interface HealthRow { day: string; kcal_in: number | null }
+interface HealthRow { day: string; kcal_in: number | null; protein_g?: number | null; carbs_g?: number | null; fat_g?: number | null }
 
 export default function NutritionScreen() {
   const { profile } = useAuth();
@@ -53,7 +53,7 @@ export default function NutritionScreen() {
       supabase.from('nutrition_tips').select('*').eq('client_id', profile.id).maybeSingle(),
       supabase.from('hydration_logs').select('*').eq('client_id', profile.id).eq('log_date', today).maybeSingle(),
       supabase.from('progress_entries').select('*').eq('client_id', profile.id).order('logged_at', { ascending: false }).limit(1),
-      supabase.from('health_daily').select('day, kcal_in').eq('client_id', profile.id).gte('day', since),
+      supabase.from('health_daily').select('*').eq('client_id', profile.id).gte('day', since),
     ]);
     setTip(tipRes.data as NutritionTip | null);
     setHydration(hydRes.data as HydrationLog | null);
@@ -112,7 +112,8 @@ export default function NutritionScreen() {
   const glasses = hydration?.glasses ?? 0;
   const primaryGoal = profile?.intake?.goals?.[0] ?? null;
   const target = profile?.kcal_target ?? calcResult?.target ?? null;
-  const eatenToday = health.find((h) => h.day === today)?.kcal_in ?? null;
+  const todayRow = health.find((h) => h.day === today);
+  const eatenToday = todayRow?.kcal_in ?? null;
   const healthConnected = health.some((h) => h.kcal_in != null && h.kcal_in > 0);
   const proteinG = latestWeight ? Math.round((latestWeight * (PROTEIN_PER_KG[primaryGoal ?? ''] ?? 1.6)) / 5) * 5 : null;
 
@@ -162,8 +163,8 @@ export default function NutritionScreen() {
             {proteinG && (
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1"><Beef size={12} className="text-adlr-gold" /> {t('Protein-Ziel')}</p>
-                <p className="text-lg font-bold text-white">~{fmtNum(proteinG)} g</p>
-                <p className="text-xs text-white/45">{t('≈ {n} Portionen à 30 g', { n: Math.round(proteinG / 30) })}</p>
+                <p className="text-lg font-bold text-white">{todayRow?.protein_g != null ? <>{fmtNum(todayRow.protein_g)} <span className="text-sm font-medium text-white/45">/ ~{fmtNum(proteinG)} g</span></> : <>~{fmtNum(proteinG)} g</>}</p>
+                <p className="text-xs text-white/45">{todayRow?.protein_g != null ? t('KH {c} g · Fett {f} g heute', { c: todayRow.carbs_g != null ? fmtNum(todayRow.carbs_g) : '—', f: todayRow.fat_g != null ? fmtNum(todayRow.fat_g) : '—' }) : t('≈ {n} Portionen à 30 g', { n: Math.round(proteinG / 30) })}</p>
               </div>
             )}
           </div>

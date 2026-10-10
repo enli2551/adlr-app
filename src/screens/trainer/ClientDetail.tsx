@@ -165,7 +165,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         </span>
         <ChevronRight size={16} className="text-white/30" />
       </button>
-      <ClientCheckins clientId={client.id} />
+      <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
 
       {/* Package, sessions used, payments */}
       <ClientPackageCard clientId={clientId} />

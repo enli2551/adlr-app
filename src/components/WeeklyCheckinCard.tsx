@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ClipboardCheck, X, Check } from 'lucide-react';
+import { ClipboardCheck, X, Check, Camera, Loader2, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useCoachName } from '@/lib/auth';
+import { useAuth, useCoachName } from '@/lib/auth';
 import { t, fmtDate } from '@/lib/i18n';
 import { dueCheckinWeek, scheduleCheckinReminder, type WeeklyCheckin } from '@/lib/engagement';
+import { computeCheckinStats, type CheckinStats } from '@/lib/checkinStats';
+import { isHealthEnabled, syncHealth, ensureMacroAccess } from '@/lib/health';
+import { resizeImageToBlob } from '@/lib/image';
+import { isNetworkError } from '@/lib/offline';
+import CheckinStatsView from '@/components/CheckinStatsView';
+import FeedbackMedia from '@/components/FeedbackMedia';
 
 const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string; low: string; high: string }[] = [
   { key: 'energy', label: 'Energie', low: 'leer', high: 'voller Energie' },
@@ -13,19 +19,43 @@ const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string;
   { key: 'nutrition', label: 'Ernährung nach Plan', low: 'gar nicht', high: 'voll' },
 ];
 
+type Pose = 'front' | 'side' | 'back';
+const POSES: { key: Pose; label: string }[] = [
+  { key: 'front', label: 'Vorne' },
+  { key: 'side', label: 'Seite' },
+  { key: 'back', label: 'Hinten' },
+];
+
 type Form = { weight: string; energy: number | null; sleep: number | null; stress: number | null; nutrition: number | null; wins: string; struggles: string };
 
-/** Client Training screen: the weekly check-in (Fri–Mon), one minute, answered by the coach. */
+const REPLY_SEEN_KEY = 'adlr_checkin_reply_seen';
+
+/** Client Training screen: the weekly check-in (Fri–Mon) — the week's numbers are collected
+ *  automatically, the client adds how it felt + 3 photos; the coach answers (text/voice/video). */
 export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: string; lastWeight: number | null }) {
   const coach = useCoachName();
+  const { profile } = useAuth();
   const week = dueCheckinWeek();
   const [state, setState] = useState<'loading' | 'due' | 'done' | 'hidden'>('loading');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState<Form>({ weight: lastWeight ? String(lastWeight) : '', energy: null, sleep: null, stress: null, nutrition: null, wins: '', struggles: '' });
+  const [stats, setStats] = useState<CheckinStats | null>(null);
+  const [photos, setPhotos] = useState<Partial<Record<Pose, { file: File; preview: string }>>>({});
+  const [reply, setReply] = useState<WeeklyCheckin | null>(null);
+  const weightTouched = useRef(false);
 
   useEffect(() => {
+    // The coach's latest answer (text and/or voice/video) until the client has seen it.
+    const since = new Date(); since.setDate(since.getDate() - 21);
+    supabase.from('weekly_checkins').select('*').eq('client_id', clientId).not('replied_at', 'is', null)
+      .gte('replied_at', since.toISOString()).order('replied_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        let seen: string | null = null;
+        try { seen = localStorage.getItem(REPLY_SEEN_KEY); } catch { /* ignore */ }
+        if (data && (data as WeeklyCheckin).id !== seen) setReply(data as WeeklyCheckin);
+      });
     if (!week) { setState('hidden'); return; }
     supabase.from('weekly_checkins').select('id').eq('client_id', clientId).eq('week_start', week).maybeSingle()
       .then(({ data, error }) => {
@@ -35,17 +65,83 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
       });
   }, [clientId, week]);
 
-  if (state === 'loading' || state === 'hidden' || !week) return null;
-  if (state === 'done' && !open) return null;
+  // Opening the form: fresh health data first, then the automatic week summary.
+  useEffect(() => {
+    if (!open || !week || state !== 'due') return;
+    let active = true;
+    (async () => {
+      if (isHealthEnabled()) {
+        await ensureMacroAccess().catch(() => {});
+        await syncHealth(clientId, true).catch(() => false);
+      }
+      const s = await computeCheckinStats(clientId, week, profile?.kcal_target ?? null).catch(() => null);
+      if (!active || !s) return;
+      setStats(s);
+      if (s.weight_end != null && !weightTouched.current) setForm((f) => ({ ...f, weight: String(s.weight_end) }));
+    })();
+    return () => { active = false; };
+  }, [open, week, state]);
+
+  const dismissReply = () => {
+    if (reply) { try { localStorage.setItem(REPLY_SEEN_KEY, reply.id); } catch { /* ignore */ } }
+    setReply(null);
+  };
+
+  const replyCard = reply && (
+    <div className="adlr-card adlr-gold-border p-4 mb-4 adlr-fade-in">
+      <div className="flex items-start gap-3">
+        <MessageCircle size={18} className="text-adlr-gold shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">{t('Feedback von {coach} zu deinem Check-in', { coach })}</p>
+          <p className="text-[11px] text-white/40 mb-2">{t('Woche ab {date}', { date: fmtDate(reply.week_start, { day: 'numeric', month: 'long' }) })}</p>
+          {reply.reply_media_path && reply.reply_media_type && <div className="mb-2"><FeedbackMedia path={reply.reply_media_path} type={reply.reply_media_type} /></div>}
+          {reply.trainer_reply && <p className="text-sm text-white/80 whitespace-pre-line">{reply.trainer_reply}</p>}
+        </div>
+        <button onClick={dismissReply} aria-label={t('Schließen')} className="adlr-tap p-1 text-white/35 shrink-0"><X size={16} /></button>
+      </div>
+    </div>
+  );
+
+  if (state === 'loading' || state === 'hidden' || !week) return replyCard || null;
+  if (state === 'done' && !open) return replyCard || null;
+
+  const pickPhoto = (pose: Pose, file: File | undefined) => {
+    if (!file) return;
+    setPhotos((p) => {
+      if (p[pose]) URL.revokeObjectURL(p[pose]!.preview);
+      return { ...p, [pose]: { file, preview: URL.createObjectURL(file) } };
+    });
+  };
 
   const submit = async () => {
     setSaving(true); setErr(null);
     const weight = form.weight ? Number(form.weight.replace(',', '.')) : null;
-    const { error } = await supabase.from('weekly_checkins').upsert({
+    // Photos: downscaled, in the client's private folder; also listed under progress photos.
+    const paths: Partial<Record<Pose, string>> = {};
+    for (const { key } of POSES) {
+      const p = photos[key];
+      if (!p) continue;
+      const blob = await resizeImageToBlob(p.file);
+      const path = `${clientId}/checkin-${week}-${key}-${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error) {
+        setSaving(false);
+        setErr(isNetworkError(error) ? t('Keine Verbindung — bitte versuche es gleich nochmal.') : t('Foto konnte nicht hochgeladen werden.'));
+        return;
+      }
+      paths[key] = path;
+      await supabase.from('progress_photos').insert({ client_id: clientId, storage_path: path, label: t(POSES.find((x) => x.key === key)!.label) });
+    }
+    const base = {
       client_id: clientId, week_start: week, weight_kg: weight,
       energy: form.energy, sleep: form.sleep, stress: form.stress, nutrition: form.nutrition,
       wins: form.wins.trim() || null, struggles: form.struggles.trim() || null,
+    };
+    let { error } = await supabase.from('weekly_checkins').upsert({
+      ...base, stats, photo_front: paths.front ?? null, photo_side: paths.side ?? null, photo_back: paths.back ?? null,
     }, { onConflict: 'client_id,week_start' });
+    // New columns not migrated yet — keep the classic check-in working.
+    if (error && !isNetworkError(error)) ({ error } = await supabase.from('weekly_checkins').upsert(base, { onConflict: 'client_id,week_start' }));
     if (error) { setSaving(false); setErr(t('Konnte nicht gespeichert werden.')); return; }
     // Weight also lands in the progress chart.
     if (weight && weight !== lastWeight) await supabase.from('progress_entries').insert({ client_id: clientId, weight_kg: weight });
@@ -58,6 +154,7 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
 
   return (
     <>
+      {replyCard}
       {state === 'due' && (
         <button onClick={() => setOpen(true)} className="adlr-tap w-full adlr-card adlr-gold-border p-4 mb-4 flex items-center gap-3 text-left">
           <ClipboardCheck size={20} className="text-adlr-gold shrink-0" />
@@ -86,11 +183,35 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
               </div>
             ) : (
               <div className="space-y-5">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/40 mb-2">{t('Deine Woche — automatisch erfasst')}</p>
+                  {stats ? <CheckinStatsView stats={stats} /> : <div className="flex items-center gap-2 text-xs text-white/40"><Loader2 size={14} className="animate-spin" /> {t('Daten werden gesammelt …')}</div>}
+                  {stats && stats.health_days === 0 && (
+                    <p className="text-[11px] text-white/40 mt-2">{t('Tipp: Verbinde Apple Health / Health Connect im Profil — dann kommen Schritte, Kalorien und Makros automatisch dazu.')}</p>
+                  )}
+                </div>
                 <label className="block">
                   <span className="text-xs text-white/50">{t('Gewicht (kg)')}</span>
-                  <input inputMode="decimal" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                  <input inputMode="decimal" value={form.weight} onChange={(e) => { weightTouched.current = true; setForm({ ...form, weight: e.target.value }); }}
                     className="mt-1 w-full bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-white outline-none" placeholder="80,5" />
                 </label>
+                <div>
+                  <p className="text-sm text-white/80 mb-1">{t('Fotos')}</p>
+                  <p className="text-[11px] text-white/40 mb-2">{t('Gleiches Licht, gleiche Pose wie letzte Woche — nur du und {coach} sehen sie.', { coach })}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {POSES.map(({ key, label }) => (
+                      <label key={key} className="adlr-tap relative aspect-[3/4] rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1 cursor-pointer border border-dashed" style={{ borderColor: photos[key] ? 'transparent' : 'rgb(var(--text) / 0.18)', background: 'rgb(var(--text) / 0.03)' }}>
+                        {photos[key] ? (
+                          <img src={photos[key]!.preview} alt={t(label)} className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <Camera size={20} className="text-white/35" />
+                        )}
+                        <span className={`text-[11px] font-medium ${photos[key] ? 'absolute bottom-1 left-1 right-1 text-center rounded-md bg-black/60 text-white py-0.5' : 'text-white/50'}`}>{t(label)}</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(key, e.target.files?.[0])} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 {SCALES.map((s) => (
                   <div key={s.key}>
                     <p className="text-sm text-white/80 mb-2">{t(s.label)}</p>
