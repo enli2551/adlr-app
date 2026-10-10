@@ -64,7 +64,6 @@ export interface WeeklyCheckin {
   weight_kg: number | null; energy: number | null; sleep: number | null; stress: number | null; nutrition: number | null;
   wins: string | null; struggles: string | null; trainer_reply: string | null; replied_at: string | null; created_at: string;
   // check-in 2.0 (migration 20261011_checkin_branding_macros.sql)
-  photo_front?: string | null; photo_side?: string | null; photo_back?: string | null;
   stats?: import('@/lib/checkinStats').CheckinStats | null;
   reply_media_path?: string | null; reply_media_type?: 'audio' | 'video' | null;
 }

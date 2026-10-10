@@ -2,10 +2,7 @@
 -- Run in Supabase Dashboard → SQL Editor (safe to run twice). Until then the app keeps
 -- working: the new fields are simply not saved / shown.
 
--- ── 1. Weekly check-in: 3 photos, auto week summary, coach voice/video reply ────
-ALTER TABLE weekly_checkins ADD COLUMN IF NOT EXISTS photo_front text;   -- storage path in 'photos'
-ALTER TABLE weekly_checkins ADD COLUMN IF NOT EXISTS photo_side text;
-ALTER TABLE weekly_checkins ADD COLUMN IF NOT EXISTS photo_back text;
+-- ── 1. Weekly check-in: auto week summary, coach voice/video reply ─────────────
 -- Filled automatically when the client submits: trainings, minutes, volume, Ø steps,
 -- Ø kcal/protein/carbs/fat, Ø sleep, weight change … (see src/lib/checkinStats.ts)
 ALTER TABLE weekly_checkins ADD COLUMN IF NOT EXISTS stats jsonb;

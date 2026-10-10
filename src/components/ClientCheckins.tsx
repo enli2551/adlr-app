@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ClipboardCheck, Send, Mic, Square, Video, Trash2, X, Loader2, Pencil } from 'lucide-react';
+import { ClipboardCheck, Send, Mic, Square, Video, Trash2, Loader2, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useCoachName } from '@/lib/auth';
 import { t, fmtDate, fmtNum } from '@/lib/i18n';
@@ -8,7 +7,6 @@ import type { WeeklyCheckin } from '@/lib/engagement';
 import { computeCheckinStats, type CheckinStats } from '@/lib/checkinStats';
 import CheckinStatsView from '@/components/CheckinStatsView';
 import FeedbackMedia from '@/components/FeedbackMedia';
-import SignedPhoto from '@/components/SignedPhoto';
 
 const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string; invert?: boolean }[] = [
   { key: 'energy', label: 'Energie' },
@@ -17,12 +15,6 @@ const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string;
   { key: 'nutrition', label: 'Ernährung' },
 ];
 
-type Pose = 'front' | 'side' | 'back';
-const POSES: { key: Pose; col: 'photo_front' | 'photo_side' | 'photo_back'; label: string }[] = [
-  { key: 'front', col: 'photo_front', label: 'Vorne' },
-  { key: 'side', col: 'photo_side', label: 'Seite' },
-  { key: 'back', col: 'photo_back', label: 'Hinten' },
-];
 const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
 
 function tone(v: number | null, invert?: boolean): string {
@@ -151,12 +143,11 @@ function Composer({ checkin, clientId, onDone }: { checkin: WeeklyCheckin; clien
 }
 
 /** Trainer ClientDetail: the client's weekly check-ins, newest first — automatic week data,
- *  photos (compare with earlier weeks), and a reply as text, voice message or video. */
+ *  and a reply as text, voice message or video. */
 export default function ClientCheckins({ clientId, kcalTarget = null }: { clientId: string; kcalTarget?: number | null }) {
   const [rows, setRows] = useState<WeeklyCheckin[] | null>(null);
   const [computed, setComputed] = useState<Record<string, CheckinStats>>({});
   const [editing, setEditing] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<{ pose: Pose; idx: number } | null>(null);
 
   const load = async () => {
     const { data, error } = await supabase.from('weekly_checkins').select('*').eq('client_id', clientId).order('week_start', { ascending: false }).limit(12);
@@ -172,7 +163,6 @@ export default function ClientCheckins({ clientId, kcalTarget = null }: { client
   }, [rows]);
 
   if (!rows || rows.length === 0) return null;
-  const withPhoto = (pose: Pose) => rows.filter((r) => r[POSES.find((p) => p.key === pose)!.col]);
 
   return (
     <div className="adlr-card p-5 mb-4">
@@ -180,7 +170,6 @@ export default function ClientCheckins({ clientId, kcalTarget = null }: { client
       <div className="space-y-5">
         {rows.map((c, i) => {
           const stats = c.stats ?? computed[c.id];
-          const photos = POSES.filter((p) => c[p.col]);
           return (
             <div key={c.id} className={i > 0 ? 'pt-5 border-t border-white/5' : ''}>
               <div className="flex items-baseline justify-between mb-2">
@@ -196,16 +185,6 @@ export default function ClientCheckins({ clientId, kcalTarget = null }: { client
                   </div>
                 ))}
               </div>
-              {photos.length > 0 && (
-                <div className="grid grid-cols-3 gap-1.5 mb-2">
-                  {photos.map((p) => (
-                    <button key={p.key} onClick={() => setViewer({ pose: p.key, idx: withPhoto(p.key).findIndex((r) => r.id === c.id) })} className="adlr-tap relative aspect-[3/4] rounded-lg overflow-hidden" style={{ background: 'rgb(var(--text) / 0.04)' }}>
-                      <SignedPhoto path={c[p.col]!} alt={t(p.label)} />
-                      <span className="absolute bottom-1 left-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/60 text-white">{t(p.label)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {c.wins && <p className="text-xs text-white/70 mb-1"><span className="text-emerald-400">＋</span> {c.wins}</p>}
               {c.struggles && <p className="text-xs text-white/70 mb-1"><span className="text-red-400">－</span> {c.struggles}</p>}
               {(c.trainer_reply || c.reply_media_path) && editing !== c.id ? (
@@ -224,43 +203,6 @@ export default function ClientCheckins({ clientId, kcalTarget = null }: { client
           );
         })}
       </div>
-      {viewer && <PhotoCompare rows={withPhoto(viewer.pose)} pose={viewer.pose} startIdx={viewer.idx} onClose={() => setViewer(null)} />}
     </div>
-  );
-}
-
-/** Fullscreen: this week's photo next to an earlier one of the same pose. */
-function PhotoCompare({ rows, pose, startIdx, onClose }: { rows: WeeklyCheckin[]; pose: Pose; startIdx: number; onClose: () => void }) {
-  const col = POSES.find((p) => p.key === pose)!.col;
-  const [idx] = useState(Math.max(0, startIdx));
-  const [cmp, setCmp] = useState(Math.min(rows.length - 1, Math.max(0, startIdx) + 1));
-  const cur = rows[idx];
-  const other = rows[cmp];
-  const label = (r: WeeklyCheckin) => fmtDate(r.week_start, { day: 'numeric', month: 'short' });
-  return createPortal(
-    <div className="fixed inset-0 z-[80] bg-black/95 flex flex-col adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <div className="flex items-center justify-between px-4 py-3">
-        <p className="text-sm font-semibold text-white">{t(POSES.find((p) => p.key === pose)!.label)}</p>
-        <button onClick={onClose} aria-label={t('Schließen')} className="adlr-tap p-2 text-white/60"><X size={20} /></button>
-      </div>
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-1 px-1">
-        {[other !== cur ? other : null, cur].map((r, i) => (
-          <div key={i} className="relative min-h-0 rounded-lg overflow-hidden bg-white/5">
-            {r ? <SignedPhoto path={r[col]!} /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/30 p-4 text-center">{t('Noch kein früheres Foto')}</div>}
-            {r && <span className="absolute top-2 left-2 text-[11px] font-semibold px-2 py-0.5 rounded bg-black/60 text-white">{label(r)}</span>}
-          </div>
-        ))}
-      </div>
-      {rows.length > 2 && (
-        <div className="px-4 py-3 flex gap-1.5 overflow-x-auto">
-          <span className="text-xs text-white/45 self-center shrink-0 mr-1">{t('Vergleich mit')}</span>
-          {rows.map((r, i) => i === idx ? null : (
-            <button key={r.id} onClick={() => setCmp(i)} className="adlr-tap shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-              style={i === cmp ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(255 255 255 / 0.08)', color: 'rgb(255 255 255 / 0.7)' }}>{label(r)}</button>
-          ))}
-        </div>
-      )}
-    </div>,
-    document.body,
   );
 }
