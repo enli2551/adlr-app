@@ -534,6 +534,9 @@ export default function PlanScreen() {
   };
   // Session editing (free workout AND a started plan day): only this session changes, never the plan.
   const sessionDayId = activeDayIdx !== null ? days[activeDayIdx]?.id ?? null : null;
+  // The written plan is the default: only clients the coach unlocked (can_edit_plan) may change
+  // a plan day's exercises/sets mid-session. A free workout is always theirs to build.
+  const canEditSession = (d: PlanDay) => !!d.is_free || !!profile?.can_edit_plan;
   const isSessionDay = (d: PlanDay) => d.id === sessionDayId;
   const addFreeExercise = (row: ExerciseRow) => {
     const active = activeDayIdx !== null ? days[activeDayIdx] : undefined;
@@ -1413,7 +1416,7 @@ export default function PlanScreen() {
                                                 />
                                               </>
                                             )}
-                                            {isTraining && (
+                                            {isTraining && canEditSession(day) && (
                                               <button onClick={() => removeFreeSet(ex.name, setIdx)} className="adlr-tap ml-auto p-1 shrink-0 rounded-md text-white/30 hover:text-red-400" aria-label={t('Satz entfernen')}>
                                                 <X size={14} />
                                               </button>
@@ -1421,7 +1424,7 @@ export default function PlanScreen() {
                                           </div>
                                         );
                                       })}
-                                      {isTraining && (
+                                      {isTraining && canEditSession(day) && (
                                         <button onClick={() => addFreeSet(ex.name)} className="adlr-tap text-xs font-medium text-adlr-gold flex items-center gap-1 pt-1">
                                           <Plus size={13} /> {t('Satz hinzufügen')}
                                         </button>
@@ -1430,7 +1433,7 @@ export default function PlanScreen() {
                                   )}
                                 </div>
                               </div>
-                              {isTraining && (
+                              {isTraining && canEditSession(day) && (
                                 <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap shrink-0 ml-1 p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
                                   <Trash2 size={16} />
                                 </button>
@@ -1448,7 +1451,7 @@ export default function PlanScreen() {
                   ) : (
                     <p className="text-sm text-white/30 mb-4">{day.is_free ? t('Noch keine Übungen — füge deine erste hinzu.') : t('Keine Übungen hinterlegt.')}</p>
                   )}
-                  {isTrainingThisDay && (
+                  {isTrainingThisDay && canEditSession(day) && (
                     <button
                       onClick={() => setPickerOpen(true)}
                       className="adlr-tap w-full mb-4 py-3 rounded-xl text-sm font-medium border border-dashed text-adlr-gold flex items-center justify-center gap-1.5"
