@@ -77,6 +77,8 @@ function setsVary(arr: { weight_kg?: number; reps?: number }[]): boolean {
 interface PersistedTraining {
   dayId: string;
   freeDay?: PlanDay; // ad-hoc free workout (not part of the plan)
+  /** plan day edited during the session (exercises/sets added or removed) — the plan itself is untouched */
+  sessionExercises?: PlanDay['exercises'];
   checkedSets: string[];
   setInputs: Record<string, SetInput[]>;
   trainingStartAt: number;
@@ -173,15 +175,32 @@ export default function PlanScreen() {
   const [notifPermissionDenied, setNotifPermissionDenied] = useState(false);
   const [starterBusy, setStarterBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Exercises as stored in the plan — session edits are rolled back to these when the session ends.
+  const planExercises = useRef<Map<string, PlanDay['exercises']>>(new Map());
   const currentRestCtx = useRef<{ exerciseName: string; setNumber: number; totalSets: number; restSeconds: number; reps?: string } | null>(null);
   const notifPromptShown = useRef(false);
 
   // Restores a training that was active when the app got closed (initial load only).
   const applyPlanDays = (planDays: PlanDay[]) => {
+    planExercises.current = new Map(planDays.map((d) => [d.id, d.exercises]));
+    // A reload during a running session (e.g. back online) must not drop the session's
+    // added/removed exercises or the free workout.
+    if (activeDayIdx !== null) {
+      setDays((prev) => {
+        const active = prev[activeDayIdx];
+        if (!active) return planDays;
+        if (active.is_free) return [...planDays, active];
+        return planDays.map((d) => (d.id === active.id ? { ...d, exercises: active.exercises } : d));
+      });
+      return;
+    }
     // Resume a training session that was active when the app got closed/killed —
     // only on the initial load (activeDayIdx is still null at that point).
-    const persisted = activeDayIdx === null ? getPersistedActiveTraining() : null;
-    const loadedDays = persisted?.freeDay ? [...planDays, persisted.freeDay] : planDays;
+    const persisted = getPersistedActiveTraining();
+    let loadedDays = persisted?.freeDay ? [...planDays, persisted.freeDay] : planDays;
+    if (persisted?.sessionExercises) {
+      loadedDays = loadedDays.map((d) => (d.id === persisted.dayId ? { ...d, exercises: persisted.sessionExercises! } : d));
+    }
     setDays(loadedDays);
     if (activeDayIdx === null) {
       if (persisted) {
@@ -302,6 +321,7 @@ export default function PlanScreen() {
     persistActiveTraining({
       dayId: day.id,
       freeDay: day.is_free ? day : undefined,
+      sessionExercises: day.is_free ? undefined : day.exercises,
       checkedSets: Array.from(checkedSets),
       setInputs,
       trainingStartAt,
@@ -507,12 +527,15 @@ export default function PlanScreen() {
     setTrainingStartAt(Date.now());
     haptic.medium();
   };
+  // Session editing (free workout AND a started plan day): only this session changes, never the plan.
+  const sessionDayId = activeDayIdx !== null ? days[activeDayIdx]?.id ?? null : null;
+  const isSessionDay = (d: PlanDay) => d.id === sessionDayId;
   const addFreeExercise = (row: ExerciseRow) => {
-    const free = days.find((d) => d.is_free);
-    if (!free || free.exercises.some((e) => e.name === row.name)) return;
+    const active = activeDayIdx !== null ? days[activeDayIdx] : undefined;
+    if (!active || (active.exercises ?? []).some((e) => e.name === row.name)) return;
     const sets = row.default_sets || 3;
-    setDays((prev) => prev.map((d) => (d.is_free
-      ? { ...d, exercises: [...d.exercises, { name: row.name, sets, reps: row.default_reps || undefined, rest_sec: row.default_rest_sec || undefined }] }
+    setDays((prev) => prev.map((d) => (isSessionDay(d)
+      ? { ...d, exercises: [...(d.exercises ?? []), { name: row.name, sets, reps: row.default_reps || undefined, rest_sec: row.default_rest_sec || undefined }] }
       : d)));
     const lastLogs = getLastSessionLogs(row.name).logs;
     setSetInputs((prev) => ({
@@ -541,22 +564,22 @@ export default function PlanScreen() {
     return next;
   });
   const removeFreeExercise = (name: string) => {
-    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.filter((e) => e.name !== name) } : d)));
+    setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.filter((e) => e.name !== name) } : d)));
     setSetInputs((prev) => { const next = { ...prev }; delete next[name]; return next; });
     remapChecked(name, () => null);
     haptic.light();
   };
   const removeFreeSet = (name: string, idx: number) => {
-    const ex = days.find((d) => d.is_free)?.exercises.find((e) => e.name === name);
+    const ex = (activeDayIdx !== null ? days[activeDayIdx] : undefined)?.exercises.find((e) => e.name === name);
     if (!ex) return;
     if ((ex.sets ?? 1) <= 1) { removeFreeExercise(name); return; }
-    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
+    setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
     setSetInputs((prev) => ({ ...prev, [name]: (prev[name] ?? []).filter((_, i) => i !== idx) }));
     remapChecked(name, (i) => (i === idx ? null : i > idx ? i - 1 : i));
     haptic.light();
   };
   const addFreeSet = (name: string) => {
-    setDays((prev) => prev.map((d) => (d.is_free ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) + 1 } : e)) } : d)));
+    setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) + 1 } : e)) } : d)));
     setSetInputs((prev) => {
       const arr = [...(prev[name] ?? [])];
       const last = arr[arr.length - 1];
@@ -592,7 +615,7 @@ export default function PlanScreen() {
 
   const stopTraining = () => {
     setActiveDayIdx(null);
-    setDays((prev) => prev.filter((d) => !d.is_free));
+    setDays((prev) => prev.filter((d) => !d.is_free).map((d) => (planExercises.current.has(d.id) ? { ...d, exercises: planExercises.current.get(d.id)! } : d)));
     setCheckedSets(new Set());
     setSetInputs({});
     setTrainingStartAt(null);
@@ -627,9 +650,13 @@ export default function PlanScreen() {
     const completedAt = new Date().toISOString();
     // Collect the logged sets first — they're saved online, or queued when offline.
     const baseLogs: Array<{ client_id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null }> = [];
+    // Pre-filled values (last session / plan) are not proof a set was done: once any set is
+    // ticked, only ticked sets are saved; with nothing ticked, every filled-in set counts.
+    const onlyChecked = checkedSets.size > 0;
     for (const ex of day.exercises ?? []) {
       const inputs = setInputs[ex.name] ?? [];
       for (let i = 0; i < inputs.length; i++) {
+        if (onlyChecked && !checkedSets.has(setKey(ex.name, i))) continue;
         const w = inputs[i]?.weight ? Number(inputs[i].weight) : null;
         const r = inputs[i]?.reps ? Number(inputs[i].reps) : null;
         const dur = inputs[i]?.min ? Math.round(Number(inputs[i].min) * 60) : null;
@@ -1375,7 +1402,7 @@ export default function PlanScreen() {
                                                 />
                                               </>
                                             )}
-                                            {day.is_free && (
+                                            {isTraining && (
                                               <button onClick={() => removeFreeSet(ex.name, setIdx)} className="adlr-tap ml-auto p-1 shrink-0 rounded-md text-white/30 hover:text-red-400" aria-label={t('Satz entfernen')}>
                                                 <X size={14} />
                                               </button>
@@ -1383,7 +1410,7 @@ export default function PlanScreen() {
                                           </div>
                                         );
                                       })}
-                                      {day.is_free && (
+                                      {isTraining && (
                                         <button onClick={() => addFreeSet(ex.name)} className="adlr-tap text-xs font-medium text-adlr-gold flex items-center gap-1 pt-1">
                                           <Plus size={13} /> {t('Satz hinzufügen')}
                                         </button>
@@ -1392,7 +1419,7 @@ export default function PlanScreen() {
                                   )}
                                 </div>
                               </div>
-                              {day.is_free && isTraining && (
+                              {isTraining && (
                                 <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap shrink-0 ml-1 p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
                                   <Trash2 size={16} />
                                 </button>
@@ -1410,7 +1437,7 @@ export default function PlanScreen() {
                   ) : (
                     <p className="text-sm text-white/30 mb-4">{day.is_free ? t('Noch keine Übungen — füge deine erste hinzu.') : t('Keine Übungen hinterlegt.')}</p>
                   )}
-                  {day.is_free && isTrainingThisDay && (
+                  {isTrainingThisDay && (
                     <button
                       onClick={() => setPickerOpen(true)}
                       className="adlr-tap w-full mb-4 py-3 rounded-xl text-sm font-medium border border-dashed text-adlr-gold flex items-center justify-center gap-1.5"
@@ -1477,7 +1504,7 @@ export default function PlanScreen() {
             <div className="flex items-center justify-between py-4">
               <p className="text-lg font-semibold text-white">{t('Übung hinzufügen')}</p>
               <button onClick={() => setPickerOpen(false)} className="adlr-tap px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
-                {t('Fertig')}{(() => { const n = days.find((d) => d.is_free)?.exercises.length ?? 0; return n > 0 ? ` (${n})` : ''; })()}
+                {t('Fertig')}{(() => { const n = (activeDayIdx !== null ? days[activeDayIdx]?.exercises.length : 0) ?? 0; return n > 0 ? ` (${n})` : ''; })()}
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pb-4">
