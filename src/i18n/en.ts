@@ -1164,6 +1164,8 @@ const dict: Record<string, string> = {
   "Wirklich löschen? Nochmal tippen": "Really delete? Tap again",
   "Training löschen": "Delete workout",
   "Keine Verbindung — bitte versuche es gleich nochmal.": "No connection — please try again in a moment.",
+  // ── Macros without a weight-based target (2026-10-11) ──
+  "Eiweiß heute": "Protein today",
 };
 
 export default dict;

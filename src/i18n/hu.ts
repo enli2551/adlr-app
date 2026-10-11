@@ -1165,6 +1165,8 @@ const dict: Record<string, string> = {
   "Wirklich löschen? Nochmal tippen": "Biztosan törlöd? Koppints újra",
   "Training löschen": "Edzés törlése",
   "Keine Verbindung — bitte versuche es gleich nochmal.": "Nincs kapcsolat — próbáld újra egy kicsit később.",
+  // ── Macros without a weight-based target (2026-10-11) ──
+  "Eiweiß heute": "Fehérje ma",
 };
 
 export default dict;

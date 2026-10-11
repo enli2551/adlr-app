@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useIncomingMessages } from '@/lib/chat';
@@ -110,11 +110,6 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                     )}
                   </div>
                   <div className="flex items-center gap-2 mb-2 px-1">
-                    <Sparkles size={15} className="text-adlr-gold" />
-                    <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Dein Branding')}</p>
-                  </div>
-                  <div className="mb-4"><BrandingSettings /></div>
-                  <div className="flex items-center gap-2 mb-2 px-1">
                     <Palette size={15} className="text-adlr-gold" />
                     <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Erscheinungsbild')}</p>
                   </div>
@@ -124,6 +119,8 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                     <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Sprache')}</p>
                   </div>
                   <LanguageSwitcher />
+                  {/* Branding last and collapsed: it changes every client's app */}
+                  <div className="mt-4 pt-3 border-t border-white/10"><BrandingSettings /></div>
                   <button
                     onClick={async () => { setMenuOpen(false); await signOut(); nav('/trainer-auth', { replace: true }); }}
                     className="adlr-tap w-full flex items-center gap-2 mt-3 pt-3 border-t border-white/10 text-sm text-white/60 hover:text-white/90 px-1"

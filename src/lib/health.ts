@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { Health, type HealthDataType } from '@capgo/capacitor-health';
 import { supabase } from '@/lib/supabase';
 import { localDateKey } from '@/lib/dates';
+import { captureError } from '@/lib/monitoring';
 
 // Read-only health integration (Apple Health / Health Connect). Only these five types
 // are requested — the Android manifest strips every other Health Connect permission
@@ -60,10 +61,12 @@ export async function connectHealth(): Promise<boolean> {
 }
 
 /** Already-connected users (before macros existed) get asked once for the three macro types. */
-export async function ensureMacroAccess(): Promise<void> {
-  if (!isHealthEnabled() || !Capacitor.isNativePlatform()) return;
-  try { if (localStorage.getItem(MACROS_ASKED_KEY) === '1') return; localStorage.setItem(MACROS_ASKED_KEY, '1'); } catch { return; }
+/** Returns true when it just asked (→ sync right away, past the throttle). */
+export async function ensureMacroAccess(): Promise<boolean> {
+  if (!isHealthEnabled() || !Capacitor.isNativePlatform()) return false;
+  try { if (localStorage.getItem(MACROS_ASKED_KEY) === '1') return false; localStorage.setItem(MACROS_ASKED_KEY, '1'); } catch { return false; }
   try { await Health.requestAuthorization({ read: MACRO_TYPES, write: [] }); } catch { /* unsupported → no macros */ }
+  return true;
 }
 
 export function disconnectHealth() {
@@ -100,9 +103,12 @@ async function samplesByDay(dataType: HealthDataType, start: Date, end: Date) {
  */
 export async function syncHealth(clientId: string, force = false): Promise<boolean> {
   if (!isHealthEnabled() || !Capacitor.isNativePlatform()) return false;
+  // Connected before macros existed: ask once for protein/carbs/fat on the next app open
+  // (it used to happen only when the weekly check-in was opened — macros never arrived).
+  const firstMacroSync = await ensureMacroAccess();
   try {
     const last = Number(localStorage.getItem(LAST_SYNC_KEY) ?? 0);
-    if (!force && Date.now() - last < MIN_SYNC_GAP_MS) return false;
+    if (!force && !firstMacroSync && Date.now() - last < MIN_SYNC_GAP_MS) return false;
   } catch { /* ignore */ }
 
   const end = new Date();
@@ -157,6 +163,10 @@ export async function syncHealth(clientId: string, force = false): Promise<boole
     const stamp = new Date().toISOString();
     let { error } = await supabase.from('health_daily').upsert(rows.map((r) => ({ ...r, updated_at: stamp })), { onConflict: 'client_id,day' });
     // Macro columns not migrated yet — keep syncing the rest.
+    if (error) {
+      try { localStorage.setItem('adlr_health_macro_error', error.message); } catch { /* ignore */ }
+      captureError(error, { where: 'syncHealth macros' });
+    }
     if (error) ({ error } = await supabase.from('health_daily').upsert(rows.map(({ protein_g: _p, carbs_g: _c, fat_g: _f, ...r }) => ({ ...r, updated_at: stamp })), { onConflict: 'client_id,day' }));
     if (error) return false;
   }

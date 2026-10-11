@@ -160,11 +160,13 @@ export default function NutritionScreen() {
               )}
               {!target && <p className="text-xs text-white/45">{t('Dein Coach legt dein Ziel fest — oder berechne es unten.')}</p>}
             </div>
-            {proteinG && (
+            {(proteinG || todayRow?.protein_g != null) && (
               <div>
-                <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1"><Beef size={12} className="text-adlr-gold" /> {t('Protein-Ziel')}</p>
-                <p className="text-lg font-bold text-white">{todayRow?.protein_g != null ? <>{fmtNum(todayRow.protein_g)} <span className="text-sm font-medium text-white/45">/ ~{fmtNum(proteinG)} g</span></> : <>~{fmtNum(proteinG)} g</>}</p>
-                <p className="text-xs text-white/45">{todayRow?.protein_g != null ? t('KH {c} g · Fett {f} g heute', { c: todayRow.carbs_g != null ? fmtNum(todayRow.carbs_g) : '—', f: todayRow.fat_g != null ? fmtNum(todayRow.fat_g) : '—' }) : t('≈ {n} Portionen à 30 g', { n: Math.round(proteinG / 30) })}</p>
+                <p className="text-[11px] uppercase tracking-wider text-white/40 flex items-center gap-1"><Beef size={12} className="text-adlr-gold" /> {t(proteinG ? 'Protein-Ziel' : 'Eiweiß heute')}</p>
+                <p className="text-lg font-bold text-white">
+                  {todayRow?.protein_g != null ? <>{fmtNum(todayRow.protein_g)} g{proteinG ? <span className="text-sm font-medium text-white/45"> / ~{fmtNum(proteinG)} g</span> : null}</> : <>~{fmtNum(proteinG!)} g</>}
+                </p>
+                <p className="text-xs text-white/45">{todayRow?.protein_g != null ? t('KH {c} g · Fett {f} g heute', { c: todayRow.carbs_g != null ? fmtNum(todayRow.carbs_g) : '—', f: todayRow.fat_g != null ? fmtNum(todayRow.fat_g) : '—' }) : t('≈ {n} Portionen à 30 g', { n: Math.round(proteinG! / 30) })}</p>
               </div>
             )}
           </div>
