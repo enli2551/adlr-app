@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Share2, Repeat, StickyNote } from 'lucide-react';
+import { Share2, Repeat, StickyNote, Pencil } from 'lucide-react';
 import { useCoachName } from '@/lib/auth';
 import { drawShareCard, shareCanvas, fmtVolume } from '@/lib/shareCard';
 import { Trophy, X, Truck, TramFront, Ship, Bus, Tractor, Forklift, Caravan, Car, Piano, Refrigerator } from 'lucide-react';
@@ -20,13 +20,14 @@ interface Props {
   milestoneMsg?: string | null;
   onClose: () => void;
   onRepeat?: () => void; // history: start this session again as a free workout
+  onEdit?: () => void; // history: edit / delete this workout
 }
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const CARD_STYLE = { background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' };
 
 // Full-screen, swipeable post-workout recap (also opened from the Trainings-Historie).
-export default function WorkoutSummary({ summary, allCompletions, mode, newPRs = [], milestoneMsg, onClose, onRepeat }: Props) {
+export default function WorkoutSummary({ summary, allCompletions, mode, newPRs = [], milestoneMsg, onClose, onRepeat, onEdit }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const when = new Date(summary.completion.completed_at);
@@ -79,6 +80,11 @@ export default function WorkoutSummary({ summary, allCompletions, mode, newPRs =
     <div className="fixed inset-0 z-[60] flex flex-col adlr-fade-in" style={{ background: 'rgb(var(--adlr-black))' }}>
       <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="relative px-5 pt-6 pb-4 text-center">
+          {mode === 'history' && onEdit && (
+            <button onClick={onEdit} aria-label={t('Training bearbeiten')} className="adlr-tap absolute left-4 top-5 p-2 rounded-full bg-white/5 text-white/60">
+              <Pencil size={17} />
+            </button>
+          )}
           {mode === 'history' && (
             <button onClick={onClose} aria-label={t('Schließen')} className="adlr-tap absolute right-4 top-5 p-2 rounded-full bg-white/5 text-white/60">
               <X size={18} />

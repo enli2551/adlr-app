@@ -52,9 +52,10 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activePlan, setActivePlan] = useState<ClientPlan | null>(null);
 
-  const load = async () => {
+  // quiet = refresh in place (after editing a workout) — no spinner, the page keeps its open sections
+  const load = async (quiet = false) => {
     if (!profile) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     const [c, e, p, ph, wc, cp, pl, sl] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', clientId).maybeSingle(),
       supabase.from('progress_entries').select('*').eq('client_id', clientId).order('logged_at', { ascending: true }),
@@ -249,7 +250,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
 
       {/* Workout history */}
       <Card className="mb-4">
-        <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf} limit={10} collapsible />
+        <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf} limit={10} collapsible onChanged={() => load(true)} />
       </Card>
 
       {/* PRs */}

@@ -23,25 +23,24 @@ export default function HistoryScreen() {
   const [dayNameById, setDayNameById] = useState<Map<string, string>>(new Map());
   const { data: library } = useAsyncData(fetchExercises, []);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!profile) return;
-    (async () => {
-      const [wc, sl] = await Promise.all([
-        supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false }),
-        fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
-      ]);
-      const comps = (wc.data ?? []) as WorkoutCompletion[];
-      // Names come from the plan day each session was done from (also older plans).
-      const dayIds = [...new Set(comps.map((c) => c.plan_day_id).filter((x): x is string => !!x))];
-      if (dayIds.length > 0) {
-        const { data: pd } = await supabase.from('plan_days').select('id, workout_name').in('id', dayIds);
-        setDayNameById(new Map((pd ?? []).map((d: { id: string; workout_name: string | null }) => [d.id, d.workout_name ?? 'Training'])));
-      }
-      setCompletions(comps);
-      setSetLogs((sl.data ?? []) as ExerciseSetLog[]);
-      setLoading(false);
-    })();
+    const [wc, sl] = await Promise.all([
+      supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false }),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
+    ]);
+    const comps = (wc.data ?? []) as WorkoutCompletion[];
+    // Names come from the plan day each session was done from (also older plans).
+    const dayIds = [...new Set(comps.map((c) => c.plan_day_id).filter((x): x is string => !!x))];
+    if (dayIds.length > 0) {
+      const { data: pd } = await supabase.from('plan_days').select('id, workout_name').in('id', dayIds);
+      setDayNameById(new Map((pd ?? []).map((d: { id: string; workout_name: string | null }) => [d.id, d.workout_name ?? 'Training'])));
+    }
+    setCompletions(comps);
+    setSetLogs((sl.data ?? []) as ExerciseSetLog[]);
+    setLoading(false);
   }, [profile?.id]);
+  useEffect(() => { load(); }, [load]);
 
   const muscleByName = useMemo(() => new Map((library ?? []).map((e) => [e.name, e.muscle_group])), [library]);
   const muscleOf = useCallback((n: string) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige', [muscleByName]);
@@ -54,7 +53,7 @@ export default function HistoryScreen() {
       <SectionHeader title={t('Verlauf')} subtitle={t(completions.length === 1 ? '{n} Training insgesamt' : '{n} Trainings insgesamt', { n: completions.length })} />
       {loading ? <Loading /> : (
         <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf}
-          onRepeat={(s) => { requestRepeat(s.name, s.exercises); nav('/app'); }} />
+          onRepeat={(s) => { requestRepeat(s.name, s.exercises); nav('/app'); }} onChanged={load} />
       )}
     </div>
   );

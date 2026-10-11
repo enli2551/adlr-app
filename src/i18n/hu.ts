@@ -1153,6 +1153,18 @@ const dict: Record<string, string> = {
   "Makros (Eiweiß · KH · Fett)": "Makrók (fehérje · szénhidrát · zsír)",
   "KH {c} g · Fett {f} g heute": "Ma: szénhidrát {c} g · zsír {f} g",
   "Dein Branding": "Saját arculat",
+  // ── Edit / delete saved workouts (2026-10-11) ──
+  "Bitte gib ein gültiges Datum ein.": "Adj meg egy érvényes dátumot.",
+  "Das Datum liegt in der Zukunft.": "A dátum a jövőben van.",
+  "Speichern fehlgeschlagen ({msg}).": "A mentés nem sikerült ({msg}).",
+  "Löschen fehlgeschlagen ({msg}).": "A törlés nem sikerült ({msg}).",
+  "Training bearbeiten": "Edzés szerkesztése",
+  "Dieses Training wird noch hochgeladen. Bearbeiten geht, sobald du wieder online bist.": "Ez az edzés még feltöltésre vár. Amint újra online vagy, szerkesztheted.",
+  "Name": "Név",
+  "Datum & Uhrzeit": "Dátum és idő",
+  "Wirklich löschen? Nochmal tippen": "Biztosan törlöd? Koppints újra",
+  "Training löschen": "Edzés törlése",
+  "Keine Verbindung — bitte versuche es gleich nochmal.": "Nincs kapcsolat — próbáld újra egy kicsit később.",
 };
 
 export default dict;

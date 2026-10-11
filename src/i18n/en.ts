@@ -1152,6 +1152,18 @@ const dict: Record<string, string> = {
   "Makros (Eiweiß · KH · Fett)": "Macros (protein · carbs · fat)",
   "KH {c} g · Fett {f} g heute": "Carbs {c} g · fat {f} g today",
   "Dein Branding": "Your branding",
+  // ── Edit / delete saved workouts (2026-10-11) ──
+  "Bitte gib ein gültiges Datum ein.": "Please enter a valid date.",
+  "Das Datum liegt in der Zukunft.": "The date is in the future.",
+  "Speichern fehlgeschlagen ({msg}).": "Saving failed ({msg}).",
+  "Löschen fehlgeschlagen ({msg}).": "Deleting failed ({msg}).",
+  "Training bearbeiten": "Edit workout",
+  "Dieses Training wird noch hochgeladen. Bearbeiten geht, sobald du wieder online bist.": "This workout is still being uploaded. You can edit it once you are back online.",
+  "Name": "Name",
+  "Datum & Uhrzeit": "Date & time",
+  "Wirklich löschen? Nochmal tippen": "Really delete? Tap again",
+  "Training löschen": "Delete workout",
+  "Keine Verbindung — bitte versuche es gleich nochmal.": "No connection — please try again in a moment.",
 };
 
 export default dict;

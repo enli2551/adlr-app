@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAll } from '@/lib/fetchAll';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, CollapsibleCard, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut, Pencil } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -22,6 +22,7 @@ import { LANGS, useLang } from '@/lib/i18n';
 import { JoinCoachSheet } from '@/components/CoachLink';
 import { requestRepeat } from '@/lib/repeatWorkout';
 import { guessMuscle } from '@/lib/muscleGuess';
+import WorkoutEditor from '@/components/WorkoutEditor';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -62,6 +63,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [calMonth, setCalMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutCompletion | null>(null);
   const { data: lib } = useAsyncData(fetchExercises, []);
   const libMap = useMemo(() => lib ? new Map(lib.map((e) => [e.name, e])) : null, [lib]);
 
@@ -109,6 +111,7 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+  const workoutNameOf = (c: WorkoutCompletion) => (c.plan_day_id && planDays.find((d) => d.id === c.plan_day_id)?.workout_name) || c.title || 'Training';
 
   // ---- Week helpers ----
   // Plans are a flexible rotation ("Trainingstag N"), NOT bound to weekdays: the plan
@@ -549,6 +552,15 @@ export default function ProfileScreen() {
       {/* Day detail modal */}
       {/* Portaled: inside the animated route container a fixed overlay is positioned
           relative to that transform instead of the viewport (opens in the wrong place). */}
+      {editingWorkout && (
+        <WorkoutEditor
+          completion={editingWorkout}
+          logs={setLogs.filter((l) => l.workout_completion_id === editingWorkout.id)}
+          name={workoutNameOf(editingWorkout)}
+          onClose={() => setEditingWorkout(null)}
+          onChanged={() => { setEditingWorkout(null); setSelectedDay(null); load(); }}
+        />
+      )}
       {selectedDay && selectedDayInfo && createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedDay(null)}>
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto adlr-card rounded-t-2xl sm:rounded-2xl p-5 adlr-fade-in" onClick={(e) => e.stopPropagation()}>
@@ -628,6 +640,17 @@ export default function ProfileScreen() {
                 <Repeat size={16} /> {t('Nochmal trainieren')}
               </button>
             )}
+
+            {/* Edit / delete each workout of this day */}
+            {completions.filter((c) => localDateKey(c.completed_at) === selectedDay).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setEditingWorkout(c)}
+                className="adlr-tap w-full mb-2 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white/75"
+              >
+                <Pencil size={14} /> {t('Bearbeiten')}: {t(workoutNameOf(c))}
+              </button>
+            ))}
 
             {/* Check-in for this day */}
             {selectedDayCheckin && (

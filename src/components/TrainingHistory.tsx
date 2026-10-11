@@ -4,6 +4,7 @@ import type { WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { summarizeSession, logsByCompletion, fmtKg, type SessionSummary } from '@/lib/workoutSummary';
 import { fmtDuration, monthName } from '@/lib/reportStats';
 import WorkoutSummary from '@/components/WorkoutSummary';
+import WorkoutEditor from '@/components/WorkoutEditor';
 import { t, fmtDate } from '@/lib/i18n';
 
 interface Props {
@@ -14,11 +15,13 @@ interface Props {
   limit?: number; // show only the newest N (with a "show all" toggle)
   collapsible?: boolean; // render its own header and start collapsed (trainer ClientDetail)
   onRepeat?: (s: SessionSummary) => void; // client: "Nochmal trainieren"
+  onChanged?: () => void; // a workout was edited or deleted — reload (enables editing)
 }
 
 // Chronological, month-grouped list of every completed training. Tapping a row opens
 // the same swipeable recap the client sees right after finishing a workout.
-export default function TrainingHistory({ completions, setLogs, dayNameById, muscleOf, limit, collapsible = false, onRepeat }: Props) {
+export default function TrainingHistory({ completions, setLogs, dayNameById, muscleOf, limit, collapsible = false, onRepeat, onChanged }: Props) {
+  const [editing, setEditing] = useState<SessionSummary | null>(null);
   const [cardOpen, setCardOpen] = useState(!collapsible);
   const [closedMonths, setClosedMonths] = useState<Set<string> | null>(null); // null = only newest month open
   const [open, setOpen] = useState<SessionSummary | null>(null);
@@ -129,7 +132,16 @@ export default function TrainingHistory({ completions, setLogs, dayNameById, mus
           {showAll ? t('Weniger anzeigen') : t('Alle {n} Trainings anzeigen', { n: summaries.length })}
         </button>
       )}
-      {open && <WorkoutSummary summary={open} allCompletions={completions} mode="history" onClose={() => setOpen(null)} onRepeat={onRepeat ? () => { onRepeat(open); setOpen(null); } : undefined} />}
+      {open && <WorkoutSummary summary={open} allCompletions={completions} mode="history" onClose={() => setOpen(null)} onRepeat={onRepeat ? () => { onRepeat(open); setOpen(null); } : undefined} onEdit={onChanged ? () => setEditing(open) : undefined} />}
+      {editing && (
+        <WorkoutEditor
+          completion={editing.completion}
+          logs={setLogs.filter((l) => l.workout_completion_id === editing.completion.id)}
+          name={editing.name}
+          onClose={() => setEditing(null)}
+          onChanged={() => { setEditing(null); setOpen(null); onChanged?.(); }}
+        />
+      )}
     </>
   );
 }
