@@ -85,6 +85,8 @@ export default function PlanBuilderScreen() {
   const createPlan = async (nameOverride?: string) => {
     const name = (nameOverride ?? newPlanName).trim();
     if (!profile || !name) return;
+    // Autofill put the login e-mail into this field (dozens of empty plans named 'peter@…').
+    if (/^\S+@\S+\.\S+$/.test(name)) { setCreateError(t('Bitte gib einen Plannamen ein (keine E-Mail-Adresse).')); return; }
     setCreating(true);
     setCreateError(null);
     const { data, error } = await supabase.from('plans').insert({ trainer_id: profile.id, name }).select().single();
@@ -352,6 +354,11 @@ export default function PlanBuilderScreen() {
           <input
             value={newPlanName}
             onChange={(e) => setNewPlanName(e.target.value)}
+            name="adlr-plan-name"
+            autoComplete="off"
+            autoCorrect="off"
+            data-1p-ignore
+            data-lpignore="true"
             placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
             className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
           />
@@ -892,6 +899,11 @@ export default function PlanBuilderScreen() {
           <input
             value={newPlanName}
             onChange={(e) => setNewPlanName(e.target.value)}
+            name="adlr-plan-name"
+            autoComplete="off"
+            autoCorrect="off"
+            data-1p-ignore
+            data-lpignore="true"
             placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
             className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
             autoFocus

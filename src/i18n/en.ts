@@ -1166,6 +1166,8 @@ const dict: Record<string, string> = {
   "Keine Verbindung — bitte versuche es gleich nochmal.": "No connection — please try again in a moment.",
   // ── Macros without a weight-based target (2026-10-11) ──
   "Eiweiß heute": "Protein today",
+  // ── Plan name guard (2026-10-11) ──
+  "Bitte gib einen Plannamen ein (keine E-Mail-Adresse).": "Please enter a plan name (not an e-mail address).",
 };
 
 export default dict;

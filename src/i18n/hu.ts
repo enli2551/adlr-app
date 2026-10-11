@@ -1167,6 +1167,8 @@ const dict: Record<string, string> = {
   "Keine Verbindung — bitte versuche es gleich nochmal.": "Nincs kapcsolat — próbáld újra egy kicsit később.",
   // ── Macros without a weight-based target (2026-10-11) ──
   "Eiweiß heute": "Fehérje ma",
+  // ── Plan name guard (2026-10-11) ──
+  "Bitte gib einen Plannamen ein (keine E-Mail-Adresse).": "Adj meg egy tervnevet (ne e-mail-címet).",
 };
 
 export default dict;
