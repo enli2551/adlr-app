@@ -94,7 +94,10 @@ export async function syncSessionReminders(sessions: SessionLite[]): Promise<voi
 
   if (toSchedule.length) {
     try {
-      await LocalNotifications.schedule({ notifications: toSchedule });
+      // Inexact on purpose: on Android 12+ an exact alarm without the "Alarms & reminders"
+      // permission makes the plugin open that settings screen and hold the call until the
+      // user returns — a reminder doesn't need to be to the second.
+      await LocalNotifications.schedule({ notifications: toSchedule.map((n) => ({ ...n, isExactNotification: false })) });
     } catch { /* scheduling can fail if permission revoked mid-session */ }
   }
 }

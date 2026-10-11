@@ -141,6 +141,7 @@ export async function scheduleRestTimerNotification(opts: ScheduleOptions): Prom
           title,
           body,
           schedule: { at: fireAt },
+          isExactNotification: false,
           channelId: REST_TIMER_CHANNEL_ID,
           actionTypeId: 'REST_TIMER_ACTIONS',
           extra: { actionStartNext: ACTION_START_NEXT, actionAdd30: ACTION_ADD_30 },

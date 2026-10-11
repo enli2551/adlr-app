@@ -143,7 +143,7 @@ export async function scheduleWeeklyRecapNotification(): Promise<void> {
     at.setDate(at.getDate() + 7);
     at.setHours(8, 0, 0, 0);
     await LocalNotifications.schedule({
-      notifications: [{ id: NOTIF_ID, title: t('Deine Woche ist da 💪'), body: t('Dein Wochenrückblick wartet — schau rein, bevor du loslegst.'), schedule: { at }, channelId: CHANNEL }],
+      notifications: [{ id: NOTIF_ID, title: t('Deine Woche ist da 💪'), body: t('Dein Wochenrückblick wartet — schau rein, bevor du loslegst.'), schedule: { at }, channelId: CHANNEL, isExactNotification: false }],
     });
   } catch { /* permission revoked / unsupported */ }
 }

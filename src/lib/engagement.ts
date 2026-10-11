@@ -109,7 +109,7 @@ async function reschedule(id: number, at: Date | null, title: string, body: stri
     await LocalNotifications.createChannel({ id: CHANNEL, name: t('Serie & Check-in'), description: t('Erinnerungen an dein Wochenziel und den Check-in'), importance: 3 }).catch(() => {});
     await LocalNotifications.cancel({ notifications: [{ id }] }).catch(() => {});
     if (!at || at.getTime() <= Date.now()) return;
-    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at }, channelId: CHANNEL }] });
+    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at }, channelId: CHANNEL, isExactNotification: false }] });
   } catch { /* permission revoked / unsupported */ }
 }
 
