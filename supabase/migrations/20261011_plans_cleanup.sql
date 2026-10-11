@@ -44,24 +44,16 @@ select coach, name, created_at::date as created, case when empty then 'leer' whe
 from p order by coach, name, created_at;
 
 -- ── STEP 3 — delete the EMPTY ones (only after checking STEP 2) ─────────────────
--- Default: only plans without a single exercise ("leer" in STEP 2) — e.g. the empty
--- plans named after the login e-mail (autofill in the plan-name field). Unused plans WITH
--- exercises (a plan being prepared, an old draft) stay; delete those in the Plan Builder.
--- plan_days go with the plan; old inactive client_plans rows pointing to them first.
-/*
-begin;
-
-create temp table junk_plans on commit drop as
-select pl.id from plans pl
+-- Only plans without a single exercise ("leer" in STEP 2) — e.g. the empty plans named
+-- after the login e-mail (autofill in the plan-name field). Unused plans WITH exercises
+-- (a plan being prepared, an old draft) stay; delete those in the Plan Builder.
+-- One statement on purpose: the SQL Editor commits statement by statement, so a temp
+-- table didn't survive. plan_days and client_plans rows go with the plan (ON DELETE CASCADE).
+-- Returns the deleted plans.
+delete from plans pl
 where not coalesce((to_jsonb(pl)->>'is_template')::boolean, false)
   and not coalesce((to_jsonb(pl)->>'is_starter')::boolean, false)
   and not exists (select 1 from client_plans cp where cp.plan_id = pl.id and cp.is_active)
   and not exists (select 1 from workout_completions wc join plan_days d on d.id = wc.plan_day_id where d.plan_id = pl.id)
-  and not exists (select 1 from plan_days d where d.plan_id = pl.id and jsonb_array_length(coalesce(d.exercises, '[]'::jsonb)) > 0);
-
-delete from client_plans where plan_id in (select id from junk_plans);
-delete from plan_days where plan_id in (select id from junk_plans);
-delete from plans where id in (select id from junk_plans);
-
-commit;
-*/
+  and not exists (select 1 from plan_days d where d.plan_id = pl.id and jsonb_array_length(coalesce(d.exercises, '[]'::jsonb)) > 0)
+returning pl.name, pl.created_at::date as created;
