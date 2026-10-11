@@ -11,9 +11,10 @@ import { useAsyncData } from '@/lib/useAsyncData';
 import { useSearchParams } from 'react-router-dom';
 import AiPlanSheet, { type AiPlanResult } from '@/components/AiPlanSheet';
 import { Sparkles } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t, fmtDate } from '@/lib/i18n';
 
 type Mode = 'list' | 'edit';
+interface PlanMeta { active: string[]; everAssigned: boolean; trainingDays: number; exercises: number }
 
 export default function PlanBuilderScreen() {
   const { profile } = useAuth();
@@ -24,6 +25,11 @@ export default function PlanBuilderScreen() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<Mode>('list');
   const [newPlanName, setNewPlanName] = useState('');
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);
+  const [query, setQuery] = useState('');
+  // Per plan: clients it is active for, whether it was ever assigned, size — for the grouped list.
+  const [meta, setMeta] = useState<Map<string, PlanMeta>>(new Map());
   const [selectedClientId, setSelectedClientId] = useState('');
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [assignError, setAssignError] = useState(false);
@@ -61,17 +67,74 @@ export default function PlanBuilderScreen() {
 
   useEffect(() => { load(); }, [profile?.id]);
 
-  const load = async () => {
+  // quiet = refresh in place (back from the editor) without the loading spinner
+  const load = async (quiet = false) => {
     if (!profile) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     const [{ data: pl }, { data: cl }] = await Promise.all([
       supabase.from('plans').select('*').eq('trainer_id', profile.id).order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('first_name'),
     ]);
-    const planList = (pl ?? []) as Plan[];
+    let planList = (pl ?? []) as Plan[];
+    const ids = planList.map((p) => p.id);
+    const m = new Map<string, PlanMeta>(ids.map((id) => [id, { active: [], everAssigned: false, trainingDays: 0, exercises: 0 }]));
+    if (ids.length > 0) {
+      const [{ data: cps }, { data: pds }] = await Promise.all([
+        supabase.from('client_plans').select('plan_id, client_id, is_active').in('plan_id', ids),
+        supabase.from('plan_days').select('plan_id, is_rest_day, exercises').in('plan_id', ids),
+      ]);
+      for (const r of (cps ?? []) as { plan_id: string; client_id: string; is_active: boolean }[]) {
+        const x = m.get(r.plan_id); if (!x) continue;
+        x.everAssigned = true;
+        if (r.is_active) x.active.push(r.client_id);
+      }
+      for (const d of (pds ?? []) as { plan_id: string; is_rest_day: boolean; exercises: Exercise[] | null }[]) {
+        const x = m.get(d.plan_id); if (!x) continue;
+        const n = d.exercises?.length ?? 0;
+        x.exercises += n;
+        if (!d.is_rest_day && n > 0) x.trainingDays++;
+      }
+      // Empty plans nobody ever had (an abandoned "Neuer Plan", autofill mishaps) are removed
+      // after an hour, so the list doesn't fill up with clutter again.
+      const stale = planList.filter((p) => !p.is_template && !(p as Plan & { is_starter?: boolean }).is_starter
+        && m.get(p.id)!.exercises === 0 && !m.get(p.id)!.everAssigned
+        && Date.now() - new Date(p.created_at).getTime() > 60 * 60 * 1000);
+      for (const p of stale) await deletePlanQuietly(p.id);
+      if (stale.length > 0) planList = planList.filter((p) => !stale.includes(p));
+    }
+    setMeta(m);
     setPlans(planList);
     setClients((cl ?? []) as Profile[]);
     setLoading(false);
+  };
+
+  const deletePlanQuietly = async (id: string): Promise<boolean> => {
+    let { error } = await supabase.rpc('trainer_delete_plan', { p_plan: id });
+    if (error && isMissingFunction(error)) {
+      await supabase.from('client_plans').delete().eq('plan_id', id);
+      await supabase.from('plan_days').delete().eq('plan_id', id);
+      ({ error } = await supabase.from('plans').delete().eq('id', id));
+    }
+    return !error;
+  };
+
+  // Leaving the editor: a plan that is still completely empty and was never assigned is
+  // dropped right away (tapping "Neuer Plan" and going back used to leave it behind).
+  const backToList = async () => {
+    const p = activePlan;
+    setMode('list');
+    setActivePlan(null);
+    if (p && !p.is_template && days.every((d) => (d.exercises?.length ?? 0) === 0)) {
+      const { count } = await supabase.from('client_plans').select('plan_id', { count: 'exact', head: true }).eq('plan_id', p.id);
+      if (!count) await deletePlanQuietly(p.id);
+    }
+    await load(true);
+  };
+
+  const removeEmptyPlans = async () => {
+    const empty = plans.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0 && (meta.get(p.id)?.exercises ?? 0) === 0);
+    for (const p of empty) await deletePlanQuietly(p.id);
+    await load();
   };
 
   const selectPlan = async (plan: Plan) => {
@@ -103,6 +166,7 @@ export default function PlanBuilderScreen() {
       return;
     }
     setNewPlanName('');
+    setShowNewForm(false);
     setPlans((prev) => [data as Plan, ...prev]);
     setActivePlan(data as Plan);
     setDays((pd ?? []) as PlanDay[]);
@@ -322,10 +386,106 @@ export default function PlanBuilderScreen() {
 
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if (mode === 'list') {
+    const clientName = (id: string) => { const c = clients.find((x) => x.id === id); return c ? (c.first_name || c.email || '?') : '?'; };
+    const q = query.trim().toLowerCase();
+    const matches = (p: Plan) => !q || p.name.toLowerCase().includes(q) || (meta.get(p.id)?.active ?? []).some((id) => clientName(id).toLowerCase().includes(q));
+    const visible = plans.filter(matches);
+    const assigned = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) > 0);
+    const templates = visible.filter((p) => p.is_template);
+    const others = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0);
+    const emptyOthers = others.filter((p) => (meta.get(p.id)?.exercises ?? 0) === 0);
+
+    const planRow = (p: Plan, kind: 'assigned' | 'template' | 'other') => {
+      const m = meta.get(p.id);
+      const shownName = kind === 'template' ? p.name.replace(/\s*\(Vorlage\)\s*$/, '') : p.name;
+      const tags: { label: string; tone: 'gold' | 'muted' | 'warn' }[] = [];
+      if (kind === 'template') tags.push({ label: t('Vorlage'), tone: 'gold' });
+      if (m && m.exercises === 0) tags.push({ label: t('leer'), tone: 'warn' });
+      if (p.ai_generated && kind === 'other') tags.push({ label: t('KI-Entwurf'), tone: 'muted' });
+      if (kind === 'other' && / · /.test(p.name)) tags.push({ label: t('Kopie eines Klienten'), tone: 'muted' });
+      const info = [
+        m && m.trainingDays > 0 ? t(m.trainingDays === 1 ? '1 Trainingstag' : '{n} Trainingstage', { n: m.trainingDays }) : null,
+        kind === 'other' ? fmtDate(p.created_at, { day: 'numeric', month: 'short' }) : null,
+      ].filter(Boolean).join(' · ');
+      return (
+        <div
+          key={p.id}
+          className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left"
+          style={kind === 'template'
+            ? { background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px solid rgb(var(--adlr-gold) / 0.2)' }
+            : { background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.07)' }}
+        >
+          {renamingPlanId === p.id ? (
+            <>
+              <input
+                autoFocus
+                value={renameValue}
+                name="adlr-plan-rename"
+                autoComplete="off"
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { renamePlan(p, renameValue); setRenamingPlanId(null); } if (e.key === 'Escape') setRenamingPlanId(null); }}
+                className="flex-1 bg-inset border border-white/15 rounded-lg px-2 py-1 text-sm font-medium text-white outline-none"
+              />
+              <button onClick={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }} className="adlr-tap p-1.5 rounded-lg ml-2" style={{ color: 'rgb(var(--adlr-gold))' }}>
+                <Check size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => selectPlan(p)} className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-medium text-white truncate">{shownName}</p>
+                {kind === 'assigned' && (
+                  <p className="text-xs mt-0.5 truncate" style={{ color: 'rgb(var(--adlr-gold) / 0.85)' }}>
+                    {(m?.active ?? []).map(clientName).join(' · ')}
+                  </p>
+                )}
+                {(tags.length > 0 || info) && (
+                  <p className="text-[11px] mt-0.5 flex flex-wrap items-center gap-1.5">
+                    {tags.map((tg) => (
+                      <span key={tg.label} className="px-1.5 py-px rounded" style={tg.tone === 'gold' ? { background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' } : tg.tone === 'warn' ? { background: 'rgba(251,146,60,0.12)', color: '#fb923c' } : { background: 'rgb(var(--text) / 0.06)', color: 'rgb(var(--text) / 0.5)' }}>{tg.label}</span>
+                    ))}
+                    {info && <span className="text-white/35">{info}</span>}
+                  </p>
+                )}
+              </button>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                {kind === 'template' ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); createFromTemplate(p); }}
+                    className="adlr-tap flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
+                    style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}
+                    title={t('Plan aus Vorlage erstellen')}
+                  >
+                    <Plus size={13} /> {t('Plan')}
+                  </button>
+                ) : (
+                  <button onClick={(e) => { e.stopPropagation(); copyPlan(p); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.3)' }} title={t('Duplizieren')}>
+                    <Copy size={14} />
+                  </button>
+                )}
+                <button onClick={(e) => { e.stopPropagation(); setRenameValue(shownName); setRenamingPlanId(p.id); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.3)' }} title={t('Umbenennen')}>
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); requestDelete(p); }}
+                  className="adlr-tap p-1.5 rounded-lg"
+                  style={{ color: pendingDelete === p.id ? '#f87171' : 'rgba(248,113,113,0.4)' }}
+                  title={pendingDelete === p.id ? t('Nochmal tippen zum Löschen') : t('Löschen')}
+                >
+                  {pendingDelete === p.id ? <Check size={14} /> : <Trash2 size={14} />}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="adlr-fade-in pb-6">
       {deleteErr && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
           <div className="flex-1 min-w-[11rem]">
             <h1 className="text-2xl font-bold text-white">{t('Plan Builder')}</h1>
             <p className="text-sm text-white/40 mt-0.5">{t('Baue Wochenpläne für deine Klienten')}</p>
@@ -339,188 +499,63 @@ export default function PlanBuilderScreen() {
             <Sparkles size={15} /> {t('KI-Plan')}
           </button>
           <button
-            onClick={async () => { setNewPlanName(t('Neuer Plan')); await createPlan(t('Neuer Plan')); }}
-            disabled={creating}
-            className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 whitespace-nowrap"
+            onClick={() => { setShowNewForm((v) => !v); setCreateError(null); }}
+            className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border whitespace-nowrap"
             style={{ background: 'rgb(var(--adlr-gold) / 0.08)', borderColor: 'rgb(var(--adlr-gold) / 0.3)', color: 'rgb(var(--adlr-gold))' }}
           >
-            {creating ? <span className="animate-pulse">…</span> : <Plus size={15} />} {t('Neuer Plan')}
+            {showNewForm ? <X size={15} /> : <Plus size={15} />} {t('Neuer Plan')}
           </button>
           </div>
         </div>
         {aiOpen && <AiPlanSheet clients={clients} initialClientId={aiOpen.clientId} onClose={() => { setAiOpen(null); if (params.get('ai') !== null) { params.delete('ai'); setParams(params, { replace: true }); } }} onCreated={onAiCreated} />}
 
-        <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
-          <input
-            value={newPlanName}
-            onChange={(e) => setNewPlanName(e.target.value)}
-            name="adlr-plan-name"
-            autoComplete="off"
-            autoCorrect="off"
-            data-1p-ignore
-            data-lpignore="true"
-            placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
-            className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
-          />
-          <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full bg-transparent text-sm outline-none mb-3"
-            style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
-          >
-            <option value="">{t('Klient wählen...')}</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
-            ))}
-          </select>
-          <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => createPlan()}
-              disabled={!newPlanName.trim()}
-              className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
+        {/* New plan: a name first (an instant "Neuer Plan" button used to leave empty plans behind) */}
+        {showNewForm && (
+          <div className="rounded-2xl p-4 mb-5 adlr-fade-in" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}>
+            <input
+              autoFocus
+              value={newPlanName}
+              onChange={(e) => setNewPlanName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && newPlanName.trim()) createPlan(); }}
+              name="adlr-plan-name"
+              autoComplete="off"
+              autoCorrect="off"
+              data-1p-ignore
+              data-lpignore="true"
+              placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
+              className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
+            />
+            <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              className="w-full bg-transparent text-sm outline-none mb-3"
+              style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
             >
-              {t('Plan zuweisen')}
-            </button>
-            <button
-              onClick={() => saveAsTemplate()}
-              disabled={!newPlanName.trim()}
-              className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
-              style={{ color: 'rgb(var(--text) / 0.5)' }}
-            >
-              <Copy size={13} /> {t('Als Vorlage')}
-            </button>
-          </div>
-        </div>
-
-        {plans.some((p) => p.is_template) && (
-          <div className="space-y-2 mb-5">
-            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Vorlagen')}</p>
-            {plans.filter((p) => p.is_template).map((p) => (
-              <div
-                key={p.id}
-                className="w-full flex items-center justify-between rounded-xl px-4 py-3.5"
-                style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px solid rgb(var(--adlr-gold) / 0.2)' }}
+              <option value="" className="bg-zinc-900">{t('Für Klient (optional)…')}</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
+              ))}
+            </select>
+            <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => createPlan()}
+                disabled={!newPlanName.trim() || creating}
+                className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
               >
-                {renamingPlanId === p.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { renamePlan(p, renameValue); setRenamingPlanId(null); } if (e.key === 'Escape') setRenamingPlanId(null); }}
-                      className="flex-1 bg-inset border border-white/15 rounded-lg px-2 py-1 text-sm font-medium text-white outline-none"
-                    />
-                    <button onClick={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }} className="adlr-tap p-1.5 rounded-lg ml-2" style={{ color: 'rgb(var(--adlr-gold))' }}>
-                      <Check size={14} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => selectPlan(p)} className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-medium text-white">{p.name.replace(/\s*\(Vorlage\)\s*$/, '')}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'rgb(var(--adlr-gold) / 0.7)' }}>{t('Vorlage')}</p>
-                    </button>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); createFromTemplate(p); }}
-                        className="adlr-tap flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-                        style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}
-                        title={t('Plan aus Vorlage erstellen')}
-                      >
-                        <Plus size={13} /> {t('Plan')}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setRenameValue(p.name.replace(/\s*\(Vorlage\)\s*$/, '')); setRenamingPlanId(p.id); }}
-                        className="adlr-tap p-1.5 rounded-lg"
-                        style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title={t('Umbenennen')}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); requestDelete(p); }}
-                        className="adlr-tap p-1.5 rounded-lg"
-                        style={{ color: pendingDelete === p.id ? '#f87171' : 'rgba(248,113,113,0.4)' }}
-                        title={pendingDelete === p.id ? t('Nochmal tippen zum Löschen') : t('Löschen')}
-                      >
-                        {pendingDelete === p.id ? <Check size={14} /> : <Trash2 size={14} />}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {plans.some((p) => !p.is_template) && (
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-wider text-white/30 mb-3">{t('Bestehende Pläne')}</p>
-            {plans.filter((p) => !p.is_template).map((p) => (
-              <div
-                key={p.id}
-                className="w-full flex items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all"
-                style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.07)' }}
+                {creating ? '…' : t('Plan erstellen')}
+              </button>
+              <button
+                onClick={() => saveAsTemplate()}
+                disabled={!newPlanName.trim() || creating}
+                className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
+                style={{ color: 'rgb(var(--text) / 0.5)' }}
               >
-                {renamingPlanId === p.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { renamePlan(p, renameValue); setRenamingPlanId(null); } if (e.key === 'Escape') setRenamingPlanId(null); }}
-                      className="flex-1 bg-inset border border-white/15 rounded-lg px-2 py-1 text-sm font-medium text-white outline-none"
-                    />
-                    <button
-                      onClick={() => { renamePlan(p, renameValue); setRenamingPlanId(null); }}
-                      className="adlr-tap p-1.5 rounded-lg ml-2"
-                      style={{ color: 'rgb(var(--adlr-gold))' }}
-                    >
-                      <Check size={14} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => selectPlan(p)} className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-medium text-white">{p.name}</p>
-                      <p className="text-xs text-white/30 mt-0.5">{p.is_template ? t('Vorlage') : t('7-Tage Plan')}</p>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyPlan(p); }}
-                        className="adlr-tap p-1.5 rounded-lg"
-                        style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title={t('Duplizieren')}
-                      >
-                        <Copy size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setRenameValue(p.name); setRenamingPlanId(p.id); }}
-                        className="adlr-tap p-1.5 rounded-lg"
-                        style={{ color: 'rgb(var(--text) / 0.3)' }}
-                        title={t('Umbenennen')}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); requestDelete(p); }}
-                        className="adlr-tap p-1.5 rounded-lg"
-                        style={{ color: pendingDelete === p.id ? '#f87171' : 'rgba(248,113,113,0.4)' }}
-                        title={pendingDelete === p.id ? t('Nochmal tippen zum Löschen') : t('Löschen')}
-                      >
-                        {pendingDelete === p.id ? <Check size={14} /> : <Trash2 size={14} />}
-                      </button>
-                      <ChevronDown size={14} style={{ color: 'rgb(var(--text) / 0.3)' }} />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+                <Copy size={13} /> {t('Als Vorlage')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -529,6 +564,50 @@ export default function PlanBuilderScreen() {
             <p className="text-sm text-red-400">{createError}</p>
           </div>
         )}
+
+        {plans.length > 6 && (
+          <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.07)' }}>
+            <Search size={15} className="text-white/35 shrink-0" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} name="adlr-plan-search" autoComplete="off" placeholder={t('Plan oder Klient suchen…')} className="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none" />
+            {query && <button onClick={() => setQuery('')} className="adlr-tap p-0.5 text-white/40" aria-label={t('Löschen')}><X size={14} /></button>}
+          </div>
+        )}
+
+        {assigned.length > 0 && (
+          <div className="space-y-2 mb-6">
+            <p className="text-xs uppercase tracking-wider text-white/40 mb-2">{t('Aktiv bei Klienten')} · {assigned.length}</p>
+            {assigned.map((p) => planRow(p, 'assigned'))}
+          </div>
+        )}
+
+        {templates.length > 0 && (
+          <div className="space-y-2 mb-6">
+            <p className="text-xs uppercase tracking-wider text-white/40 mb-2">{t('Vorlagen')} · {templates.length}</p>
+            {templates.map((p) => planRow(p, 'template'))}
+          </div>
+        )}
+
+        {others.length > 0 && (
+          <div className="mb-6">
+            <button onClick={() => setShowOthers((v) => !v)} className="adlr-tap w-full flex items-center justify-between mb-2">
+              <span className="text-xs uppercase tracking-wider text-white/40">{t('Nicht zugewiesen')} · {others.length}</span>
+              {(showOthers || q) ? <ChevronUp size={15} className="text-white/35" /> : <ChevronDown size={15} className="text-white/35" />}
+            </button>
+            {(showOthers || q) && (
+              <div className="space-y-2 adlr-fade-in">
+                <p className="text-[11px] text-white/35 mb-1">{t('Entwürfe, Kopien und Pläne, die gerade niemand hat. Leere Pläne werden automatisch entfernt.')}</p>
+                {others.map((p) => planRow(p, 'other'))}
+                {emptyOthers.length > 1 && (
+                  <button onClick={removeEmptyPlans} className="adlr-tap w-full mt-1 py-2.5 rounded-xl text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/25">
+                    {t('{n} leere Pläne löschen', { n: emptyOthers.length })}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {q && visible.length === 0 && <p className="text-sm text-white/35 text-center py-8">{t('Nichts gefunden.')}</p>}
 
         {plans.length === 0 && !createError && (
           <div className="text-center py-16">
@@ -558,7 +637,7 @@ export default function PlanBuilderScreen() {
     <div className="adlr-fade-in pb-6">
       {deleteErr && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => { setMode('list'); setActivePlan(null); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.4)' }}>
+        <button onClick={backToList} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.4)' }}>
           <ChevronDown size={18} className="rotate-90" />
         </button>
         <div className="flex-1 min-w-0">
@@ -964,7 +1043,7 @@ export default function PlanBuilderScreen() {
             </button>
           )}
           <button
-            onClick={() => { setMode('list'); setActivePlan(null); }}
+            onClick={backToList}
             className="adlr-tap w-full py-3.5 rounded-xl text-sm font-semibold mb-4 flex items-center justify-center gap-2"
             style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
           >

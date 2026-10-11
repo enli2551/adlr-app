@@ -1168,6 +1168,17 @@ const dict: Record<string, string> = {
   "Eiweiß heute": "Protein today",
   // ── Plan name guard (2026-10-11) ──
   "Bitte gib einen Plannamen ein (keine E-Mail-Adresse).": "Please enter a plan name (not an e-mail address).",
+  // ── Plan library overview (2026-10-11) ──
+  "Kopie eines Klienten": "Client copy",
+  "Für Klient (optional)…": "For client (optional)…",
+  "Plan erstellen": "Create plan",
+  "Plan oder Klient suchen…": "Search plan or client…",
+  "Aktiv bei Klienten": "Active with clients",
+  "Nicht zugewiesen": "Not assigned",
+  "Entwürfe, Kopien und Pläne, die gerade niemand hat. Leere Pläne werden automatisch entfernt.": "Drafts, copies and plans nobody has right now. Empty plans are removed automatically.",
+  "{n} leere Pläne löschen": "Delete {n} empty plans",
+  "Nichts gefunden.": "Nothing found.",
+  "1 Trainingstag": "1 training day",
 };
 
 export default dict;

@@ -1169,6 +1169,17 @@ const dict: Record<string, string> = {
   "Eiweiß heute": "Fehérje ma",
   // ── Plan name guard (2026-10-11) ──
   "Bitte gib einen Plannamen ein (keine E-Mail-Adresse).": "Adj meg egy tervnevet (ne e-mail-címet).",
+  // ── Plan library overview (2026-10-11) ──
+  "Kopie eines Klienten": "Ügyfél másolata",
+  "Für Klient (optional)…": "Ügyfélnek (nem kötelező)…",
+  "Plan erstellen": "Terv létrehozása",
+  "Plan oder Klient suchen…": "Terv vagy ügyfél keresése…",
+  "Aktiv bei Klienten": "Aktív az ügyfeleknél",
+  "Nicht zugewiesen": "Nincs kiosztva",
+  "Entwürfe, Kopien und Pläne, die gerade niemand hat. Leere Pläne werden automatisch entfernt.": "Vázlatok, másolatok és tervek, amelyek most senkinél sincsenek. Az üres tervek automatikusan törlődnek.",
+  "{n} leere Pläne löschen": "{n} üres terv törlése",
+  "Nichts gefunden.": "Nincs találat.",
+  "1 Trainingstag": "1 edzésnap",
 };
 
 export default dict;
