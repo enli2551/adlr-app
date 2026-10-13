@@ -52,8 +52,9 @@ Deno.serve(async (req) => {
     const uid = userData.user.id;
 
     // Remove the user's files from storage (folder = <uid>/...): progress photos,
-    // and the coach's voice/video replies to their check-ins. Paged — list() returns ≤ 1000.
-    for (const bucket of ['photos', 'feedback']) {
+    // the coach's voice/video replies to their check-ins, and (coach accounts) their exercise
+    // videos. Paged — list() returns ≤ 1000.
+    for (const bucket of ['photos', 'feedback', 'exercise-videos']) {
       try {
         for (let round = 0; round < 50; round++) {
           const { data: files } = await admin.storage.from(bucket).list(uid, { limit: 1000 });

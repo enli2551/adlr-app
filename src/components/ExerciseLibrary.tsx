@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Dumbbell, Play, Plus, X, Loader2, Activity, Target, Clock } from 'lucide-react';
-import { fetchExercises, MUSCLE_GROUPS, type ExerciseRow } from '@/lib/exercises';
+import { Search, Dumbbell, Play, Plus, X, Loader2, Activity, Target, Clock, Pencil, Video, Trash2 } from 'lucide-react';
+import { fetchExercises, MUSCLE_GROUPS, coachVideoFor, onCoachLibraryChange, type ExerciseRow } from '@/lib/exercises';
+import { signedCoachVideo, setLibraryVideo, clearLibraryVideo } from '@/lib/coachVideos';
+import { useAuth } from '@/lib/auth';
+import CoachExerciseSheet from '@/components/CoachExerciseSheet';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { t } from '@/lib/i18n';
 import { demoVideoFor } from '@/lib/demoVideos';
@@ -16,7 +19,14 @@ interface Props {
 
 export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Props) {
   const [hint, setHint] = useState(false);
-  const { data: exercises, loading } = useAsyncData(fetchExercises, []);
+  const { profile } = useAuth();
+  const isCoach = profile?.role === 'trainer';
+  // Coach's own exercises change while the list is open (created / edited) → refetch.
+  const [libVersion, setLibVersion] = useState(0);
+  useEffect(() => onCoachLibraryChange(() => setLibVersion((v) => v + 1)), []);
+  const [sheet, setSheet] = useState<{ row: ExerciseRow | null } | null>(null);
+  const { data: exercises, loading } = useAsyncData(fetchExercises, [libVersion]);
+  const hasOwn = (exercises ?? []).some((e) => e.trainer_id);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Alle');
 
@@ -33,7 +43,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
     const words = fold(search).split(/\s+/).filter(Boolean);
     return exercises.filter((s) => {
       if (s.alias_of || EXERCISE_ALIASES[s.name]) return false; // duplicate entry — use the kept one
-      const matchGroup = filter === 'Alle' || s.muscle_group === filter;
+      const matchGroup = filter === 'Alle' || (filter === '__own' ? !!s.trainer_id : s.muscle_group === filter);
       if (!matchGroup) return false;
       if (words.length === 0) return true;
       const names = [s.name, ...(aliasesOf.get(s.name) ?? [])];
@@ -65,8 +75,13 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
             className="w-full bg-inset border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-white/30 outline-none"
           />
         </div>
+        {isCoach && (
+          <button onClick={() => setSheet({ row: null })} className="adlr-tap w-full mb-3 py-2.5 rounded-xl text-sm font-semibold border border-dashed flex items-center justify-center gap-1.5" style={{ borderColor: 'rgb(var(--adlr-gold) / 0.45)', color: 'rgb(var(--adlr-gold))' }}>
+            <Plus size={15} /> {t('Eigene Übung erstellen')}
+          </button>
+        )}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {['Alle', ...MUSCLE_GROUPS].map((g) => (
+          {['Alle', ...(hasOwn ? ['__own'] : []), ...MUSCLE_GROUPS].map((g) => (
             <button
               key={g}
               onClick={() => setFilter(g)}
@@ -75,7 +90,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
                 ? { background: 'rgb(var(--adlr-gold))', color: '#000', borderColor: 'rgb(var(--adlr-gold))' }
                 : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)', borderColor: 'rgb(var(--text) / 0.08)' }}
             >
-              {t(g)}
+              {g === '__own' ? (isCoach ? t('Eigene') : t('Von deinem Coach')) : t(g)}
             </button>
           ))}
         </div>
@@ -87,10 +102,16 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
               <Dumbbell size={15} style={{ color: 'rgb(var(--adlr-gold))' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{t(s.name)}</p>
+              <p className="text-sm font-medium text-white flex items-center gap-1.5">
+                <span className="min-w-0">{t(s.name)}</span>
+                {s.trainer_id && <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}>{isCoach ? t('Eigene') : t('Coach')}</span>}
+              </p>
               <p className="text-xs text-white/40">{t(s.muscle_group)} · {s.default_sets}×{s.default_reps} · {t(s.equipment)}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {isCoach && s.trainer_id === profile?.id && (
+                <button onClick={() => setSheet({ row: s })} className="adlr-tap p-1 text-white/35" aria-label={t('Bearbeiten')}><Pencil size={13} /></button>
+              )}
               {hasDemo(s) && (
                 <button
                   onClick={() => onDemo(s)}
@@ -119,6 +140,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
           <p className="text-sm text-white/25 text-center py-8">{t('Keine Treffer.')}</p>
         )}
       </div>
+      {sheet && <CoachExerciseSheet initial={sheet.row} onClose={() => setSheet(null)} />}
       {hint && (
         <div className="px-4 py-2.5 text-xs text-center adlr-fade-in" style={{ background: 'rgb(var(--adlr-gold) / 0.08)', color: 'rgb(var(--adlr-gold))', borderTop: '1px solid rgb(var(--adlr-gold) / 0.15)' }}>
           {noSelectionHint ?? t('Wähle zuerst einen Trainingstag oben aus')}
@@ -176,8 +198,8 @@ export const LOCAL_DEMO_IMAGES: Record<string, string> = {
 
 
 // True if the exercise has any local demo (animation preferred, else static image).
-export function hasDemo(ex: { name: string; exercise_id?: string | null }): boolean {
-  return !!(demoVideoFor(ex.name) || (ex.exercise_id && LOCAL_DEMO_IMAGES[ex.exercise_id]));
+export function hasDemo(ex: { name: string; exercise_id?: string | null; video_path?: string | null }): boolean {
+  return !!(coachVideoFor(ex) || demoVideoFor(ex.name) || (ex.exercise_id && LOCAL_DEMO_IMAGES[ex.exercise_id]));
 }
 
 export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: () => void }) {
@@ -202,7 +224,30 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
     if (p && typeof p.then === 'function') p.then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
   };
 
-  const localVid = demoVideoFor(ex.name);
+  const { profile } = useAuth();
+  const isCoach = profile?.role === 'trainer';
+  const [libVersion, setLibVersion] = useState(0);
+  useEffect(() => onCoachLibraryChange(() => setLibVersion((v) => v + 1)), []);
+  const coachPath = coachVideoFor(ex);
+  const [coachUrl, setCoachUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setCoachUrl(null);
+    if (coachPath) signedCoachVideo(coachPath).then((u) => { if (alive) setCoachUrl(u); });
+    return () => { alive = false; };
+  }, [coachPath, libVersion]);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoErr, setVideoErr] = useState<string | null>(null);
+  const [editOwn, setEditOwn] = useState(false);
+  const ownOverride = isCoach && !ex.trainer_id && !!coachPath;
+  const uploadOwnVideo = async (file: File | undefined) => {
+    if (!file || !profile) return;
+    setVideoBusy(true); setVideoErr(null);
+    const e = await setLibraryVideo(profile.id, ex.name, file);
+    setVideoBusy(false);
+    if (e) setVideoErr(e === 'too_large' ? t('Das Video ist zu groß (max. 50 MB). Nimm ein kürzeres auf.') : t('Video konnte nicht hochgeladen werden ({msg}).', { msg: e }));
+  };
+  const localVid = coachUrl ?? demoVideoFor(ex.name);
   const localImg = LOCAL_DEMO_IMAGES[ex.exercise_id];
   const gifUrl = localImg
     ? `/exercises/${localImg}`
@@ -215,7 +260,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
         <div className="flex justify-between items-start mb-4">
           <div>
             <h2 className="text-lg font-bold text-white">{t(ex.name)}</h2>
-            <p className="text-sm text-white/40 mt-0.5">{t('Ausführung Demo')}</p>
+            <p className="text-sm text-white/40 mt-0.5">{coachUrl ? (isCoach ? t('Dein Video') : t('Video von deinem Coach')) : t('Ausführung Demo')}</p>
           </div>
           <button onClick={onClose} className="adlr-tap text-white/40 hover:text-white/80"><X size={20} /></button>
         </div>
@@ -263,6 +308,30 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
             </>
           )}
         </div>
+        {isCoach && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {ex.trainer_id === profile?.id ? (
+              <button onClick={() => setEditOwn(true)} className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}>
+                <Pencil size={13} /> {t('Übung bearbeiten')}
+              </button>
+            ) : !ex.trainer_id && (
+              <>
+                <label className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer" style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))' }}>
+                  {videoBusy ? <Loader2 size={13} className="animate-spin" /> : <Video size={13} />} {ownOverride ? t('Eigenes Video ersetzen') : t('Eigenes Video hochladen')}
+                  <input type="file" accept="video/*" className="hidden" disabled={videoBusy} onChange={(e) => uploadOwnVideo(e.target.files?.[0])} />
+                </label>
+                {ownOverride && (
+                  <button onClick={async () => { if (!profile) return; setVideoBusy(true); await clearLibraryVideo(profile.id, ex.name); setVideoBusy(false); }} className="adlr-tap flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-white/5 text-white/60">
+                    <Trash2 size={13} /> {t('Animation statt Video')}
+                  </button>
+                )}
+              </>
+            )}
+            <p className="w-full text-[11px] text-white/35">{t('Deine Klienten sehen dein Video statt der Animation.')}</p>
+            {videoErr && <p className="w-full text-xs text-red-400">{videoErr}</p>}
+          </div>
+        )}
+        {editOwn && <CoachExerciseSheet initial={ex} onClose={() => setEditOwn(false)} />}
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-inset rounded-lg p-2.5 text-center">
             <Target size={14} className="mx-auto mb-1" style={{ color: 'rgb(var(--adlr-gold))' }} />
