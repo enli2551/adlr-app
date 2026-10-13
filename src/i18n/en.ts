@@ -1179,6 +1179,8 @@ const dict: Record<string, string> = {
   "{n} leere Pläne löschen": "Delete {n} empty plans",
   "Nichts gefunden.": "Nothing found.",
   "1 Trainingstag": "1 training day",
+  // ── Animation play fallback (2026-10-13) ──
+  "Animation abspielen": "Play animation",
 };
 
 export default dict;

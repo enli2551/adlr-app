@@ -20,8 +20,6 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Bicycle Crunches": '0135', // bicycle crunches
   "Bizeps Curls": '0134', // biceps curl
   "Box Jumps": '0210', // box jump
-  "Boxen Rechte Gerade": '0215', // kick boxing
-  "Boxen Rechter Uppercut": '0215', // kick boxing
   "Breites Bankdrücken (Langhantel)": '0042', // barbell bench press flat
   "Brustpresse (Maschine)": '0237', // seated machine chest press
   "Burpees": '0211', // burpee
@@ -71,7 +69,7 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Kabel Boden Sitz Rudern (breit)": '0181', // wide grip seated cable row
   "Kabel Crossover Variante": '0044', // high to low cable crossover
   "Kabel Einarmig Curl": '0169', // single arm high cable curl
-  "Kabel Einarmig Seitheben": '0095', // cable cross lateral raise
+  "Kabel Einarmig Seitheben": '0137', // cable lateral raise (single arm; was 0095 = two-arm cable cross)
   "Kabel Gerade-Arm Drücken (V2)": '0023', // single arm straight arm cable pulldown
   "Kabel Gerader Rücken Sitz Rudern": '0163', // seated cable row
   "Kabel Kniend Trizeps Extension": '0140', // cable overhead triceps extension
@@ -93,11 +91,11 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Klimmzüge": '0038', // pull up
   "Kniebeugen": '0054', // barbell back squat
   "Kreuzheben": '0032', // deadlift barbell
-  "Kurzhantel Bank Sitz Drücken": '0090', // dumbbell overhead standard
+  "Kurzhantel Bank Sitz Drücken": '0257', // dumbbell shoulder press, seated (was 0090 = standing)
   "Kurzhantel Bankdrücken": '0227', // flat dumbbell bench press
   "Kurzhantel Bizeps Curls": '0134', // biceps curl
   "Kurzhantel Concentration Curl": '0014', // concentration curl (seated)
-  "Kurzhantel Cross Body Hammer Curl": '0016', // dumbbell hammer curl
+  "Kurzhantel Cross Body Hammer Curl": '0143', // cross-body hammer curl (was 0016 = plain hammer curl)
   "Kurzhantel Decline Bankdrücken": '0047', // dumbbell bench press (decline)
   "Kurzhantel Einarmig Vorgebeugt Rudern": '0203', // single arm dumbbell row
   "Kurzhantel Einarmig Wrist Curl": '0148', // dumbbell forearms curl
@@ -106,7 +104,7 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Kurzhantel Fly": '0049', // dumbbell flys flat
   "Kurzhantel Frontheben": '0092', // front raise (dumbbell)
   "Kurzhantel Full Can Seitheben": '0096', // lateral raises (dumbbell)
-  "Kurzhantel Hintere Ausfallschritte": '0059', // barbell reverse lunges
+  "Kurzhantel Hintere Ausfallschritte": '0283', // walking lunge with dumbbells (was 0059 = barbell)
   "Kurzhantel Kelch-Kniebeuge": '0064', // dumbbell goblet squat
   "Kurzhantel Kniebeuge": '0064', // dumbbell goblet squat
   "Kurzhantel Kreuzheben": '0256', // dumbbell romanian deadlift
@@ -285,7 +283,7 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Kettlebell Marsch": '0070', // kettlebell hold march (new exercise)
   "Langhantel Halten": '0010', // barbell hold (new exercise)
   "Kettlebell Einarmig Hochziehen": '0071', // kettlebell lift up (new exercise)
-  "Widerstandsband Liegestütze": '0008', // band pushups (new exercise)
+  "Widerstandsband Liegestütze": '0236', // resistance band push-up (was 0008 = suspension/TRX push-up)
   "Liegestütze an Kurzhanteln": '0027', // wide dumbbell push up (new exercise)
   "Liegestütze mit Armheben": '0160', // push up arm lift (new exercise)
   "Fingerspitzen-Liegestütze": '0226', // fingers push-up (new exercise)

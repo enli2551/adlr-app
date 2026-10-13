@@ -9,7 +9,7 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward } from 'lucide-react';
+import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
 import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
 import { loadFrozenWeeks, applyStreakFreeze, mondayKey, scheduleStreakReminder } from '@/lib/engagement';
@@ -616,6 +616,18 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
     setSetInputs((prev) => ({ ...prev, [name]: (prev[name] ?? []).filter((_, i) => i !== idx) }));
     remapChecked(name, (i) => (i === idx ? null : i > idx ? i - 1 : i));
+    haptic.light();
+  };
+  // Reorder the session's exercises (set keys are name-based, so ticks and inputs move along).
+  const moveSessionExercise = (idx: number, dir: -1 | 1) => {
+    setDays((prev) => prev.map((d) => {
+      if (!isSessionDay(d)) return d;
+      const to = idx + dir;
+      if (to < 0 || to >= d.exercises.length) return d;
+      const exs = [...d.exercises];
+      [exs[idx], exs[to]] = [exs[to], exs[idx]];
+      return { ...d, exercises: exs };
+    }));
     haptic.light();
   };
   const addFreeSet = (name: string) => {
@@ -1522,9 +1534,21 @@ export default function PlanScreen() {
                                 </div>
                               </div>
                               {isTraining && canEditSession(day) && (
-                                <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap shrink-0 ml-1 p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
-                                  <Trash2 size={16} />
-                                </button>
+                                <div className="shrink-0 ml-1 flex flex-col items-center">
+                                  {day.exercises.length > 1 && (
+                                    <button onClick={() => moveSessionExercise(i, -1)} disabled={i === 0} className="adlr-tap p-1 text-white/35 disabled:opacity-20" aria-label={t('Nach oben')}>
+                                      <ChevronUp size={16} />
+                                    </button>
+                                  )}
+                                  <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
+                                    <Trash2 size={16} />
+                                  </button>
+                                  {day.exercises.length > 1 && (
+                                    <button onClick={() => moveSessionExercise(i, 1)} disabled={i === day.exercises.length - 1} className="adlr-tap p-1 text-white/35 disabled:opacity-20" aria-label={t('Nach unten')}>
+                                      <ChevronDown size={16} />
+                                    </button>
+                                  )}
+                                </div>
                               )}
                               {(() => { const r = libMap?.get(ex.name); return r && hasDemo(r) ? r : null; })() && (
                                 <button onClick={() => setDemoEx(libMap!.get(ex.name)!)} className="adlr-tap shrink-0 ml-1" style={{ color: 'rgb(var(--adlr-gold))' }} title={t('Demo anzeigen')}>

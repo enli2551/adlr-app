@@ -1180,6 +1180,8 @@ const dict: Record<string, string> = {
   "{n} leere Pläne löschen": "{n} üres terv törlése",
   "Nichts gefunden.": "Nincs találat.",
   "1 Trainingstag": "1 edzésnap",
+  // ── Animation play fallback (2026-10-13) ──
+  "Animation abspielen": "Animáció lejátszása",
 };
 
 export default dict;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, Dumbbell, Play, Plus, X, Loader2, Activity, Target, Clock } from 'lucide-react';
 import { fetchExercises, MUSCLE_GROUPS, type ExerciseRow } from '@/lib/exercises';
@@ -22,12 +22,23 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
 
   const filtered = useMemo(() => {
     if (!exercises) return [];
-    const q = search.toLowerCase();
+    // Hidden duplicates still count for search: "Kurzhantel Seitheben" (hidden) finds the kept
+    // "Seitheben". Equipment and accents too — "kezisulyzos oldalemeles" finds it.
+    const fold = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const aliasesOf = new Map<string, string[]>();
+    for (const e of exercises) {
+      const keep = e.alias_of || EXERCISE_ALIASES[e.name];
+      if (keep) aliasesOf.set(keep, [...(aliasesOf.get(keep) ?? []), e.name]);
+    }
+    const words = fold(search).split(/\s+/).filter(Boolean);
     return exercises.filter((s) => {
       if (s.alias_of || EXERCISE_ALIASES[s.name]) return false; // duplicate entry — use the kept one
       const matchGroup = filter === 'Alle' || s.muscle_group === filter;
-      const matchSearch = !q || s.name.toLowerCase().includes(q) || t(s.name).toLowerCase().includes(q);
-      return matchGroup && matchSearch;
+      if (!matchGroup) return false;
+      if (words.length === 0) return true;
+      const names = [s.name, ...(aliasesOf.get(s.name) ?? [])];
+      const hay = fold([...names, ...names.map((n) => t(n)), s.equipment ?? '', s.equipment ? t(s.equipment) : ''].join(' | '));
+      return words.every((w) => hay.includes(w));
     });
   }, [exercises, search, filter]);
 
@@ -174,11 +185,22 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
   const [gifLoading, setGifLoading] = useState(true);
   const [gifError, setGifError] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     if (ex.cues.length === 0) return;
     const interval = setInterval(() => setStep((s) => (s + 1) % ex.cues.length), 2000);
     return () => clearInterval(interval);
-  });
+  }, [ex.cues.length]);
+  // iPhone Low Power Mode (and some Android battery savers) refuse autoplay: the clip then
+  // sat on its first frame. Try to play explicitly; if refused, show a play button — a tap
+  // is always allowed.
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [needsTap, setNeedsTap] = useState(false);
+  const tryPlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const p = v.play();
+    if (p && typeof p.then === 'function') p.then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
+  };
 
   const localVid = demoVideoFor(ex.name);
   const localImg = LOCAL_DEMO_IMAGES[ex.exercise_id];
@@ -212,17 +234,29 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
                 </div>
               )}
               {localVid ? (
-                <video
-                  src={localVid}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="w-full h-auto"
-                  style={{ maxHeight: '320px', objectFit: 'contain' }}
-                  onLoadedData={() => setGifLoading(false)}
-                  onError={() => { setGifLoading(false); setGifError(true); }}
-                />
+                <>
+                  <video
+                    ref={videoRef}
+                    src={localVid}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    className="w-full h-auto"
+                    style={{ maxHeight: '320px', objectFit: 'contain' }}
+                    onLoadedData={() => { setGifLoading(false); tryPlay(); }}
+                    onClick={tryPlay}
+                    onError={() => { setGifLoading(false); setGifError(true); }}
+                  />
+                  {needsTap && (
+                    <button onClick={tryPlay} className="adlr-tap absolute inset-0 flex items-center justify-center" aria-label={t('Animation abspielen')}>
+                      <span className="w-16 h-16 rounded-full flex items-center justify-center shadow-xl" style={{ background: 'rgb(var(--adlr-gold))' }}>
+                        <Play size={28} color="#000" fill="#000" />
+                      </span>
+                    </button>
+                  )}
+                </>
               ) : (
                 <img src={gifUrl} alt={t(ex.name)} className="w-full h-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} onLoad={() => setGifLoading(false)} onError={() => { setGifLoading(false); setGifError(true); }} />
               )}
