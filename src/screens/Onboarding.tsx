@@ -11,6 +11,8 @@ import StepMotivation from './onboarding/StepMotivation';
 import { StepBasics, StepGoalLevel, StepSchedule } from './onboarding/StepQuick';
 import Completion from './onboarding/Completion';
 import { t } from '@/lib/i18n';
+import QuestionFields from '@/components/QuestionFields';
+import { loadQuestions, missingRequired, saveIntakeAnswers, type AnswerValue, type CoachQuestion } from '@/lib/coachQuestions';
 
 type StepDef = { header: string; render: (data: IntakeData, update: (p: Partial<IntakeData>) => void) => React.ReactNode; valid?: (d: IntakeData) => boolean };
 
@@ -41,6 +43,10 @@ export default function Onboarding() {
     : {});
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // The coach's own intake questions — asked right after the quick steps (the coach is known by then).
+  const [coachQs, setCoachQs] = useState<CoachQuestion[] | null>(null);
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [savedIntake, setSavedIntake] = useState<unknown>(null);
 
   const update = (patch: Partial<IntakeData>) => setData((d) => ({ ...d, ...patch }));
   const back = () => (step === 0 ? (more ? nav('/app/profil') : undefined) : setStep((s) => s - 1));
@@ -53,6 +59,7 @@ export default function Onboarding() {
     setSaving(true);
     setErr(null);
     let error;
+    let trainerId: string | null = null;
     if (more) {
       ({ error } = await supabase.from('profiles').update({
         first_name: data.firstName, last_name: data.lastName, phone: data.phone, avatar_url: data.avatarUrl,
@@ -60,7 +67,7 @@ export default function Onboarding() {
       }).eq('id', uid));
     } else {
       // Link client to the trainer (invite code / existing link, SECURITY DEFINER).
-      const { data: trainerId } = await supabase.rpc('get_trainer_id');
+      ({ data: trainerId } = await supabase.rpc('get_trainer_id'));
       ({ error } = await supabase.from('profiles').update({
         intake_completed: true,
         first_name: data.firstName?.trim(),
@@ -72,12 +79,58 @@ export default function Onboarding() {
     }
     setSaving(false);
     if (error) { console.error(error); setErr(t('Speichern fehlgeschlagen. Bitte erneut versuchen.')); return; }
+    if (!more && trainerId) {
+      const qs = await loadQuestions(trainerId, 'intake');
+      if (qs.length) {
+        setSavedIntake({ ...data, email: session?.user.email ?? undefined });
+        setCoachQs(qs);
+        return; // refreshProfile after the answers — it would route away from here
+      }
+    }
     await refreshProfile();
     if (more) nav('/app/profil');
     else setDone(true);
   };
 
+  const finishCoachQs = async (skip: boolean) => {
+    const uid = session?.user.id;
+    if (!uid || !coachQs) return;
+    // Skipped: nothing saved — the questions wait on the Training screen.
+    if (!skip) {
+      setSaving(true); setErr(null);
+      const { error } = await saveIntakeAnswers(uid, savedIntake, coachQs, answers);
+      setSaving(false);
+      if (error) { setErr(t('Speichern fehlgeschlagen. Bitte erneut versuchen.')); return; }
+    }
+    await refreshProfile();
+    setDone(true);
+  };
+
   if (done) return <Completion data={data} onContinue={() => nav('/app')} />;
+
+  if (coachQs) {
+    const required = coachQs.some((q) => q.required);
+    return (
+      <div className="min-h-screen flex flex-col">
+        <div className="flex-1 px-6 pt-16 pb-36 max-w-md mx-auto w-full adlr-slide-in">
+          <div className="mb-6">
+            <p className="text-xs text-adlr-gold tracking-widest uppercase mb-2">{t('Fast geschafft')}</p>
+            <h1 className="text-2xl font-bold tracking-tight">{t('Noch ein paar Fragen von deinem Coach')}</h1>
+          </div>
+          <QuestionFields questions={coachQs} values={answers} onChange={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} />
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-adlr-black via-adlr-black to-transparent pt-6 pb-6 px-6 safe-bottom">
+          <div className="max-w-md mx-auto">
+            {err && <p className="text-xs text-red-400 mb-2 text-center">{err}</p>}
+            <Button onClick={() => finishCoachQs(false)} disabled={saving || missingRequired(coachQs, answers)} className="w-full">
+              {saving ? t('Speichert...') : t("Los geht's")}
+            </Button>
+            {!required && <button onClick={() => finishCoachQs(true)} disabled={saving} className="w-full text-xs text-white/35 mt-3">{t('Später beantworten')}</button>}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const progress = ((step + 1) / steps.length) * 100;
 

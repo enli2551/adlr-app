@@ -7,6 +7,7 @@ import type { WeeklyCheckin } from '@/lib/engagement';
 import { computeCheckinStats, type CheckinStats } from '@/lib/checkinStats';
 import CheckinStatsView from '@/components/CheckinStatsView';
 import FeedbackMedia from '@/components/FeedbackMedia';
+import { AnswerList } from '@/components/QuestionFields';
 
 const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string; invert?: boolean }[] = [
   { key: 'energy', label: 'Energie' },
@@ -187,6 +188,7 @@ export default function ClientCheckins({ clientId, kcalTarget = null }: { client
               </div>
               {c.wins && <p className="text-xs text-white/70 mb-1"><span className="text-emerald-400">＋</span> {c.wins}</p>}
               {c.struggles && <p className="text-xs text-white/70 mb-1"><span className="text-red-400">－</span> {c.struggles}</p>}
+              {c.answers && c.answers.length > 0 && <div className="mt-2 rounded-xl p-2.5" style={{ background: 'rgb(var(--text) / 0.04)' }}><AnswerList answers={c.answers} /></div>}
               {(c.trainer_reply || c.reply_media_path) && editing !== c.id ? (
                 <div className="mt-2 rounded-xl p-2.5" style={{ background: 'rgb(var(--adlr-gold) / 0.07)' }}>
                   <div className="flex items-center justify-between mb-1">

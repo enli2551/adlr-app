@@ -66,6 +66,7 @@ export interface WeeklyCheckin {
   // check-in 2.0 (migration 20261011_checkin_branding_macros.sql)
   stats?: import('@/lib/checkinStats').CheckinStats | null;
   reply_media_path?: string | null; reply_media_type?: 'audio' | 'video' | null;
+  answers?: import('@/lib/coachQuestions').CustomAnswer[] | null; // coach's own questions (20261013e)
 }
 
 /** Which week a check-in is due for right now: Fri–Sun → this week, Monday → last week, else none. */

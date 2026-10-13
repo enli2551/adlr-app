@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages, ListChecks } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useIncomingMessages } from '@/lib/chat';
@@ -9,6 +9,7 @@ import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import BrandingSettings from '@/components/BrandingSettings';
+import CoachQuestionsEditor from '@/components/CoachQuestionsEditor';
 
 const TABS = [
   { to: '/trainer', label: 'Übersicht', icon: LayoutDashboard, end: true },
@@ -30,6 +31,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
   const nav = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
   const [msgUnread, setMsgUnread] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +122,10 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
                   </div>
                   <LanguageSwitcher />
                   {/* Branding last and collapsed: it changes every client's app */}
+                  <button onClick={() => { setMenuOpen(false); setQuestionsOpen(true); }} className="adlr-tap w-full flex items-center gap-2 mt-4 pt-3 border-t border-white/10 px-1 text-left">
+                    <ListChecks size={15} className="text-adlr-gold shrink-0" />
+                    <span className="flex-1 text-xs font-medium uppercase tracking-wider text-white/50">{t('Eigene Fragen')}</span>
+                  </button>
                   <div className="mt-4 pt-3 border-t border-white/10"><BrandingSettings /></div>
                   <button
                     onClick={async () => { setMenuOpen(false); await signOut(); nav('/trainer-auth', { replace: true }); }}
@@ -134,6 +140,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
 
+      {questionsOpen && <CoachQuestionsEditor onClose={() => setQuestionsOpen(false)} />}
       <main className="flex-1 px-5 pb-28 pt-2">
         <div key={location.pathname} className="adlr-route">{children}</div>
       </main>

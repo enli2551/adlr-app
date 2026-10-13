@@ -10,6 +10,8 @@ import { isHealthEnabled, syncHealth, ensureMacroAccess } from '@/lib/health';
 import { isNetworkError } from '@/lib/offline';
 import CheckinStatsView from '@/components/CheckinStatsView';
 import FeedbackMedia from '@/components/FeedbackMedia';
+import QuestionFields from '@/components/QuestionFields';
+import { loadQuestions, missingRequired, toAnswers, type AnswerValue, type CoachQuestion } from '@/lib/coachQuestions';
 
 const SCALES: { key: 'energy' | 'sleep' | 'stress' | 'nutrition'; label: string; low: string; high: string }[] = [
   { key: 'energy', label: 'Energie', low: 'leer', high: 'voller Energie' },
@@ -36,6 +38,10 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
   const [stats, setStats] = useState<CheckinStats | null>(null);
   const [reply, setReply] = useState<WeeklyCheckin | null>(null);
   const weightTouched = useRef(false);
+  // The coach's own check-in questions (after the standard ones).
+  const [questions, setQuestions] = useState<CoachQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  useEffect(() => { if (open) loadQuestions(profile?.trainer_id, 'checkin').then(setQuestions); }, [open, profile?.trainer_id]);
 
   useEffect(() => {
     // The coach's latest answer (text and/or voice/video) until the client has seen it.
@@ -104,11 +110,14 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
       energy: form.energy, sleep: form.sleep, stress: form.stress, nutrition: form.nutrition,
       wins: form.wins.trim() || null, struggles: form.struggles.trim() || null,
     };
-    let { error } = await supabase.from('weekly_checkins').upsert({
-      ...base, stats,
-    }, { onConflict: 'client_id,week_start' });
-    // New columns not migrated yet — keep the classic check-in working.
-    if (error && !isNetworkError(error)) ({ error } = await supabase.from('weekly_checkins').upsert(base, { onConflict: 'client_id,week_start' }));
+    const custom = toAnswers(questions, answers);
+    // Newest columns first; older databases (migrations not run yet) keep the classic check-in working.
+    const attempts = [custom.length ? { ...base, stats, answers: custom } : null, { ...base, stats }, base].filter(Boolean) as Record<string, unknown>[];
+    let error: { message: string } | null = null;
+    for (const row of attempts) {
+      ({ error } = await supabase.from('weekly_checkins').upsert(row, { onConflict: 'client_id,week_start' }));
+      if (!error || isNetworkError(error)) break;
+    }
     if (error) { setSaving(false); setErr(t('Konnte nicht gespeichert werden.')); return; }
     // Weight also lands in the progress chart.
     if (weight && weight !== lastWeight) await supabase.from('progress_entries').insert({ client_id: clientId, weight_kg: weight });
@@ -184,8 +193,9 @@ export default function WeeklyCheckinCard({ clientId, lastWeight }: { clientId: 
                   <textarea rows={2} value={form.struggles} onChange={(e) => setForm({ ...form, struggles: e.target.value })}
                     className="mt-1 w-full bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none resize-none" />
                 </label>
+                {questions.length > 0 && <QuestionFields questions={questions} values={answers} onChange={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} />}
                 {err && <p className="text-xs text-red-400">{err}</p>}
-                <button onClick={submit} disabled={saving} className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
+                <button onClick={submit} disabled={saving || missingRequired(questions, answers)} className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold disabled:opacity-50" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
                   {saving ? '…' : t('Absenden')}
                 </button>
               </div>

@@ -5,6 +5,8 @@ import { fetchAll } from '@/lib/fetchAll';
 import { captureError } from '@/lib/monitoring';
 import { useNavigate } from 'react-router-dom';
 import ClientCheckins from '@/components/ClientCheckins';
+import { AnswerList } from '@/components/QuestionFields';
+import { intakeAnswers } from '@/lib/coachQuestions';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
 import { ArrowLeft, Edit3, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles } from 'lucide-react';
@@ -219,6 +221,12 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
           <Row label={t('Commitment')} value={intake.commitmentLevel ? `${intake.commitmentLevel}/5` : '—'} />
           <Row label={t('Warum jetzt')} value={intake.whyNow} />
         </div>
+        {intakeAnswers(intake).length > 0 && (
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <p className="text-[11px] uppercase tracking-wider text-adlr-gold/80 mb-2">{t('Deine eigenen Fragen')}</p>
+            <AnswerList answers={intakeAnswers(intake)} />
+          </div>
+        )}
       </CollapsibleCard>
 
       {/* Weight chart */}

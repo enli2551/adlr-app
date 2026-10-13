@@ -12,6 +12,7 @@ import { SectionHeader, EmptyState, Loading } from '@/components/ui';
 import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
 import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
+import IntakeQuestionsCard from '@/components/IntakeQuestionsCard';
 import { loadFrozenWeeks, applyStreakFreeze, mondayKey, scheduleStreakReminder } from '@/lib/engagement';
 import { cacheGet, cacheSet, flushOutbox, isNetworkError, onOutboxChange, outbox, queueWorkout, uuid, type QueuedWorkout } from '@/lib/offline';
 import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/components/ExerciseLibrary';
@@ -1125,6 +1126,7 @@ export default function PlanScreen() {
       )}
 
       {activeDayIdx === null && profile && <WeeklyCheckinCard clientId={profile.id} lastWeight={profile.weight_kg ?? null} />}
+      {activeDayIdx === null && <IntakeQuestionsCard />}
 
       {/* Guided first workout: intro card before, one-tip-at-a-time during */}
       {activeDayIdx !== null && completions.length === 0 && <FirstWorkoutTips />}
