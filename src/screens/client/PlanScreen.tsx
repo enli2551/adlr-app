@@ -30,6 +30,7 @@ import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapN
 import { weeklyStreak } from '@/lib/streak';
 import { takeRepeat, type RepeatWorkout } from '@/lib/repeatWorkout';
 import { guessMuscle } from '@/lib/muscleGuess';
+import { programState, applyWeek, ruleSummary, type ProgramState, type WeekRule } from '@/lib/program';
 
 const NOTIF_PROMPT_KEY = 'adlr_notif_prompted';
 const ACTIVE_TRAINING_KEY = 'adlr_active_training';
@@ -192,6 +193,10 @@ export default function PlanScreen() {
   const [starterBusy, setStarterBusy] = useState(false);
   // Exercises as stored in the plan — session edits are rolled back to these when the session ends.
   const planExercises = useRef<Map<string, PlanDay['exercises']>>(new Map());
+  // Multi-week program: this week's position + the plan as WRITTEN (before the week's
+  // changes) — the client's own plan editor must edit the written plan, not this week's view.
+  const [program, setProgram] = useState<ProgramState | null>(null);
+  const writtenExercises = useRef<Map<string, PlanDay['exercises']>>(new Map());
   const notifPromptShown = useRef(false);
 
   // Restores a training that was active when the app got closed (initial load only).
@@ -259,7 +264,7 @@ export default function PlanScreen() {
     let trainingDaysInPlan = 0;
     const { data: cp, error: cpErr } = await supabase
       .from('client_plans')
-      .select('plan_id')
+      .select('*')
       .eq('client_id', profile.id)
       .eq('is_active', true)
       .maybeSingle();
@@ -282,8 +287,17 @@ export default function PlanScreen() {
     loadFrozenWeeks(profile.id).then(setFrozen).catch(() => {});
     let planDays: PlanDay[] = [];
     if (cp) {
-      const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week');
+      const [{ data: pd }, prog] = await Promise.all([
+        supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week'),
+        supabase.from('plans').select('weeks, week_rules').eq('id', cp.plan_id).maybeSingle(),
+      ]);
       planDays = (pd ?? []) as PlanDay[];
+      writtenExercises.current = new Map(planDays.map((d) => [d.id, d.exercises]));
+      // Program week: the plan's days as prescribed for this week (sets/reps/load/RPE).
+      const pdata = prog.error ? null : (prog.data as { weeks: number | null; week_rules: WeekRule[] | null } | null);
+      const state = programState(pdata?.weeks, pdata?.week_rules, (cp as { assigned_at?: string }).assigned_at);
+      setProgram(state);
+      if (state?.rule) planDays = planDays.map((d) => ({ ...d, exercises: applyWeek(d.exercises ?? [], state.rule) }));
       trainingDaysInPlan = planDays.filter((d) => !d.is_rest_day).length;
     }
     // Also without a plan: a running free workout has to be restored.
@@ -804,7 +818,7 @@ export default function PlanScreen() {
     setTimeout(() => setCelebrate(false), 2800);
     const original = planExercises.current.get(day.id);
     const shape = (xs: Exercise[] | undefined) => JSON.stringify((xs ?? []).map((e) => [e.name, e.sets ?? 1]));
-    if (profile.can_edit_plan && !day.is_free && original && shape(original) !== shape(day.exercises)) {
+    if (profile.can_edit_plan && !day.is_free && !program && original && shape(original) !== shape(day.exercises)) {
       setPlanSaveError(null);
       setPlanSaveOffer({ dayId: day.id, exercises: day.exercises });
     }
@@ -903,7 +917,7 @@ export default function PlanScreen() {
     if (sp) {
       await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id);
       await supabase.from('client_plans').upsert(
-        { client_id: profile.id, plan_id: sp.id, is_active: true },
+        { client_id: profile.id, plan_id: sp.id, is_active: true, assigned_at: new Date().toISOString() },
         { onConflict: 'client_id,plan_id' },
       );
       await load();
@@ -1170,6 +1184,19 @@ export default function PlanScreen() {
 
       {activeDayIdx === null && (
         <div className="adlr-card p-4 mb-4">
+          {program && (
+            <div className="flex items-center justify-between gap-2 mb-3 pb-3" style={{ borderBottom: '1px solid rgb(var(--text) / 0.07)' }}>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wider text-adlr-gold/85">{program.finished ? t('Programm abgeschlossen') : t('Programm · Woche {n} von {total}', { n: program.week, total: program.total })}</p>
+                <p className="text-xs text-white/55 truncate mt-0.5">{program.finished ? t('{coach} plant deinen nächsten Block.', { coach }) : program.rule?.deload ? t('Deload-Woche — leichter, damit du dich erholst.') : ruleSummary(program.rule)}</p>
+              </div>
+              <div className="flex gap-0.5 shrink-0">
+                {Array.from({ length: Math.min(program.total, 12) }, (_, i) => (
+                  <span key={i} className="w-1.5 h-4 rounded-full" style={{ background: i + 1 < program.week || program.finished ? 'rgb(var(--adlr-gold))' : i + 1 === program.week ? 'rgb(var(--adlr-gold) / 0.55)' : 'rgb(var(--text) / 0.12)' }} />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-end justify-between gap-3 mb-2.5">
             <div>
               <p className="text-[11px] uppercase tracking-wider text-white/40">{t('Wochenziel')}</p>
@@ -1338,7 +1365,7 @@ export default function PlanScreen() {
                           </button>
                           {profile?.can_edit_plan && !day.is_free && activeDayIdx === null && (
                             <button
-                              onClick={() => setEditingDay(day)}
+                              onClick={() => setEditingDay({ ...day, exercises: writtenExercises.current.get(day.id) ?? day.exercises })}
                               className="adlr-tap px-4 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm flex items-center justify-center gap-1.5"
                               aria-label={t('Tag bearbeiten')}
                             >

@@ -73,6 +73,8 @@ export interface Plan {
   client_edited_at?: string | null; // last time the client changed the plan themselves
   ai_generated?: boolean;             // drafted by the AI plan builder
   ai_rationale?: string | null;       // the AI's reasoning, shown to the trainer
+  weeks?: number | null;              // multi-week program: length in weeks (null/1 = plain weekly plan)
+  week_rules?: import('@/lib/program').WeekRule[] | null; // per-week volume/load/RPE changes
 }
 
 export interface PlanDay {

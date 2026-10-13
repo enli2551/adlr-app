@@ -10,6 +10,7 @@ import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { useSearchParams } from 'react-router-dom';
 import AiPlanSheet, { type AiPlanResult } from '@/components/AiPlanSheet';
+import ProgramEditor from '@/components/ProgramEditor';
 import { Sparkles } from 'lucide-react';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -207,7 +208,7 @@ export default function PlanBuilderScreen() {
     // Deactivate any other active plans for this client so only one is active.
     await supabase.from('client_plans').update({ is_active: false }).eq('client_id', selectedClientId).neq('plan_id', activePlan.id);
     const { error } = await supabase.from('client_plans').upsert(
-      { client_id: selectedClientId, plan_id: activePlan.id, is_active: true },
+      { client_id: selectedClientId, plan_id: activePlan.id, is_active: true, assigned_at: new Date().toISOString() },
       { onConflict: 'client_id,plan_id' }
     );
     if (error) {
@@ -380,9 +381,12 @@ export default function PlanBuilderScreen() {
     }
   };
 
+  // Program settings travel with copies/templates (only when set, so older databases keep working).
+  const programOf = (p: Plan) => (p.weeks && p.weeks > 1 ? { weeks: p.weeks, week_rules: p.week_rules ?? null } : {});
+
   const copyPlan = async (plan: Plan) => {
     if (!profile) return;
-    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: `${plan.name} (Kopie)` }).select().single();
+    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: `${plan.name} (Kopie)`, ...programOf(plan) }).select().single();
     if (!data) return;
     await clonePlanDays(plan.id, data.id);
     await load();
@@ -392,7 +396,7 @@ export default function PlanBuilderScreen() {
   const saveCurrentAsTemplate = async () => {
     if (!profile || !activePlan) return;
     const baseName = activePlan.name.replace(/\s*\(Vorlage\)\s*$/, '');
-    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: `${baseName} (Vorlage)`, is_template: true }).select().single();
+    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: `${baseName} (Vorlage)`, is_template: true, ...programOf(activePlan) }).select().single();
     if (!data) { setTemplateMsg(t('Fehler beim Speichern')); setTimeout(() => setTemplateMsg(null), 2500); return; }
     await clonePlanDays(activePlan.id, data.id);
     await load();
@@ -404,7 +408,7 @@ export default function PlanBuilderScreen() {
   const createFromTemplate = async (tpl: Plan) => {
     if (!profile) return;
     const baseName = tpl.name.replace(/\s*\(Vorlage\)\s*$/, '');
-    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: baseName, is_template: false }).select().single();
+    const { data } = await supabase.from('plans').insert({ trainer_id: profile.id, name: baseName, is_template: false, ...programOf(tpl) }).select().single();
     if (!data) return;
     await clonePlanDays(tpl.id, data.id);
     await load();
@@ -434,6 +438,7 @@ export default function PlanBuilderScreen() {
       if (kind === 'other' && / · /.test(p.name)) tags.push({ label: t('Kopie eines Klienten'), tone: 'muted' });
       const info = [
         m && m.trainingDays > 0 ? t(m.trainingDays === 1 ? '1 Trainingstag' : '{n} Trainingstage', { n: m.trainingDays }) : null,
+        p.weeks && p.weeks > 1 ? t('{n} Wochen', { n: p.weeks }) : null,
         kind === 'other' ? fmtDate(p.created_at, { day: 'numeric', month: 'short' }) : null,
       ].filter(Boolean).join(' · ');
       return (
@@ -745,6 +750,13 @@ export default function PlanBuilderScreen() {
           )}
           {showRationale && aiInfo && <p className="text-[10px] text-white/30 mt-2">{t('KI-Pläne diesen Monat: {u} / {l}', { u: aiInfo.used, l: aiInfo.limit })}</p>}
         </div>
+      )}
+
+      {activePlan && (
+        <ProgramEditor
+          plan={activePlan}
+          onChange={(p) => { setActivePlan(p); setPlans((prev) => prev.map((x) => (x.id === p.id ? p : x))); }}
+        />
       )}
 
       {days.length > 0 && (
