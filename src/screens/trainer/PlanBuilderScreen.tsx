@@ -258,6 +258,35 @@ export default function PlanBuilderScreen() {
     await updateDay(dayIdx, { exercises: exs });
   };
 
+  // Superset / circuit: exercises sharing a letter are done back to back. Joining a group takes
+  // over its type; changing the type changes it for the whole group.
+  const setExerciseGroup = async (dayIdx: number, exIdx: number, group: string | null) => {
+    const day = days[dayIdx];
+    if (!day) return;
+    const type = group ? (day.exercises.find((e, i) => i !== exIdx && e.group === group)?.group_type ?? 'superset') : null;
+    const exs = [...day.exercises];
+    const [moved] = exs.splice(exIdx, 1);
+    const updated = { ...moved, group, group_type: type };
+    // Joining a group moves the exercise right behind the group's last member, so a superset
+    // always reads A1, A2 next to each other.
+    let lastMember = -1;
+    exs.forEach((e, i) => { if (group && e.group === group) lastMember = i; });
+    exs.splice(lastMember >= 0 ? lastMember + 1 : exIdx, 0, updated);
+    await updateDay(dayIdx, { exercises: exs });
+  };
+  const setGroupType = async (dayIdx: number, group: string, type: 'superset' | 'circuit') => {
+    const day = days[dayIdx];
+    if (!day) return;
+    await updateDay(dayIdx, { exercises: day.exercises.map((e) => (e.group === group ? { ...e, group_type: type } : e)) });
+  };
+  // "A1", "A2" … position of an exercise inside its group.
+  const groupLabel = (exs: Exercise[], exIdx: number) => {
+    const g = exs[exIdx]?.group;
+    if (!g) return null;
+    const members = exs.map((e, i) => (e.group === g ? i : -1)).filter((i) => i >= 0);
+    return members.length > 1 ? `${g}${members.indexOf(exIdx) + 1}` : g;
+  };
+
   // Per-set weight/reps helpers (pyramid sets etc.)
   const setDetailsOf = (ex: Exercise): { weight_kg?: number; reps?: number }[] => {
     const n = Math.max(1, ex.sets ?? 1);
@@ -786,7 +815,10 @@ export default function PlanBuilderScreen() {
                               <Dumbbell size={14} style={{ color: 'rgb(var(--adlr-gold))' }} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white mb-2">{t(ex.name)}</p>
+                              <p className="text-sm font-medium text-white mb-2 flex items-center gap-1.5">
+                                {ex.group && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{groupLabel(day.exercises, exIdx)}</span>}
+                                <span className="min-w-0">{t(ex.name)}</span>
+                              </p>
                               <div className="space-y-2">
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
@@ -807,6 +839,58 @@ export default function PlanBuilderScreen() {
                                       className="w-full bg-inset border border-white/10 rounded-md px-1 py-2 text-sm text-white outline-none text-center"
                                     />
                                   </div>
+                                </div>
+                                {/* Superset / circuit group + intensity target (RPE or RIR) */}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Gruppe')}</span>
+                                  {[null, 'A', 'B', 'C', 'D'].map((g) => (
+                                    <button
+                                      key={g ?? '-'}
+                                      onClick={() => setExerciseGroup(idx, exIdx, g)}
+                                      className="adlr-tap min-w-7 h-7 px-1.5 rounded-md text-xs font-semibold"
+                                      style={(ex.group ?? null) === g ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
+                                    >
+                                      {g ?? '–'}
+                                    </button>
+                                  ))}
+                                  {ex.group && (['superset', 'circuit'] as const).map((tp) => (
+                                    <button
+                                      key={tp}
+                                      onClick={() => setGroupType(idx, ex.group!, tp)}
+                                      className="adlr-tap h-7 px-2 rounded-md text-[11px] font-medium"
+                                      style={(ex.group_type ?? 'superset') === tp ? { background: 'rgb(var(--adlr-gold) / 0.2)', color: 'rgb(var(--adlr-gold))' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.45)' }}
+                                    >
+                                      {tp === 'superset' ? t('Supersatz') : t('Zirkel')}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Intensität')}</span>
+                                  {(['none', 'rpe', 'rir'] as const).map((mode) => {
+                                    const cur = ex.rpe != null ? 'rpe' : ex.rir != null ? 'rir' : 'none';
+                                    return (
+                                      <button
+                                        key={mode}
+                                        onClick={() => updateExercise(idx, exIdx, mode === 'rpe' ? { rpe: ex.rpe ?? 8, rir: null } : mode === 'rir' ? { rir: ex.rir ?? 2, rpe: null } : { rpe: null, rir: null })}
+                                        className="adlr-tap h-7 px-2 rounded-md text-[11px] font-semibold"
+                                        style={cur === mode ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
+                                      >
+                                        {mode === 'none' ? '–' : mode.toUpperCase()}
+                                      </button>
+                                    );
+                                  })}
+                                  {(ex.rpe != null || ex.rir != null) && (
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step={ex.rpe != null ? 0.5 : 1}
+                                      min={ex.rpe != null ? 5 : 0}
+                                      max={ex.rpe != null ? 10 : 5}
+                                      value={ex.rpe ?? ex.rir ?? ''}
+                                      onChange={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); updateExercise(idx, exIdx, ex.rpe != null ? { rpe: v } : { rir: v }); }}
+                                      className="w-14 h-7 bg-inset border border-white/10 rounded-md px-1 text-sm text-white outline-none text-center"
+                                    />
+                                  )}
                                 </div>
                                 {/* Per-set weight × reps (pyramid etc.) */}
                                 <div className="space-y-1.5 pt-0.5">

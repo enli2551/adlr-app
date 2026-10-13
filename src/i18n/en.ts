@@ -1181,6 +1181,16 @@ const dict: Record<string, string> = {
   "1 Trainingstag": "1 training day",
   // ── Animation play fallback (2026-10-13) ──
   "Animation abspielen": "Play animation",
+  // ── Supersets, circuits, RPE/RIR (2026-10-13) ──
+  "Gruppe": "Group",
+  "Supersatz": "Superset",
+  "Zirkel": "Circuit",
+  "Intensität": "Intensity",
+  "Zirkel — alle Übungen nacheinander, dann Pause": "Circuit — all exercises in a row, then rest",
+  "Supersatz — direkt nacheinander, dann Pause": "Superset — back to back, then rest",
+  "Wiederholungen in Reserve": "Reps in reserve",
+  "Anstrengung (RPE 1–10)": "Effort (RPE 1–10)",
+  "RPE bei jedem Satz erfassen": "Log RPE for every set",
 };
 
 export default dict;

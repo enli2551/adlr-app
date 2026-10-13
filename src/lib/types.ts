@@ -99,6 +99,12 @@ export interface Exercise {
   tempo?: string;
   notes?: string;
   alternatives?: string[]; // up to 2 fallback exercises (same muscle group)
+  /** superset / circuit: exercises with the same letter are done back to back, rest after the round */
+  group?: string | null;
+  group_type?: 'superset' | 'circuit' | null;
+  /** intensity target — either RPE (1–10) or reps in reserve */
+  rpe?: number | null;
+  rir?: number | null;
 }
 
 export interface ClientPlan {
@@ -247,6 +253,8 @@ export interface ExerciseSetLog {
   set_type?: 'warmup' | 'working' | 'dropset' | null;
   duration_sec?: number | null; // cardio
   distance_km?: number | null;  // cardio
+  rpe?: number | null; // logged effort 1–10
+  rir?: number | null; // logged reps in reserve
   created_at: string;
 }
 

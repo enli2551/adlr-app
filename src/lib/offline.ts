@@ -46,6 +46,7 @@ export interface QueuedLog {
   id?: string;
   exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null;
   set_type: string; duration_sec: number | null; distance_km: number | null; plan_day_id: string | null;
+  rpe?: number | null; rir?: number | null;
 }
 export interface QueuedWorkout {
   localId: string;
@@ -125,9 +126,14 @@ export function flushOutbox(): Promise<number> {
       }
       if (item.logs.length > 0 && !item.logsSent) {
         const logs = item.logs.map((l) => ({ ...l, client_id: item.client_id, workout_completion_id: id, created_at: item.completed_at }));
+        // Newest columns first; strip them step by step if a migration hasn't been run yet.
+        const noEffort = logs.map(({ rpe: _r, rir: _i, ...r }) => r);
         let { error } = await supabase.from('exercise_set_logs').insert(logs);
         if (error && !isNetworkError(error) && !isDuplicate(error)) {
-          ({ error } = await supabase.from('exercise_set_logs').insert(logs.map(({ set_type: _s, duration_sec: _d, distance_km: _k, ...r }) => r)));
+          ({ error } = await supabase.from('exercise_set_logs').insert(noEffort));
+        }
+        if (error && !isNetworkError(error) && !isDuplicate(error)) {
+          ({ error } = await supabase.from('exercise_set_logs').insert(noEffort.map(({ set_type: _s, duration_sec: _d, distance_km: _k, ...r }) => r)));
         }
         // One insert is atomic: a duplicate id means the whole batch already arrived.
         if (error && !isDuplicate(error)) {

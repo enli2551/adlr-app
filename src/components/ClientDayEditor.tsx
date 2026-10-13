@@ -38,9 +38,10 @@ export default function ClientDayEditor({ day, onClose, onSaved }: { day: PlanDa
     if (picking === -1) {
       setItems((arr) => [...arr, { name: row.name, sets: row.default_sets || 3, reps: row.default_reps || 10, rest_sec: row.default_rest_sec || 60 }]);
     } else {
-      // Swapped exercise: keep the prescription volume, drop exercise-specific details.
+      // Swapped exercise: keep the prescription volume, its superset group and intensity
+      // target, drop exercise-specific details (weights, alternatives, notes).
       setItems((arr) => arr.map((e, idx) => (idx === picking
-        ? { name: row.name, sets: e.sets, reps: e.reps, rest_sec: e.rest_sec ?? row.default_rest_sec }
+        ? { name: row.name, sets: e.sets, reps: e.reps, rest_sec: e.rest_sec ?? row.default_rest_sec, group: e.group, group_type: e.group_type, rpe: e.rpe, rir: e.rir }
         : e)));
     }
     haptic.light();

@@ -61,12 +61,14 @@ export default function WorkoutImportCard({ clientId }: { clientId: string }) {
           client_id: clientId, workout_completion_id: ids[k], plan_day_id: null, exercise_name: s.exercise,
           set_number: s.set_number, weight_kg: s.weight_kg, reps: s.reps, set_type: s.set_type,
           duration_sec: s.duration_sec, distance_km: s.distance_km, created_at: w.end.toISOString(),
+          ...(s.rpe != null && s.rpe >= 1 && s.rpe <= 10 ? { rpe: s.rpe } : {}),
         })));
         for (let j = 0; j < logs.length; j += 500) {
           const part = logs.slice(j, j + 500);
           const { error } = await supabase.from('exercise_set_logs').insert(part);
           if (error) {
-            const { error: e2 } = await supabase.from('exercise_set_logs').insert(part.map(({ set_type: _t, duration_sec: _d, distance_km: _k, ...r }) => r));
+            // RPE / set type / cardio columns missing (migrations not run) — keep the core data
+            const { error: e2 } = await supabase.from('exercise_set_logs').insert(part.map(({ set_type: _t, duration_sec: _d, distance_km: _k, rpe: _r, ...r }: Record<string, unknown>) => r));
             if (e2) throw new Error(e2.message);
           }
         }

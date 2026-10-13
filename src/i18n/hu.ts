@@ -1182,6 +1182,16 @@ const dict: Record<string, string> = {
   "1 Trainingstag": "1 edzésnap",
   // ── Animation play fallback (2026-10-13) ──
   "Animation abspielen": "Animáció lejátszása",
+  // ── Supersets, circuits, RPE/RIR (2026-10-13) ──
+  "Gruppe": "Csoport",
+  "Supersatz": "Szuperszett",
+  "Zirkel": "Kör",
+  "Intensität": "Intenzitás",
+  "Zirkel — alle Übungen nacheinander, dann Pause": "Kör — minden gyakorlat egymás után, utána pihenő",
+  "Supersatz — direkt nacheinander, dann Pause": "Szuperszett — közvetlenül egymás után, utána pihenő",
+  "Wiederholungen in Reserve": "Tartalékismétlés (RIR)",
+  "Anstrengung (RPE 1–10)": "Erőfeszítés (RPE 1–10)",
+  "RPE bei jedem Satz erfassen": "RPE rögzítése minden sorozatnál",
 };
 
 export default dict;

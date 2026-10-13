@@ -203,7 +203,7 @@ function ExercisesCard({ summary }: { summary: SessionSummary }) {
               <p className="text-base font-medium text-white leading-snug">{t(ex.name)}</p>
               {ex.cardio ? (
                 <p className="text-xs text-white/45 mt-0.5">{ex.cardio.minutes} min{ex.cardio.km > 0 ? ` · ${fmtNum(ex.cardio.km)} km` : ''}</p>
-              ) : ex.best && <p className="text-xs text-white/45 mt-0.5">{t('Bester Satz')}: {ex.best.weight_kg} kg × {ex.best.reps}</p>}
+              ) : ex.best && <p className="text-xs text-white/45 mt-0.5">{t('Bester Satz')}: {ex.best.weight_kg} kg × {ex.best.reps}{ex.best.rpe != null ? ` @ RPE ${ex.best.rpe}` : ex.best.rir != null ? ` · ${ex.best.rir} RIR` : ''}</p>}
               {summary.completion.exercise_notes?.[ex.name] && (
                 <p className="text-xs text-adlr-gold/70 mt-0.5 flex items-start gap-1"><StickyNote size={11} className="shrink-0 mt-0.5" /> {summary.completion.exercise_notes[ex.name]}</p>
               )}

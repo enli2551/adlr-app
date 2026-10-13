@@ -43,6 +43,7 @@ export default function WorkoutEditor({ completion, logs, name, onClose, onChang
       sets: ls.sort((a, b) => a.set_number - b.set_number).map((l) => ({
         weight: l.weight_kg?.toString() ?? '', reps: l.reps?.toString() ?? '', type: (l.set_type ?? 'working') as EditSet['type'],
         min: l.duration_sec ? String(Math.round(l.duration_sec / 60)) : '', km: l.distance_km?.toString() ?? '',
+        effort: l.rir != null ? String(l.rir) : l.rpe != null ? String(l.rpe) : '', effortIsRir: l.rir != null,
       })),
     }));
   });
@@ -161,6 +162,9 @@ export default function WorkoutEditor({ completion, logs, name, onClose, onChang
                             <input inputMode="decimal" value={s.weight} onChange={(e) => setField(ei, si, { weight: e.target.value })} placeholder="kg" className={`w-16 text-center ${input}`} />
                             <span className="text-xs text-white/30">×</span>
                             <input inputMode="numeric" value={s.reps} onChange={(e) => setField(ei, si, { reps: e.target.value })} placeholder={t('Wdh')} className={`w-16 text-center ${input}`} />
+                            {ex.sets.some((x) => x.effort) && (
+                              <input inputMode="decimal" value={s.effort ?? ''} onChange={(e) => setField(ei, si, { effort: e.target.value, effortIsRir: ex.sets.some((x) => x.effortIsRir) })} placeholder={ex.sets.some((x) => x.effortIsRir) ? 'RIR' : 'RPE'} className={`w-12 text-center ${input}`} />
+                            )}
                           </>
                         )}
                         <button onClick={() => removeSet(ei, si)} className="adlr-tap ml-auto p-1 text-white/30 hover:text-red-400" aria-label={t('Satz entfernen')}><X size={14} /></button>

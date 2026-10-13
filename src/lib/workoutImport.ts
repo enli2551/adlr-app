@@ -21,6 +21,7 @@ export interface ImportedSet {
   set_type: 'warmup' | 'working' | 'dropset';
   duration_sec: number | null;
   distance_km: number | null;
+  rpe?: number | null; // Hevy exports RPE per set
 }
 
 export interface ImportedWorkout {
@@ -193,6 +194,7 @@ export function parseWorkoutExport(text: string): ImportResult {
       title: col('title'), start: col('start_time'), end: col('end_time'), ex: col('exercise_title'),
       idx: col('set_index'), type: col('set_type'), kg: col('weight_kg'), lbs: col('weight_lbs'),
       reps: col('reps'), km: col('distance_km'), mi: col('distance_miles'), dur: col('duration_seconds'),
+      rpe: col('rpe'),
     };
     for (const r of rows.slice(1)) {
       if (!(r[c.ex] ?? '').trim()) continue;
@@ -210,6 +212,7 @@ export function parseWorkoutExport(text: string): ImportResult {
         set_number: (num(r[c.idx]) ?? w.sets.filter((s) => s.original === r[c.ex]).length) + 1,
         weight_kg: kg, reps: num(r[c.reps]), set_type: setTypeOf(r[c.type] ?? ''),
         duration_sec: num(r[c.dur]), distance_km: km,
+        rpe: c.rpe >= 0 ? num(r[c.rpe]) : null,
       });
     }
     return { source: 'hevy', workouts: finish(byKey), mapping, skippedRows };

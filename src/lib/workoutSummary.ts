@@ -6,7 +6,7 @@ import { t, fmtNum } from '@/lib/i18n';
 export interface SessionExercise {
   name: string;
   sets: number;
-  best: { weight_kg: number; reps: number } | null; // heaviest non-warm-up set
+  best: { weight_kg: number; reps: number; rpe?: number | null; rir?: number | null } | null; // heaviest non-warm-up set
   cardio: { minutes: number; km: number } | null;   // summed time/distance (cardio sets)
   logs: ExerciseSetLog[];
 }
@@ -43,7 +43,7 @@ export function summarizeSession(
     let best: SessionExercise['best'] = null;
     for (const l of ls) {
       if (l.weight_kg == null || l.set_type === 'warmup') continue;
-      if (!best || l.weight_kg > best.weight_kg) best = { weight_kg: l.weight_kg, reps: l.reps ?? 0 };
+      if (!best || l.weight_kg > best.weight_kg) best = { weight_kg: l.weight_kg, reps: l.reps ?? 0, rpe: l.rpe ?? null, rir: l.rir ?? null };
     }
     const sec = ls.reduce((t, l) => t + (l.duration_sec ?? 0), 0);
     const km = ls.reduce((t, l) => t + (l.distance_km ?? 0), 0);

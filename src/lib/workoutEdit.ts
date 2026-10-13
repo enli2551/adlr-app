@@ -14,6 +14,9 @@ export interface EditSet {
   type: 'working' | 'warmup' | 'dropset';
   min: string;
   km: string;
+  /** logged RPE (or RIR, see rir flag) — kept as it was, editable */
+  effort?: string;
+  effortIsRir?: boolean;
 }
 export interface EditExercise { name: string; sets: EditSet[] }
 export interface WorkoutPatch {
@@ -87,10 +90,13 @@ export async function saveWorkoutEdit(c: WorkoutCompletion, oldLogs: ExerciseSet
       id: uuid(), client_id: c.client_id, workout_completion_id: c.id, plan_day_id: c.plan_day_id,
       exercise_name: ex.name, set_number: i + 1, weight_kg: x.w, reps: x.r == null ? null : Math.round(x.r),
       set_type: x.s.type, duration_sec: x.dur, distance_km: x.km, created_at: patch.completed_at,
+      ...(x.s.effort?.trim() ? (x.s.effortIsRir ? { rir: Math.round(Number(x.s.effort.replace(',', '.'))) } : { rpe: Number(x.s.effort.replace(',', '.')) }) : {}),
     })));
   if (rows.length > 0) {
+    const noEffort = rows.map(({ rpe: _r, rir: _i, ...r }: Record<string, unknown>) => r);
     let { error: insErr } = await supabase.from('exercise_set_logs').insert(rows);
-    if (insErr && !isNetworkError(insErr)) ({ error: insErr } = await supabase.from('exercise_set_logs').insert(rows.map(({ set_type: _s, duration_sec: _d, distance_km: _k, ...r }) => r)));
+    if (insErr && !isNetworkError(insErr)) ({ error: insErr } = await supabase.from('exercise_set_logs').insert(noEffort));
+    if (insErr && !isNetworkError(insErr)) ({ error: insErr } = await supabase.from('exercise_set_logs').insert(noEffort.map(({ set_type: _s, duration_sec: _d, distance_km: _k, ...r }) => r)));
     if (insErr) return isNetworkError(insErr) ? t('Keine Verbindung — bitte versuche es gleich nochmal.') : insErr.message;
   }
   const oldIds = oldLogs.map((l) => l.id);

@@ -47,6 +47,7 @@ interface SetInput {
   type: SetType;
   min?: string; // cardio: duration in minutes
   km?: string;  // cardio: distance
+  rpe?: string; // logged effort: RPE (1–10) or RIR, depending on the exercise's target
 }
 
 // Resolve an exercise's per-set prescription (falls back to uniform sets×reps@weight).
@@ -75,7 +76,7 @@ interface PersistedTraining {
 // Rest timer preferences (per device): auto-start on ticking a set, and per-exercise
 // rest overrides in seconds (0 = no rest timer for that exercise).
 const REST_PREFS_KEY = 'adlr_rest_prefs';
-interface RestPrefs { auto: boolean; overrides: Record<string, number> }
+interface RestPrefs { auto: boolean; overrides: Record<string, number>; trackRpe?: boolean }
 const REST_OPTIONS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 function fmtRest(sec: number): string {
   return sec >= 60 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : `${sec}s`;
@@ -382,6 +383,18 @@ export default function PlanScreen() {
 
   // ── Lock-screen flow (rest countdown → next set with ✓, see lib/restChrono.ts) ──
   const restFor = (ex: Exercise) => restPrefs.overrides[ex.name] ?? ex.rest_sec ?? 0;
+  // Superset / circuit: members of a group (same letter) are done back to back — no rest
+  // between them, the rest comes after the group's last exercise.
+  const groupMembers = (day: PlanDay | undefined, ex: Exercise) =>
+    ex.group && day ? day.exercises.filter((e) => e.group === ex.group) : [ex];
+  const restAfter = (day: PlanDay | undefined, ex: Exercise) => {
+    const m = groupMembers(day, ex);
+    return m.length > 1 && m[m.length - 1].name !== ex.name ? 0 : restFor(ex);
+  };
+  // What is logged next to kg × reps: RIR when the coach set a RIR target, otherwise RPE
+  // (when there's a target or the client switched on RPE logging).
+  const effortMode = (ex: Exercise): 'rpe' | 'rir' | null =>
+    ex.rir != null ? 'rir' : ex.rpe != null || restPrefs.trackRpe ? 'rpe' : null;
   const setLine = (ex: Exercise, i: number, inputs: Record<string, SetInput[]>) => {
     const s = inputs[ex.name]?.[i];
     const parts = [t('Satz {n}/{total}', { n: i + 1, total: ex.sets ?? 1 })];
@@ -396,11 +409,20 @@ export default function PlanScreen() {
   // Every set not ticked yet, in training order — the lock screen walks through these.
   const buildSteps = (day: PlanDay, checked: Set<string>, inputs: Record<string, SetInput[]>): RestStep[] => {
     const steps: RestStep[] = [];
+    const done = new Set<string>();
     for (const ex of day.exercises ?? []) {
-      for (let i = 0; i < (ex.sets ?? 1); i++) {
-        const key = setKey(ex.name, i);
-        if (checked.has(key)) continue;
-        steps.push({ key, title: t(ex.name), body: setLine(ex, i, inputs), rest: restPrefs.auto ? restFor(ex) : 0 });
+      if (done.has(ex.name)) continue;
+      // a superset/circuit is walked round by round: A1 set 1, A2 set 1, rest, A1 set 2 …
+      const members = groupMembers(day, ex);
+      members.forEach((m) => done.add(m.name));
+      const rounds = Math.max(...members.map((m) => m.sets ?? 1));
+      for (let i = 0; i < rounds; i++) {
+        for (const m of members) {
+          if (i >= (m.sets ?? 1)) continue;
+          const key = setKey(m.name, i);
+          if (checked.has(key)) continue;
+          steps.push({ key, title: t(m.name), body: setLine(m, i, inputs), rest: restPrefs.auto ? restAfter(day, m) : 0 });
+        }
       }
     }
     return steps;
@@ -697,7 +719,7 @@ export default function PlanScreen() {
     const planDayId = day.is_free ? null : day.id;
     const title = day.is_free ? (day.workout_name?.trim() || 'Freies Training') : null;
     // Collect the logged sets first (row ids made here, so a retried upload can't duplicate them).
-    const baseLogs: Array<{ id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null }> = [];
+    const baseLogs: Array<{ id: string; plan_day_id: string | null; exercise_name: string; set_number: number; weight_kg: number | null; reps: number | null; set_type: SetType; duration_sec: number | null; distance_km: number | null; rpe?: number | null; rir?: number | null }> = [];
     // Pre-filled values (last session / plan) are not proof a set was done: once any set is
     // ticked, only ticked sets are saved; with nothing ticked, every filled-in set counts.
     const onlyChecked = checkedSets.size > 0;
@@ -709,6 +731,8 @@ export default function PlanScreen() {
         const r = inputs[i]?.reps ? Number(inputs[i].reps) : null;
         const dur = inputs[i]?.min ? Math.round(Number(inputs[i].min) * 60) : null;
         const km = inputs[i]?.km ? Number(inputs[i].km) : null;
+        const effort = inputs[i]?.rpe ? Number(inputs[i].rpe!.replace(',', '.')) : null;
+        const mode = effortMode(ex);
         if (w !== null || r !== null || dur !== null || km !== null) {
           baseLogs.push({
             id: uuid(),
@@ -720,6 +744,7 @@ export default function PlanScreen() {
             set_type: inputs[i]?.type ?? 'working',
             duration_sec: dur,
             distance_km: km,
+            ...(effort != null && !Number.isNaN(effort) ? (mode === 'rir' ? { rir: Math.round(effort) } : { rpe: effort }) : {}),
           });
         }
       }
@@ -810,7 +835,7 @@ export default function PlanScreen() {
     await load();
   };
 
-  const updateSetInput = (exerciseName: string, setIdx: number, field: 'weight' | 'reps' | 'min' | 'km', value: string) => {
+  const updateSetInput = (exerciseName: string, setIdx: number, field: 'weight' | 'reps' | 'min' | 'km' | 'rpe', value: string) => {
     setSetInputs((prev) => {
       const arr = [...(prev[exerciseName] ?? [])];
       if (!arr[setIdx]) arr[setIdx] = { weight: '', reps: '', type: 'working' };
@@ -844,7 +869,7 @@ export default function PlanScreen() {
       return next;
     });
     if (!wasChecked) {
-      const rest = restPrefs.auto ? restFor(ex) : 0;
+      const rest = restPrefs.auto ? restAfter(days[activeDayIdx], ex) : 0;
       if (rest > 0) {
         setRestTotal(rest);
         setRestEndAt(Date.now() + rest * 1000);
@@ -1356,12 +1381,28 @@ export default function PlanScreen() {
                                   {isChecked && <Check size={14} className="text-white" />}
                                 </button>
                                 <div className="flex-1 min-w-0">
-                                  <p className={`text-sm font-medium ${isChecked ? 'text-white/60 line-through' : 'text-white/90'}`}>{t(ex.name)}</p>
+                                  <p className={`text-sm font-medium flex items-center gap-1.5 ${isChecked ? 'text-white/60 line-through' : 'text-white/90'}`}>
+                                    {ex.group && (() => {
+                                      const m = groupMembers(day, ex);
+                                      return m.length > 1 ? (
+                                        <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded no-underline" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }} title={ex.group_type === 'circuit' ? t('Zirkel') : t('Supersatz')}>
+                                          {ex.group}{m.findIndex((x) => x.name === ex.name) + 1}
+                                        </span>
+                                      ) : null;
+                                    })()}
+                                    <span className="min-w-0">{t(ex.name)}</span>
+                                  </p>
+                                  {ex.group && groupMembers(day, ex).length > 1 && groupMembers(day, ex)[0].name === ex.name && (
+                                    <p className="text-[11px] text-adlr-gold/80 mt-0.5">
+                                      {ex.group_type === 'circuit' ? t('Zirkel — alle Übungen nacheinander, dann Pause') : t('Supersatz — direkt nacheinander, dann Pause')}
+                                    </p>
+                                  )}
                                   <p className="text-xs text-white/40 mt-0.5">
                                     {ex.sets && t('{n} Sätze', { n: ex.sets })}
                                     {!vary && prescribed[0]?.reps ? ` · ${prescribed[0].reps} ${t('Wdh')}` : ''}
                                     {!vary && prescribed[0]?.weight_kg ? <span className="text-adlr-gold/70"> · {prescribed[0].weight_kg} kg</span> : ''}
                                     {!isTraining && restFor(ex) > 0 ? ` · ${t('{n}s Pause', { n: restFor(ex) })}` : ''}
+                                    {ex.rpe != null ? <span className="text-adlr-gold/80"> · RPE {ex.rpe}</span> : ex.rir != null ? <span className="text-adlr-gold/80"> · {ex.rir} RIR</span> : null}
                                   </p>
                                   {isTraining && (
                                     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -1514,6 +1555,17 @@ export default function PlanScreen() {
                                                   placeholder={t('Wdh')}
                                                   className="w-14 bg-inset border border-white/10 rounded-md px-1.5 py-1.5 text-xs text-white placeholder-white/20 outline-none text-center"
                                                 />
+                                                {effortMode(ex) && (
+                                                  <input
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    value={inputs[setIdx]?.rpe ?? ''}
+                                                    onChange={(e) => updateSetInput(ex.name, setIdx, 'rpe', e.target.value)}
+                                                    placeholder={effortMode(ex) === 'rir' ? 'RIR' : 'RPE'}
+                                                    aria-label={effortMode(ex) === 'rir' ? t('Wiederholungen in Reserve') : t('Anstrengung (RPE 1–10)')}
+                                                    className="w-11 bg-inset border border-adlr-gold/25 rounded-md px-1 py-1.5 text-xs text-white placeholder-white/25 outline-none text-center"
+                                                  />
+                                                )}
                                               </>
                                             )}
                                             {isTraining && canEditSession(day) && (
@@ -1661,6 +1713,16 @@ export default function PlanScreen() {
               <span className="text-white/85">{t('Pausen-Timer automatisch starten')}</span>
               <span className="w-10 h-6 rounded-full relative transition-colors shrink-0" style={{ background: restPrefs.auto ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.15)' }}>
                 <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: restPrefs.auto ? '18px' : '2px' }} />
+              </span>
+            </button>
+            <button
+              onClick={() => setRestPrefs({ ...restPrefs, trackRpe: !restPrefs.trackRpe })}
+              className="adlr-tap w-full mt-1.5 flex items-center justify-between rounded-xl px-3.5 py-3 text-sm text-left"
+              style={{ background: 'rgb(var(--text) / 0.04)' }}
+            >
+              <span className="text-white/85">{t('RPE bei jedem Satz erfassen')}</span>
+              <span className="w-10 h-6 rounded-full relative transition-colors shrink-0" style={{ background: restPrefs.trackRpe ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.15)' }}>
+                <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: restPrefs.trackRpe ? '18px' : '2px' }} />
               </span>
             </button>
           </div>
