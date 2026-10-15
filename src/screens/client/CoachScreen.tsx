@@ -4,10 +4,11 @@ import { supabase } from '@/lib/supabase';
 import type { Session, WeeklyMessage } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input } from '@/components/ui';
 import MyPackageCard from '@/components/business/MyPackageCard';
-import { Calendar, Sparkles, Gem, Check } from 'lucide-react';
+import { Calendar, Sparkles, Gem, Check, UserPlus } from 'lucide-react';
 import { t, fmtDate, fmtTime } from '@/lib/i18n';
 import { useChatThread } from '@/lib/chat';
 import { KIND_LABEL, fmtEUR, type Package } from '@/lib/business';
+import { JoinCoachSheet } from '@/components/CoachLink';
 
 type Offer = Package;
 
@@ -21,6 +22,7 @@ export default function CoachScreen() {
   const [requested, setRequested] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,6 +62,25 @@ export default function CoachScreen() {
   };
 
   if (loading) return <Loading />;
+
+  // Signed up without an invite code: no coach yet until a master trainer assigns one.
+  if (profile && !profile.trainer_id) {
+    return (
+      <div className="adlr-fade-in">
+        <SectionHeader title={t('Mein Coach')} subtitle={t('Noch kein Coach verbunden.')} />
+        <Card className="adlr-gold-border">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgb(var(--adlr-gold) / 0.12)' }}>
+            <UserPlus size={20} className="text-adlr-gold" />
+          </div>
+          <p className="text-base font-semibold text-white">{t('Dein Coach kommt bald')}</p>
+          <p className="text-sm text-white/55 mt-1.5 leading-relaxed">{t('Du bist angemeldet. Wir teilen dir in Kürze einen ADLR-Coach zu. Bis dahin kannst du mit dem Starter-Plan trainieren.')}</p>
+          <p className="text-sm text-white/55 mt-3 leading-relaxed">{t('Du hast schon einen Coach mit Einladungscode? Dann verbinde dich direkt.')}</p>
+          <Button onClick={() => setJoinOpen(true)} className="w-full mt-4">{t('Code eingeben')}</Button>
+        </Card>
+        {joinOpen && <JoinCoachSheet onClose={() => setJoinOpen(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div className="adlr-fade-in">

@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Users, Calendar, TrendingUp, AlertTriangle, MessageCircle, ClipboardX, Moon, Target, BatteryLow, ChevronRight } from 'lucide-react';
 import WeeklyMessagesCard from '@/components/WeeklyMessagesCard';
 import ChallengeCard from '@/components/ChallengeCard';
+import MasterAssignCard from '@/components/MasterAssignCard';
 import { computeAttention, type AttentionItem, type AttentionKind } from '@/lib/attention';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -100,6 +101,9 @@ export default function OverviewScreen() {
           <span className="text-sm font-medium text-white/85">{t('Kalender')}</span>
         </button>
       </div>
+
+      {/* Master trainer: sign-ups without an invite code */}
+      {profile?.is_master && <MasterAssignCard />}
 
       {/* Needs attention */}
       <Card className="mb-4">

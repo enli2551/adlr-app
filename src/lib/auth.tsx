@@ -105,7 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message };
     }
     if (data.user) {
-      // For clients, auto-link to the single trainer so they show up in the trainer's client list.
+      // Clients keep an existing coach link only; without an invite code they stay unassigned
+      // until a master trainer assigns them (get_trainer_id has no fallback trainer any more).
       let trainerId: string | null = null;
       if (role === 'client') {
         const { data: tid } = await supabase.rpc('get_trainer_id');

@@ -9,7 +9,7 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward } from 'lucide-react';
+import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward, ListChecks } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
 import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
 import IntakeQuestionsCard from '@/components/IntakeQuestionsCard';
@@ -26,6 +26,7 @@ import { startRestFlow, stopRestFlow, drainRestFlow, setRestFlowForeground, onRe
 import { playRestAlarm, unlockRestAlarm } from '@/lib/restAlarm';
 import { t, fmtDate, fmtTime } from '@/lib/i18n';
 import ClientDayEditor from '@/components/ClientDayEditor';
+import MyPlans from '@/components/MyPlans';
 import WeeklyRecap from '@/components/WeeklyRecap';
 import { loadWeeklyRecap, recapSeenThisWeek, markRecapSeen, scheduleWeeklyRecapNotification, type WeeklyRecapData } from '@/lib/weeklyRecap';
 import { weeklyStreak } from '@/lib/streak';
@@ -141,6 +142,9 @@ export default function PlanScreen() {
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
+  // Athletes without a coach build their own plans ("Meine Pläne")
+  const [myPlansOpen, setMyPlansOpen] = useState(false);
+  const solo = !!profile && !profile.trainer_id;
   // Clients the coach allows to edit their plan get asked whether this session's changes
   // (added/removed exercises or sets) should stay in the plan.
   const [planSaveOffer, setPlanSaveOffer] = useState<{ dayId: string; exercises: Exercise[] } | null>(null);
@@ -931,10 +935,20 @@ export default function PlanScreen() {
     return (
       <div className="adlr-fade-in">
         <SectionHeader title={t('Mein Plan')} />
-        <EmptyState title={t('Dein Plan wird vorbereitet.')} subtitle={t('{coach} ist am Werk. Du trainierst, sobald dein Plan bereit ist.', { coach })} />
+        {solo ? (
+          <EmptyState title={t('Noch kein Plan')} subtitle={t('Bau dir deinen eigenen Plan oder leg direkt mit dem Starter-Plan los.')} />
+        ) : (
+          <EmptyState title={t('Dein Plan wird vorbereitet.')} subtitle={t('{coach} ist am Werk. Du trainierst, sobald dein Plan bereit ist.', { coach })} />
+        )}
+        {solo && (
+          <button onClick={() => setMyPlansOpen(true)} className="adlr-tap w-full mt-4 py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
+            <Plus size={16} /> {t('Eigenen Plan erstellen')}
+          </button>
+        )}
         <div className="adlr-card p-5 mt-4 adlr-gold-border" style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold) / 0.12), rgb(var(--adlr-gold) / 0.03))' }}>
           <p className="text-sm font-semibold text-white mb-1">{t('Schon mal loslegen? 💪')}</p>
-          <p className="text-xs text-white/60 mb-4 leading-relaxed">{t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald {coach} deinen persönlichen Plan fertig hat, wird er automatisch aktiv.', { coach })}</p>
+          <p className="text-xs text-white/60 mb-4 leading-relaxed">{solo ? t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Du kannst jederzeit zu deinem eigenen Plan wechseln.') : t('Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Sobald {coach} deinen persönlichen Plan fertig hat, wird er automatisch aktiv.', { coach })}</p>
           <button
             onClick={activateStarter}
             disabled={starterBusy}
@@ -955,6 +969,7 @@ export default function PlanScreen() {
             <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
           </div>
         </button>
+        {myPlansOpen && <MyPlans onClose={() => setMyPlansOpen(false)} onChanged={load} />}
       </div>
     );
   }
@@ -1251,6 +1266,16 @@ export default function PlanScreen() {
             <span className="flex items-center gap-2 text-white/80"><Shuffle size={15} className="text-adlr-gold" /> {t('Freies Training')}</span>
             <span className="flex items-center gap-1 text-xs text-white/40">{t('außerhalb des Plans')} <ChevronRight size={14} /></span>
           </button>
+          {solo && (
+            <button
+              onClick={() => setMyPlansOpen(true)}
+              className="adlr-tap w-full mt-3 pt-3 flex items-center justify-between text-sm"
+              style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}
+            >
+              <span className="flex items-center gap-2 text-white/80"><ListChecks size={15} className="text-adlr-gold" /> {t('Meine Pläne')}</span>
+              <span className="flex items-center gap-1 text-xs text-white/40">{t('erstellen & wechseln')} <ChevronRight size={14} /></span>
+            </button>
+          )}
         </div>
       )}
 
@@ -1824,6 +1849,7 @@ export default function PlanScreen() {
         document.body
       )}
       {editingDay && <ClientDayEditor day={editingDay} onClose={() => setEditingDay(null)} onSaved={() => { setEditingDay(null); load(); }} />}
+      {myPlansOpen && <MyPlans onClose={() => setMyPlansOpen(false)} onChanged={load} />}
       {confirm && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 px-4 pb-6 adlr-fade-in" onClick={() => setConfirm(null)}>
           <div className="w-full max-w-md rounded-2xl p-5 bg-adlr-anthracite" style={{ border: '1px solid rgb(var(--text) / 0.1)' }} onClick={(e) => e.stopPropagation()}>

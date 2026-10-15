@@ -14,8 +14,13 @@ import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary
  * exercises from the library and adjust sets/reps. Saving goes through the
  * `client_update_plan_day` RPC, which validates everything server-side and forks a
  * personal copy if the plan is shared with other clients.
+ * With `saveExercises` (a client's own plan) the day is written directly instead; it returns
+ * an error message or null.
  */
-export default function ClientDayEditor({ day, onClose, onSaved }: { day: PlanDay; onClose: () => void; onSaved: () => void }) {
+export default function ClientDayEditor({ day, onClose, onSaved, saveExercises }: {
+  day: PlanDay; onClose: () => void; onSaved: () => void;
+  saveExercises?: (exercises: Exercise[]) => Promise<string | null>;
+}) {
   const [items, setItems] = useState<Exercise[]>(() => (day.exercises ?? []).map((e) => ({ ...e })));
   // null = list view; -1 = picking an exercise to ADD; >= 0 = picking a replacement for that index
   const [picking, setPicking] = useState<number | null>(null);
@@ -58,6 +63,14 @@ export default function ClientDayEditor({ day, onClose, onSaved }: { day: PlanDa
       if (out.set_details) out.set_details = out.set_details.slice(0, sets);
       return out;
     });
+    if (saveExercises) {
+      const msg = await saveExercises(payload);
+      setSaving(false);
+      if (msg) { setError(msg); return; }
+      haptic.success();
+      onSaved();
+      return;
+    }
     const { error: err } = await supabase.rpc('client_update_plan_day', { p_day_id: day.id, p_exercises: payload });
     setSaving(false);
     if (err) {
@@ -139,7 +152,7 @@ export default function ClientDayEditor({ day, onClose, onSaved }: { day: PlanDa
               >
                 <Plus size={15} /> {t('Übung hinzufügen')}
               </button>
-              <p className="text-[11px] text-white/35 text-center pt-1">{t('Dein Coach sieht deine Änderungen.')}</p>
+              {!saveExercises && <p className="text-[11px] text-white/35 text-center pt-1">{t('Dein Coach sieht deine Änderungen.')}</p>}
             </div>
             <div className="py-3">
               {error && <p className="text-xs text-red-400 mb-2 text-center">{error}</p>}

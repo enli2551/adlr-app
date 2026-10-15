@@ -17,6 +17,8 @@ export interface Profile {
   brand_color?: string | null; // trainer: main colour '#RRGGBB' replacing ADLR gold
   leaderboard_opt_in?: boolean; // shows up (first name + initial) in the coach's monthly ranking
   lang?: string | null; // client's app language (de/en/hu), synced by the app
+  is_master?: boolean; // trainer: may assign clients who signed up without an invite code
+  pro_until?: string | null; // ADLR Pro entitlement (athletes without a coach)
   email: string | null;
   phone: string | null;
   avatar_url: string | null;
@@ -75,6 +77,7 @@ export interface Plan {
   ai_rationale?: string | null;       // the AI's reasoning, shown to the trainer
   weeks?: number | null;              // multi-week program: length in weeks (null/1 = plain weekly plan)
   week_rules?: import('@/lib/program').WeekRule[] | null; // per-week volume/load/RPE changes
+  is_personal?: boolean;              // built by a client for themselves (client owns it)
 }
 
 export interface PlanDay {
