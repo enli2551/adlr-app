@@ -8,6 +8,7 @@ import TrainerLayout from '@/screens/trainer/TrainerLayout';
 import Logo from '@/components/Logo';
 import { Loading } from '@/components/ui';
 import { useLang } from '@/lib/i18n';
+import PushBridge from '@/components/PushBridge';
 
 // Route screens are code-split so the initial bundle stays small (login paints fast);
 // heavy deps like recharts only load on the screens that actually use them.
@@ -60,6 +61,7 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <PushBridge />
         <Fragment key={lang}>
         <Suspense fallback={<Splash />}>
         <Routes>

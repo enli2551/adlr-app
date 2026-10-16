@@ -19,6 +19,8 @@ export default function ClientsScreen() {
   const [goalFilter, setGoalFilter] = useState('Alle');
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<string | null>(() => params.get('client'));
+  // Already on this screen when a push is tapped: follow the new ?client=.
+  useEffect(() => { const c = params.get('client'); if (c) setSelected(c); }, [params]);
 
   const load = async () => {
     if (!profile) return;

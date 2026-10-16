@@ -65,6 +65,9 @@ Deno.serve(async (req) => {
     }
 
     // Delete the user's data rows (service role bypasses RLS).
+    // Push device tokens are keyed by user_id (also ON DELETE CASCADE from auth.users);
+    // removed first so nothing is pushed to this device any more.
+    await admin.from('push_tokens').delete().eq('user_id', uid);
     for (const table of CLIENT_TABLES) {
       await admin.from(table).delete().eq('client_id', uid);
     }

@@ -1315,6 +1315,9 @@ const dict: Record<string, string> = {
   "Eigenen Plan erstellen": "Create your own plan",
   "Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Du kannst jederzeit zu deinem eigenen Plan wechseln.": "Start with the full-body starter plan (3 days). You can switch to your own plan at any time.",
   "erstellen & wechseln": "create & switch",
+  // ── Push notifications ──
+  "Nachrichten & Termine": "Messages & sessions",
+  "Chat, Check-ins und Termine von deinem Coach": "Chat, check-ins and sessions from your coach",
 };
 
 export default dict;

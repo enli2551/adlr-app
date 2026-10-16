@@ -6,6 +6,7 @@ import { t } from './i18n';
 import { cacheGet, cacheSet, isNetworkError } from './offline';
 import { setMonitoringUser } from './monitoring';
 import { applyBrand, cacheBrand } from './branding';
+import { removePushToken } from './push';
 
 /** The client's own coach (or, for a trainer, themselves) — shown instead of a hardcoded name. */
 export interface CoachInfo { id: string; first_name: string | null; last_name: string | null; avatar_url: string | null; brand_logo?: string | null; brand_color?: string | null }
@@ -135,9 +136,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // still existed — the app froze. 'local' scope clears the stored session immediately;
   // the server-side revoke is best-effort with a timeout.
   const signOut = async () => {
+    const pushCleanup = removePushToken(); // needs the session, so before the local sign-out (capped at 1.5 s)
     setProfile(null);
     setCoach(null);
     setSession(null);
+    await pushCleanup;
     try {
       await Promise.race([
         supabase.auth.signOut({ scope: 'local' }),

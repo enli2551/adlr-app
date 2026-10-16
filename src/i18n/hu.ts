@@ -1316,6 +1316,9 @@ const dict: Record<string, string> = {
   "Eigenen Plan erstellen": "Saját terv létrehozása",
   "Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Du kannst jederzeit zu deinem eigenen Plan wechseln.": "Kezdj a teljes testes kezdő tervvel (3 nap). Bármikor válthatsz a saját tervedre.",
   "erstellen & wechseln": "létrehozás és váltás",
+  // ── Push notifications ──
+  "Nachrichten & Termine": "Üzenetek és időpontok",
+  "Chat, Check-ins und Termine von deinem Coach": "Chat, check-inek és időpontok az edződtől",
 };
 
 export default dict;
