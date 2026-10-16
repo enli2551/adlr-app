@@ -95,7 +95,7 @@ export function ExerciseLibrary({ onAdd, onDemo, canAdd, noSelectionHint }: Prop
           ))}
         </div>
       </div>
-      <div className="max-h-80 overflow-y-auto divide-y" style={{ divideColor: 'rgb(var(--text) / 0.05)' }}>
+      <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
         {filtered.map((s) => (
           <div key={s.id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--adlr-gold) / 0.1)' }}>
