@@ -3,12 +3,13 @@ import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 import { SectionHeader, Loading, Card, Input } from '@/components/ui';
-import { Search } from 'lucide-react';
+import { Search, Users } from 'lucide-react';
 import ClientDetail from './ClientDetail';
 import { useSearchParams } from 'react-router-dom';
 import { t, fmtDate } from '@/lib/i18n';
 import { loadWeeklyStreaks } from '@/lib/streak';
 import { InviteClientsButton } from '@/components/CoachLink';
+import { useIsDesktop } from '@/lib/useMediaQuery';
 
 export default function ClientsScreen() {
   const { profile } = useAuth();
@@ -19,10 +20,14 @@ export default function ClientsScreen() {
   const [goalFilter, setGoalFilter] = useState('Alle');
   const [params, setParams] = useSearchParams();
   const [selected, setSelected] = useState<string | null>(() => params.get('client'));
+  // Already on this screen when a push is tapped: follow the new ?client=.
+  useEffect(() => { const c = params.get('client'); if (c) setSelected(c); }, [params]);
+  const isDesktop = useIsDesktop();
 
-  const load = async () => {
+  // quiet = refresh the list in place (desktop keeps it visible next to the detail pane)
+  const load = async (quiet = false) => {
     if (!profile) return;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     const { data } = await supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('created_at', { ascending: false });
     const list = (data ?? []) as Profile[];
     setClients(list);
@@ -32,8 +37,15 @@ export default function ClientsScreen() {
 
   useEffect(() => { load(); }, [profile?.id]);
 
+  const closeDetail = () => { setSelected(null); if (params.get('client')) setParams({}, { replace: true }); load(isDesktop); };
+  const openClient = (id: string) => {
+    setSelected(id);
+    // Desktop: keep the selection in the URL so a reload / shared link reopens the same client.
+    if (isDesktop) setParams({ client: id }, { replace: true });
+  };
+
   if (loading) return <Loading />;
-  if (selected) return <ClientDetail clientId={selected} onBack={() => { setSelected(null); if (params.get('client')) setParams({}, { replace: true }); load(); }} />;
+  if (selected && !isDesktop) return <ClientDetail clientId={selected} onBack={closeDetail} />;
 
   const goals = ['Alle', 'Gewicht reduzieren', 'Muskeln aufbauen', 'Allgemeine Fitness & Energie'];
   const filtered = clients.filter((c) => {
@@ -43,7 +55,7 @@ export default function ClientsScreen() {
     return matchQuery && matchGoal;
   });
 
-  return (
+  const list = (
     <div className="adlr-fade-in">
       <div className="flex items-start justify-between gap-3">
         <SectionHeader title={t('Klienten')} subtitle={t('{n} aktiv', { n: clients.length })} />
@@ -77,7 +89,7 @@ export default function ClientsScreen() {
             const lastActive = c.last_active ? fmtDate(c.last_active) : '—';
             const goal = c.intake?.goals?.[0] ?? '—';
             return (
-              <Card key={c.id} onClick={() => setSelected(c.id)}>
+              <Card key={c.id} onClick={() => openClient(c.id)} className={isDesktop && selected === c.id ? 'adlr-gold-border' : ''}>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold font-bold overflow-hidden">
                     {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-full h-full object-cover" /> : (c.first_name?.[0] ?? '?').toUpperCase()}
@@ -97,6 +109,25 @@ export default function ClientsScreen() {
           })}
         </div>
       )}
+    </div>
+  );
+
+  if (!isDesktop) return list;
+
+  // Desktop: client list and the open client side by side.
+  return (
+    <div className="grid grid-cols-[minmax(300px,380px)_minmax(0,1fr)] gap-8 items-start">
+      <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">{list}</div>
+      <div className="min-w-0">
+        {selected ? (
+          <ClientDetail key={selected} clientId={selected} onBack={closeDetail} />
+        ) : (
+          <div className="adlr-card p-10 mt-1 text-center adlr-fade-in">
+            <Users size={32} className="mx-auto mb-3 text-white/15" />
+            <p className="text-sm text-white/40">{t('Wähle links einen Klienten, um Details zu sehen.')}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

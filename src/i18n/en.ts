@@ -9,6 +9,11 @@ const dict: Record<string, string> = {
   "Profil": "Profile",
   "Upgrades": "Upgrades",
   "Übersicht": "Overview",
+  // ── Desktop web (trainer) ──
+  "Hauptnavigation": "Main navigation",
+  "Wähle links einen Klienten, um Details zu sehen.": "Pick a client on the left to see their details.",
+  "Wähle links eine Unterhaltung.": "Pick a conversation on the left.",
+  "Wähle links einen Plan oder erstelle einen neuen.": "Pick a plan on the left or create a new one.",
   "Plan Builder": "Plan Builder",
   "Nachrichten": "Messages",
   "Business": "Business",

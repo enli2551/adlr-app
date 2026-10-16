@@ -53,6 +53,7 @@ export async function healthAvailability(): Promise<{ available: boolean; reason
 
 /** Opens the native permission sheet; returns true if at least one type was granted. */
 export async function connectHealth(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
   const status = await Health.requestAuthorization({ read: [...HEALTH_TYPES, ...MACRO_TYPES], write: [] });
   try { localStorage.setItem(MACROS_ASKED_KEY, '1'); } catch { /* ignore */ }
   const ok = status.readAuthorized.length > 0;

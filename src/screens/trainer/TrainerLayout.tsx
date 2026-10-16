@@ -10,6 +10,7 @@ import { t } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import BrandingSettings from '@/components/BrandingSettings';
 import CoachQuestionsEditor from '@/components/CoachQuestionsEditor';
+import TrainerSidebar from './TrainerSidebar';
 
 const TABS = [
   { to: '/trainer', label: 'Übersicht', icon: LayoutDashboard, end: true },
@@ -76,11 +77,15 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
     return () => document.removeEventListener('mousedown', onDown);
   }, [menuOpen]);
 
+  // Desktop: screens that use the width (side-by-side panes, grids) get more room than the rest.
+  const wide = /^\/trainer\/(plan-builder|klienten|nachrichten|business)/.test(location.pathname) && !location.search.includes('view=kalender');
+
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto">
+    <div className="min-h-screen flex flex-col max-w-md mx-auto lg:max-w-none lg:mx-0 lg:pl-60">
+      <TrainerSidebar msgUnread={msgUnread} />
       <header className="sticky top-0 z-20 bg-adlr-black safe-top">
-        <div className="flex items-center justify-between px-5 py-3">
-          <button onClick={() => nav('/trainer')} className="flex items-center">
+        <div className="flex items-center justify-between px-5 py-3 lg:justify-end lg:px-8">
+          <button onClick={() => nav('/trainer')} className="flex items-center lg:hidden">
             <BrandLogo size={18} />
           </button>
           <div className="flex items-center gap-3">
@@ -141,11 +146,11 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
       </header>
 
       {questionsOpen && <CoachQuestionsEditor onClose={() => setQuestionsOpen(false)} />}
-      <main className="flex-1 px-5 pb-28 pt-2">
-        <div key={location.pathname} className="adlr-route">{children}</div>
+      <main className="flex-1 px-5 pb-28 pt-2 lg:px-8 lg:pb-10">
+        <div key={location.pathname} className={`adlr-route lg:mx-auto ${wide ? 'lg:max-w-[1400px]' : 'lg:max-w-4xl'}`}>{children}</div>
       </main>
 
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite border-t border-white/5 safe-bottom z-30">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-adlr-anthracite border-t border-white/5 safe-bottom z-30 lg:hidden">
         <div className="flex justify-around items-center py-2">
           {TABS.map((tab) => (
             <NavLink

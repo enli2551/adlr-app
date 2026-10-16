@@ -27,7 +27,8 @@ export default function ClientsHub() {
 
   return (
     <div>
-      <div className="flex gap-1.5 p-1 rounded-xl mb-4" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.06)' }}>
+      {/* Desktop: the sidebar has separate Klienten / Kalender entries, so the toggle is phone-only. */}
+      <div className="flex gap-1.5 p-1 rounded-xl mb-4 lg:hidden" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.06)' }}>
         {tabs.map((tab) => {
           const active = view === tab.id;
           return (

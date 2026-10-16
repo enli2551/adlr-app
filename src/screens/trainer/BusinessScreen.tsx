@@ -78,6 +78,7 @@ export default function BusinessScreen() {
       {/* Packages, payments, revenue per client, price list */}
       <BusinessDashboard />
 
+      <div className="lg:grid lg:grid-cols-2 lg:gap-x-4 lg:items-start">
       {/* Sessions chart */}
       <Card className="mb-5">
         <p className="text-sm font-medium text-white/80 mb-4">{t('Sessions pro Woche')}</p>
@@ -120,6 +121,7 @@ export default function BusinessScreen() {
           </div>
         )}
       </Card>
+      </div>
 
       {/* Other income (not tied to a client package) — counted in the monthly revenue above */}
       <CollapsibleCard title={t('Sonstige Einnahmen')} subtitle={t('z. B. Gruppenkurse — ohne Klienten-Paket · {n} Einträge', { n: revenue.length })}>

@@ -78,7 +78,7 @@ export default function BusinessDashboard() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <Kpi label={t('Umsatz · {month}', { month: monthName })} value={fmtEUR(b.revenueThisMonth)} accent
           sub={trend != null ? (
             <span className={`flex items-center gap-1 ${trend >= 0 ? 'text-green-500' : 'text-orange-400'}`}>
@@ -90,6 +90,8 @@ export default function BusinessDashboard() {
         <Kpi label={t('Ø pro Klient · 90 Tage')} value={fmtEUR(b.avgPerClient90d)} sub={<span className="text-white/40">{t('zahlende Klienten')}</span>} />
       </div>
 
+      {/* Desktop: the cards below sit in two columns */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-x-4 lg:items-start">
       {/* To do */}
       <div className="adlr-card p-5 mb-4">
         <div className="flex items-center gap-2 mb-3">
@@ -174,6 +176,7 @@ export default function BusinessDashboard() {
             {' · '}{(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((k) => `${t(KIND_LABEL[k])} ${cps.filter((c) => c.status === 'active' && c.kind === k).length}`).join(' · ')}
           </p>
         )}
+      </div>
       </div>
     </div>
   );

@@ -10,6 +10,11 @@ const dict: Record<string, string> = {
   "Profil": "Profil",
   "Upgrades": "Extrák",
   "Übersicht": "Áttekintés",
+  // ── Desktop web (trainer) ──
+  "Hauptnavigation": "Fő navigáció",
+  "Wähle links einen Klienten, um Details zu sehen.": "Válassz egy klienst a bal oldalon a részletekhez.",
+  "Wähle links eine Unterhaltung.": "Válassz egy beszélgetést a bal oldalon.",
+  "Wähle links einen Plan oder erstelle einen neuen.": "Válassz egy tervet a bal oldalon, vagy hozz létre egy újat.",
   "Plan Builder": "Tervkészítő",
   "Nachrichten": "Üzenetek",
   "Business": "Üzlet",
