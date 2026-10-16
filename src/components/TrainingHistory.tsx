@@ -5,7 +5,7 @@ import { summarizeSession, logsByCompletion, fmtKg, type SessionSummary } from '
 import { fmtDuration, monthName } from '@/lib/reportStats';
 import WorkoutSummary from '@/components/WorkoutSummary';
 import WorkoutEditor from '@/components/WorkoutEditor';
-import { t, fmtDate } from '@/lib/i18n';
+import { t, tUserTitle, fmtDate } from '@/lib/i18n';
 
 interface Props {
   completions: WorkoutCompletion[];
@@ -31,7 +31,7 @@ export default function TrainingHistory({ completions, setLogs, dayNameById, mus
     const byComp = logsByCompletion(setLogs);
     return [...completions]
       .sort((a, b) => b.completed_at.localeCompare(a.completed_at))
-      .map((c) => summarizeSession(c, byComp.get(c.id) ?? [], (c.plan_day_id && dayNameById.get(c.plan_day_id)) || c.title || 'Training', muscleOf));
+      .map((c) => summarizeSession(c, byComp.get(c.id) ?? [], (() => { const dn = c.plan_day_id ? dayNameById.get(c.plan_day_id) : undefined; return dn ? t(dn) : tUserTitle(c.title); })(), muscleOf));
   }, [completions, setLogs, dayNameById, muscleOf]);
 
   const visible = limit && !showAll ? summaries.slice(0, limit) : summaries;
@@ -107,7 +107,7 @@ export default function TrainingHistory({ completions, setLogs, dayNameById, mus
                       <p className="text-lg font-bold text-white leading-tight">{d.getDate()}</p>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white truncate">{t(s.name)}{s.completion.gym ? <span className="text-white/40 font-normal"> · {s.completion.gym}</span> : null}</p>
+                      <p className="text-sm font-semibold text-white truncate">{s.name}{s.completion.gym ? <span className="text-white/40 font-normal"> · {s.completion.gym}</span> : null}</p>
                       <p className="text-xs text-white/45 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                         {s.durationMin != null && <span className="flex items-center gap-1"><Clock size={11} /> {fmtDuration(s.durationMin)}</span>}
                         {s.volumeKg > 0 && <span className="flex items-center gap-1"><Weight size={11} /> {fmtKg(s.volumeKg)}</span>}

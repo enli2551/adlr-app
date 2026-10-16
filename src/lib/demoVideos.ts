@@ -234,7 +234,6 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Widerstandsband Pull-Apart": '0186', // banded pull-apart (new exercise)
   "Widerstandsband Seitheben": '0285', // banded lateral raise (new exercise)
   "Widerstandsband Schulterdrücken": '0185', // banded overhead press (new exercise)
-  "Beinbeuger sitzend (Maschine)": '0079', // seated leg curl machine (new exercise)
   "Kniebeuge (Smith Machine)": '0279', // smith machine squat (new exercise)
   "Kniebeuge (Maschine)": '0280', // squat machine (new exercise)
   "Bulgarische Kniebeuge": '1113', // bulgarian split squat (new exercise)
@@ -367,6 +366,9 @@ export const DEMO_VIDEOS: Record<string, string> = {
   "Langhantel Curls": '0009', // barbell curl standard
   "Langhantel Stehend Breit Curl": '0180', // wide grip barbell curl
   "Kabel Upright Row": '0287', // cable upright row
+  "Klimmzüge mit Gewicht": '0038', // pull up (weighted variant, same movement)
+  "Dips mit Gewicht": '0045', // dips (weighted variant, same movement)
+  "Kabel Overhead Trizeps Extension (Stange)": '0140', // cable overhead triceps extension
 };
 
 export const demoVideoFor = (name: string | undefined | null): string | null =>

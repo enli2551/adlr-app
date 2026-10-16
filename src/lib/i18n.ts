@@ -84,6 +84,15 @@ export function t(de: string, vars?: Record<string, string | number>): string {
   return out;
 }
 
+/**
+ * A workout name the user typed (free workout title, own plan): shown exactly as written —
+ * "Pull" must not become "Húzó". Only the app's own defaults are translated.
+ */
+export function tUserTitle(name: string | null | undefined): string {
+  if (!name || name === 'Freies Training' || name === 'Training') return t(name || 'Training');
+  return name;
+}
+
 /** BCP-47 locale for dates/numbers in the current language. */
 export function locale(): string {
   return LOCALES[current];

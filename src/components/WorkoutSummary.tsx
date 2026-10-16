@@ -44,7 +44,7 @@ export default function WorkoutSummary({ summary, allCompletions, mode, newPRs =
     ]);
     const canvas = drawShareCard({
       kicker: t('Training #{n}', { n: nth }),
-      title: t(summary.name),
+      title: summary.name,
       date: when,
       stats: [
         ...(summary.durationMin ? [{ label: t('Dauer'), value: `${summary.durationMin} min` }] : []),
@@ -166,7 +166,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function OverviewCard({ summary, newPRs, milestoneMsg }: { summary: SessionSummary; newPRs: Props['newPRs'] & {}; milestoneMsg?: string | null }) {
   return (
     <div className="my-auto">
-      <p className="text-xl font-bold text-white mb-6">{t(summary.name)}</p>
+      <p className="text-xl font-bold text-white mb-6">{summary.name}</p>
       <div className="grid grid-cols-2 gap-y-6 gap-x-4">
         <Stat label={t('Dauer')} value={summary.durationMin != null ? fmtDuration(summary.durationMin) : '—'} />
         <Stat label={t('Volumen')} value={fmtKg(summary.volumeKg)} />

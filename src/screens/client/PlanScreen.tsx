@@ -9,7 +9,7 @@ import WorkoutSummary from '@/components/WorkoutSummary';
 import { summarizeSession, type SessionSummary } from '@/lib/workoutSummary';
 import { useNavigate } from 'react-router-dom';
 import { SectionHeader, EmptyState, Loading } from '@/components/ui';
-import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward, ListChecks } from 'lucide-react';
+import { Flame, ChevronDown, ChevronUp, Clock, Check, Play, Timer, Square, Dumbbell, Footprints, Moon, CircleDashed, Repeat, Calendar, MapPin, History, ChevronRight, ChevronLeft, Plus, Shuffle, Pencil, CloudOff, ShieldCheck, Trash2, X, StickyNote, SkipForward, ListChecks } from 'lucide-react';
 import { FirstWorkoutIntro, FirstWorkoutTips } from '@/components/FirstWorkoutGuide';
 import WeeklyCheckinCard from '@/components/WeeklyCheckinCard';
 import IntakeQuestionsCard from '@/components/IntakeQuestionsCard';
@@ -24,7 +24,7 @@ import { syncSessionReminders } from '@/lib/sessionReminders';
 import { requestNotificationPermission } from '@/lib/restTimerNotifications';
 import { startRestFlow, stopRestFlow, drainRestFlow, setRestFlowForeground, onRestFlowAction, removeRestFlowListener, type RestStep } from '@/lib/restChrono';
 import { playRestAlarm, unlockRestAlarm } from '@/lib/restAlarm';
-import { t, fmtDate, fmtTime } from '@/lib/i18n';
+import { t, tUserTitle, fmtDate, fmtTime } from '@/lib/i18n';
 import ClientDayEditor from '@/components/ClientDayEditor';
 import MyPlans from '@/components/MyPlans';
 import WeeklyRecap from '@/components/WeeklyRecap';
@@ -141,6 +141,9 @@ export default function PlanScreen() {
   // Cardio exercises log time/distance instead of kg × reps.
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // the client's own plan (built by themselves): its day names are theirs, never translated
+  const [ownPlan, setOwnPlan] = useState(false);
+  const dayTitle = (d: PlanDay) => (d.is_free || ownPlan ? tUserTitle(d.workout_name) : t(d.workout_name ?? 'Training'));
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
   // Athletes without a coach build their own plans ("Meine Pläne")
   const [myPlansOpen, setMyPlansOpen] = useState(false);
@@ -262,7 +265,15 @@ export default function PlanScreen() {
     };
   };
 
+  // Whatever goes wrong while loading, the spinner must never stay up forever —
+  // on a phone that looks exactly like a frozen app.
   const load = async () => {
+    try { await loadPlan(); }
+    catch (e) { console.error('[plan] load failed', e); }
+    finally { setLoading(false); }
+  };
+
+  const loadPlan = async () => {
     if (!profile) return;
     setLoading(true);
     if (outbox().length > 0) await flushOutbox().catch(() => 0);
@@ -290,16 +301,30 @@ export default function PlanScreen() {
     }
     setOffline(false);
     loadFrozenWeeks(profile.id).then(setFrozen).catch(() => {});
-    let planDays: PlanDay[] = [];
-    if (cp) {
-      const [{ data: pd }, prog] = await Promise.all([
+    // Everything below only needs the client id / plan id: fetched in ONE round trip
+    // (it used to be six in a row, which made the first screen slow on mobile data).
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const [planRes, { data: wc }, { data: sl }, { data: pr }, { data: ss }] = await Promise.all([
+      cp ? Promise.all([
         supabase.from('plan_days').select('*').eq('plan_id', cp.plan_id).order('day_of_week'),
-        supabase.from('plans').select('weeks, week_rules').eq('id', cp.plan_id).maybeSingle(),
-      ]);
+        // '*' so older databases without the program/personal columns still answer
+        supabase.from('plans').select('*').eq('id', cp.plan_id).maybeSingle(),
+      ]) : Promise.resolve(null),
+      supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false }),
+      fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: false }).order('id').range(a, b)),
+      supabase.from('personal_records').select('*').eq('client_id', profile.id),
+      // Upcoming PT sessions (from today), for the "Nächste Termine" card + reminders
+      supabase.from('sessions').select('*').eq('client_id', profile.id).neq('status', 'cancelled')
+        .gte('scheduled_at', todayStart.toISOString()).order('scheduled_at', { ascending: true }),
+    ]);
+    let planDays: PlanDay[] = [];
+    if (cp && planRes) {
+      const [{ data: pd }, prog] = planRes;
       planDays = (pd ?? []) as PlanDay[];
       writtenExercises.current = new Map(planDays.map((d) => [d.id, d.exercises]));
       // Program week: the plan's days as prescribed for this week (sets/reps/load/RPE).
-      const pdata = prog.error ? null : (prog.data as { weeks: number | null; week_rules: WeekRule[] | null } | null);
+      const pdata = prog.error ? null : (prog.data as { weeks: number | null; week_rules: WeekRule[] | null; is_personal?: boolean } | null);
+      setOwnPlan(!!pdata?.is_personal);
       const state = programState(pdata?.weeks, pdata?.week_rules, (cp as { assigned_at?: string }).assigned_at);
       setProgram(state);
       if (state?.rule) planDays = planDays.map((d) => ({ ...d, exercises: applyWeek(d.exercises ?? [], state.rule) }));
@@ -307,22 +332,10 @@ export default function PlanScreen() {
     }
     // Also without a plan: a running free workout has to be restored.
     applyPlanDays(planDays);
-    const { data: wc } = await supabase.from('workout_completions').select('*').eq('client_id', profile.id).order('completed_at', { ascending: false });
-    const { data: sl } = await fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: false }).order('id').range(a, b));
     const merged = withPending((wc ?? []) as WorkoutCompletion[], (sl ?? []) as ExerciseSetLog[]);
     setCompletions(merged.completions);
     setSetLogs(merged.logs);
-    const { data: pr } = await supabase.from('personal_records').select('*').eq('client_id', profile.id);
     setPrs((pr ?? []) as PersonalRecord[]);
-    // Upcoming PT sessions (from today), for the "Nächste Termine" card + reminders
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-    const { data: ss } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('client_id', profile.id)
-      .neq('status', 'cancelled')
-      .gte('scheduled_at', todayStart.toISOString())
-      .order('scheduled_at', { ascending: true });
     const sessList = (ss ?? []) as Session[];
     setSessions(sessList);
     cacheSet(profile.id, 'plan', { days: planDays, completions: wc ?? [], setLogs: (sl ?? []).slice(0, 1500), prs: pr ?? [], sessions: sessList });
@@ -817,7 +830,7 @@ export default function PlanScreen() {
     const sessionLogs: ExerciseSetLog[] = baseLogs.map((l) => ({ ...l, client_id: profile.id, workout_completion_id: completionId, created_at: completedAt }));
     const muscleByName = new Map((lib ?? []).map((e) => [e.name, e.muscle_group]));
     setFinished({
-      summary: summarizeSession(doneComp, sessionLogs, title ?? day.workout_name ?? t('Training'), (n) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige'),
+      summary: summarizeSession(doneComp, sessionLogs, title ? tUserTitle(title) : dayTitle(day), (n) => muscleByName.get(n) ?? guessMuscle(n) ?? 'Sonstige'),
       all: [...completions, doneComp],
     });
     setTimeout(() => setCelebrate(false), 2800);
@@ -1140,14 +1153,14 @@ export default function PlanScreen() {
         </div>
       )}
 
-      {activeDayIdx === null && profile && <WeeklyCheckinCard clientId={profile.id} lastWeight={profile.weight_kg ?? null} />}
+      {activeDayIdx === null && profile && !solo && <WeeklyCheckinCard clientId={profile.id} lastWeight={profile.weight_kg ?? null} />}
       {activeDayIdx === null && <IntakeQuestionsCard />}
 
       {/* Guided first workout: intro card before, one-tip-at-a-time during */}
       {activeDayIdx !== null && completions.length === 0 && <FirstWorkoutTips />}
       {activeDayIdx === null && completions.length === 0 && nextRecommendedDayId && (() => {
         const idx = days.findIndex((d) => d.id === nextRecommendedDayId);
-        return <FirstWorkoutIntro dayName={t(days[idx]?.workout_name ?? 'Training')} onStart={() => requestStart((g) => startTraining(idx, g))} />;
+        return <FirstWorkoutIntro dayName={days[idx] ? dayTitle(days[idx]) : t('Training')} onStart={() => requestStart((g) => startTraining(idx, g))} />;
       })()}
 
       {saveError && (
@@ -1311,7 +1324,7 @@ export default function PlanScreen() {
                         {isNext && <span className="text-xs text-adlr-gold font-medium">· {t('Als Nächstes dran')}</span>}
                       </div>
                     )}
-                    <p className={`text-base font-semibold truncate ${isNext ? 'text-white' : 'text-white/90'}`}>{day.is_rest_day ? t('Ruhetag') : t(workoutLabel)}</p>
+                    <p className={`text-base font-semibold truncate ${isNext ? 'text-white' : 'text-white/90'}`}>{day.is_rest_day ? t('Ruhetag') : dayTitle(day)}</p>
                   </div>
                 </div>
                 {!day.is_rest_day && (
@@ -1375,7 +1388,11 @@ export default function PlanScreen() {
                             <Check size={16} /> {allExercisesChecked ? t('Training abgeschlossen') : t('Training beenden')}
                           </button>
                           <button
-                            onClick={() => setConfirm({ kind: 'cancel' })}
+                            onClick={() => {
+                              // nothing logged yet in an empty free workout → just leave, no warning
+                              if (day.is_free && (day.exercises ?? []).length === 0) stopTraining();
+                              else setConfirm({ kind: 'cancel' });
+                            }}
                             className="adlr-tap px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white/50 text-sm flex items-center justify-center gap-1.5"
                           >
                             <Square size={14} /> {t('Abbrechen')}
@@ -1786,8 +1803,20 @@ export default function PlanScreen() {
       {pickerOpen && createPortal(
         <div className="fixed inset-0 z-[65] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">
-            <div className="flex items-center justify-between py-4">
-              <p className="text-lg font-semibold text-white">{t('Übung hinzufügen')}</p>
+            <div className="flex items-center justify-between gap-3 py-4">
+              <button
+                onClick={() => {
+                  // An empty free workout has nothing to keep: going back leaves it entirely.
+                  const active = activeDayIdx !== null ? days[activeDayIdx] : undefined;
+                  setPickerOpen(false);
+                  if (active?.is_free && (active.exercises ?? []).length === 0) stopTraining();
+                }}
+                className="adlr-tap -ml-2 p-2 rounded-xl text-white/70 flex items-center gap-1 text-sm"
+                aria-label={t('Zurück')}
+              >
+                <ChevronLeft size={20} /> {t('Zurück')}
+              </button>
+              <p className="flex-1 text-lg font-semibold text-white truncate">{t('Übung hinzufügen')}</p>
               <button onClick={() => setPickerOpen(false)} className="adlr-tap px-4 py-2 rounded-xl text-sm font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
                 {t('Fertig')}{(() => { const n = (activeDayIdx !== null ? days[activeDayIdx]?.exercises.length : 0) ?? 0; return n > 0 ? ` (${n})` : ''; })()}
               </button>

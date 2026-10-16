@@ -27,7 +27,7 @@ export const MUSCLE_GROUPS = [
 // it on every app cold-start was the main driver of Supabase egress, so we persist it
 // in localStorage and only hit the network once per device (until CACHE_VERSION bumps).
 // BUMP CACHE_VERSION whenever the exercises table changes (new exercises via migration).
-const CACHE_VERSION = 12;
+const CACHE_VERSION = 13;
 const CACHE_KEY = 'adlr_exercises_cache';
 const COLUMNS = 'id, name, muscle_group, equipment, tempo, default_sets, default_reps, default_rest_sec, exercise_id, cues';
 
@@ -81,7 +81,15 @@ export async function fetchExercises(): Promise<ExerciseRow[]> {
   return [...shared.filter((e) => !names.has(e.name)), ...mine].sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
-async function fetchSharedExercises(): Promise<ExerciseRow[]> {
+// Several screens ask at app start at the same time — share one request instead of racing.
+let inflight: Promise<ExerciseRow[]> | null = null;
+function fetchSharedExercises(): Promise<ExerciseRow[]> {
+  if (cache) return Promise.resolve(cache);
+  if (!inflight) inflight = loadSharedExercises().finally(() => { inflight = null; });
+  return inflight;
+}
+
+async function loadSharedExercises(): Promise<ExerciseRow[]> {
   if (cache) return cache;
 
   // Persistent cache: skip the network entirely if we already have this version.

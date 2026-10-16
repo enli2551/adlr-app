@@ -14,7 +14,7 @@ import WorkoutImportCard from '@/components/WorkoutImportCard';
 import { weeklyStreak } from '@/lib/streak';
 import { loadFrozenWeeks } from '@/lib/engagement';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
-import { t, fmtDate } from '@/lib/i18n';
+import { t, tUserTitle, fmtDate } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { createPortal } from 'react-dom';
 import { THEMES, getTheme } from '@/lib/theme';
@@ -112,6 +112,8 @@ export default function ProfileScreen() {
 
   useEffect(() => { load(); }, [profile?.id]);
   const workoutNameOf = (c: WorkoutCompletion) => (c.plan_day_id && planDays.find((d) => d.id === c.plan_day_id)?.workout_name) || c.title || 'Training';
+  // plan day names are translated, a title the user typed (free workout) is shown as written
+  const workoutDisplayOf = (c: WorkoutCompletion) => { const pd = c.plan_day_id ? planDays.find((d) => d.id === c.plan_day_id)?.workout_name : null; return pd ? t(pd) : tUserTitle(c.title); };
 
   // ---- Week helpers ----
   // Plans are a flexible rotation ("Trainingstag N"), NOT bound to weekdays: the plan
@@ -155,7 +157,7 @@ export default function ProfileScreen() {
       const dayCompletions = completions.filter((c) => localDateKey(c.completed_at) === dateStr);
       const completion = dayCompletions[0];
       const workoutName = dayCompletions.length > 0
-        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || (c.title ? t(c.title) : t('Training'))).join(' + ')
+        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || tUserTitle(c.title)).join(' + ')
         : undefined;
       days.push({
         date: dateStr, dayInMonth: d, isCurrentMonth: true,
@@ -648,7 +650,7 @@ export default function ProfileScreen() {
                 onClick={() => setEditingWorkout(c)}
                 className="adlr-tap w-full mb-2 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-white/75"
               >
-                <Pencil size={14} /> {t('Bearbeiten')}: {t(workoutNameOf(c))}
+                <Pencil size={14} /> {t('Bearbeiten')}: {workoutDisplayOf(c)}
               </button>
             ))}
 
