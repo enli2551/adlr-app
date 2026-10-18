@@ -8,6 +8,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Handler;
@@ -255,8 +257,26 @@ final class RestFlow {
         }
     }
 
+    /**
+     * End-of-rest beep on the MEDIA stream: plays with the phone on silent/vibrate (only the
+     * media volume counts), goes to the headphones when music is playing there, and takes no
+     * audio focus — the music keeps playing at full volume, the beep is mixed in.
+     */
+    static void beep() {
+        try {
+            final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
+            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 700);
+            new Handler(Looper.getMainLooper()).postDelayed(tg::release, 1200);
+        } catch (RuntimeException ignored) {
+            // no audio hardware / too many tone generators
+        }
+    }
+
     /** Heads-up with sound + vibration when a rest is over and the app isn't open. */
     private static void alert(Context c, JSONObject s) {
+        // The notification sound is muted on silent/vibrate — then beep on the media stream.
+        AudioManager audio = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+        if (audio != null && audio.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) beep();
         JSONArray steps = s.optJSONArray("steps");
         JSONObject step = steps != null && steps.length() > 0 ? steps.optJSONObject(0) : null;
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, ALERT_CHANNEL)

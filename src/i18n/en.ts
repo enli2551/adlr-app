@@ -1315,6 +1315,14 @@ const dict: Record<string, string> = {
   "Eigenen Plan erstellen": "Create your own plan",
   "Starte mit dem Ganzkörper-Starter-Plan (3 Tage). Du kannst jederzeit zu deinem eigenen Plan wechseln.": "Start with the full-body starter plan (3 days). You can switch to your own plan at any time.",
   "erstellen & wechseln": "create & switch",
+  // ── Coach account sheet, haptics ──
+  "Dein Name": "Your name",
+  "Für Klienten sichtbar": "Visible to clients",
+  "Darstellung & Sprache": "Appearance & language",
+  "Kennenlernen & wöchentlicher Check-in": "Getting to know & weekly check-in",
+  "Branding": "Branding",
+  "Logo & Farbe in der App deiner Klienten": "Logo & colour in your clients' app",
+  "Vibration bei Aktionen": "Vibrate on actions",
 };
 
 export default dict;

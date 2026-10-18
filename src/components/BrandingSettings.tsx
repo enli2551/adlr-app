@@ -9,9 +9,10 @@ import { t } from '@/lib/i18n';
 /** Trainer account menu: own logo + main colour, shown in the app of all their clients.
  *  Collapsed by default and nothing is applied until "Speichern" — a single tap on a
  *  swatch used to change every client's app colour on the spot. */
-export default function BrandingSettings() {
+export default function BrandingSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const { profile, refreshProfile } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpen] = useState(false);
+  const open = embedded || openState; // embedded: inside an already collapsible section
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(profile?.brand_color ?? null);
@@ -36,14 +37,14 @@ export default function BrandingSettings() {
 
   return (
     <div>
-      <button onClick={() => setOpen(!open)} className="adlr-tap w-full flex items-center gap-2 px-1 py-1 text-left">
+      {!embedded && <button onClick={() => setOpen(!open)} className="adlr-tap w-full flex items-center gap-2 px-1 py-1 text-left">
         <Sparkles size={15} className="text-adlr-gold shrink-0" />
         <span className="flex-1 text-xs font-medium uppercase tracking-wider text-white/50">{t('Dein Branding')}</span>
         <span className="w-4 h-4 rounded-full shrink-0" style={{ background: swatch(savedColor) }} />
         <ChevronDown size={14} className="text-white/35 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
-      </button>
+      </button>}
       {open && (
-        <div className="mt-2 adlr-fade-in">
+        <div className={embedded ? '' : 'mt-2 adlr-fade-in'}>
           <div className="flex items-center gap-2 mb-2">
             <div className="flex-1 h-12 rounded-lg flex items-center justify-center overflow-hidden px-2" style={{ background: 'rgb(var(--text) / 0.05)' }}>
               {logo ? <img src={logo} alt="" className="max-h-10 max-w-full object-contain" /> : <span className="text-[11px] text-white/35">{t('Kein Logo — ADLR wird angezeigt')}</span>}

@@ -503,7 +503,6 @@ export default function PlanScreen() {
     if (next <= Date.now() + 1000) { setRestEndAt(null); return; }
     setRestEndAt(next);
     setRestTotal((r) => Math.max(1, r + delta));
-    haptic.light();
   };
   const stopRestTimer = () => setRestEndAt(null);
 
@@ -642,7 +641,6 @@ export default function PlanScreen() {
         km: lastLogs[i]?.distance_km?.toString() ?? '',
       })),
     }));
-    haptic.light();
   };
 
   // Free workout editing: remove an exercise, remove a single set, add a set.
@@ -661,7 +659,6 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.filter((e) => e.name !== name) } : d)));
     setSetInputs((prev) => { const next = { ...prev }; delete next[name]; return next; });
     remapChecked(name, () => null);
-    haptic.light();
   };
   const removeFreeSet = (name: string, idx: number) => {
     const ex = (activeDayIdx !== null ? days[activeDayIdx] : undefined)?.exercises.find((e) => e.name === name);
@@ -670,7 +667,6 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
     setSetInputs((prev) => ({ ...prev, [name]: (prev[name] ?? []).filter((_, i) => i !== idx) }));
     remapChecked(name, (i) => (i === idx ? null : i > idx ? i - 1 : i));
-    haptic.light();
   };
   // Reorder the session's exercises (set keys are name-based, so ticks and inputs move along).
   const moveSessionExercise = (idx: number, dir: -1 | 1) => {
@@ -682,7 +678,6 @@ export default function PlanScreen() {
       [exs[idx], exs[to]] = [exs[to], exs[idx]];
       return { ...d, exercises: exs };
     }));
-    haptic.light();
   };
   const addFreeSet = (name: string) => {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) + 1 } : e)) } : d)));
@@ -692,7 +687,6 @@ export default function PlanScreen() {
       arr.push(last ? { ...last, type: 'working' } : { weight: '', reps: '', type: 'working' });
       return { ...prev, [name]: arr };
     });
-    haptic.light();
   };
 
   // Initialize set inputs when training starts (prefilled from the given Studio's last session)
@@ -901,6 +895,7 @@ export default function PlanScreen() {
       return next;
     });
     if (!wasChecked) {
+      haptic.light();
       const rest = restPrefs.auto ? restAfter(days[activeDayIdx], ex) : 0;
       if (rest > 0) {
         setRestTotal(rest);
@@ -1758,7 +1753,7 @@ export default function PlanScreen() {
                 return (
                   <button
                     key={sec}
-                    onClick={() => { setRestPrefs({ ...restPrefs, overrides: { ...restPrefs.overrides, [restSheet.name]: sec } }); setRestSheet(null); haptic.light(); }}
+                    onClick={() => { setRestPrefs({ ...restPrefs, overrides: { ...restPrefs.overrides, [restSheet.name]: sec } }); setRestSheet(null); }}
                     className="adlr-tap py-2.5 rounded-xl text-sm font-medium tabular-nums"
                     style={active ? { background: 'rgb(var(--adlr-gold) / 0.16)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.45)' } : { background: 'rgb(var(--text) / 0.04)', color: 'rgb(var(--text) / 0.8)', border: '1px solid transparent' }}
                   >

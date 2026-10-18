@@ -37,6 +37,7 @@ interface RestChronoPlugin {
   stop(): Promise<void>;
   drain(): Promise<{ events: RestEvent[]; phase: RestFlowState['phase']; endTime: number }>;
   setForeground(options: { value: boolean }): Promise<void>;
+  beep(): Promise<void>;
   addListener(eventName: 'restAction', listener: (data: { action: string }) => void): Promise<{ remove: () => void }>;
 }
 
@@ -60,6 +61,17 @@ const labels = () => ({
   alert: t('Pause vorbei!'),
   channel: t('Pausen-Ende'),
 });
+
+/** Native end-of-rest beep: plays on silent, mixed into the music (no ducking). false = not available. */
+export async function nativeBeep(): Promise<boolean> {
+  if (!isNative()) return false;
+  try {
+    await RestChrono.beep();
+    return true;
+  } catch {
+    return false; // older native build without beep()
+  }
+}
 
 /** Show/replace the lock-screen flow. `endTime` <= now starts directly with the next set. */
 export async function startRestFlow(endTime: number, steps: RestStep[]): Promise<void> {

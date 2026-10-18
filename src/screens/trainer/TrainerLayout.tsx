@@ -1,14 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Palette, LogOut, Languages, ListChecks } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useIncomingMessages } from '@/lib/chat';
 import BrandLogo from '@/components/BrandLogo';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { t } from '@/lib/i18n';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
-import BrandingSettings from '@/components/BrandingSettings';
+import TrainerAccountSheet from '@/components/TrainerAccountSheet';
 import CoachQuestionsEditor from '@/components/CoachQuestionsEditor';
 
 const TABS = [
@@ -19,21 +17,12 @@ const TABS = [
 ];
 
 export default function TrainerLayout({ children }: { children: React.ReactNode }) {
-  const { profile, signOut, refreshProfile } = useAuth();
-  const [nameDraft, setNameDraft] = useState<string | null>(null);
-  const saveName = async () => {
-    const first = (nameDraft ?? '').trim();
-    if (!profile || !first) return;
-    await supabase.from('profiles').update({ first_name: first }).eq('id', profile.id);
-    await refreshProfile();
-    setNameDraft(null);
-  };
+  const { profile, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [msgUnread, setMsgUnread] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // Live: a client message while the app is open lights the Nachrichten dot (RLS limits the stream to my clients).
   useIncomingMessages('client', () => {
@@ -67,15 +56,6 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
     }
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [menuOpen]);
-
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto">
       <header className="sticky top-0 z-20 bg-adlr-black safe-top">
@@ -88,7 +68,7 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
               <p className="text-xs font-medium text-white/80">{profile?.first_name ?? t('Coach')}</p>
               <p className="text-[10px] text-adlr-gold/70">{t('Trainer')}</p>
             </div>
-            <div className="relative" ref={menuRef}>
+            <div className="relative">
               <button
                 onClick={() => setMenuOpen((o) => !o)}
                 className="w-9 h-9 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-xs font-bold adlr-tap"
@@ -96,50 +76,18 @@ export default function TrainerLayout({ children }: { children: React.ReactNode 
               >
                 {(profile?.first_name?.[0] ?? 'C').toUpperCase()}
               </button>
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-72 max-h-[80vh] overflow-y-auto adlr-card p-3 z-40 adlr-fade-in" style={{ background: 'rgb(var(--adlr-anthracite))' }}>
-                  <p className="text-xs font-medium uppercase tracking-wider text-white/50 mb-2 px-1">{t('Dein Name (für Klienten sichtbar)')}</p>
-                  <div className="flex gap-1.5 mb-4">
-                    <input
-                      value={nameDraft ?? profile?.first_name ?? ''}
-                      onChange={(e) => setNameDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') saveName(); }}
-                      placeholder={t('Vorname')}
-                      className="flex-1 min-w-0 bg-inset border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 outline-none"
-                    />
-                    {nameDraft !== null && nameDraft.trim() !== (profile?.first_name ?? '') && (
-                      <button onClick={saveName} className="adlr-tap px-3 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>OK</button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <Palette size={15} className="text-adlr-gold" />
-                    <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Erscheinungsbild')}</p>
-                  </div>
-                  <ThemeSwitcher />
-                  <div className="flex items-center gap-2 mt-4 mb-2 px-1">
-                    <Languages size={15} className="text-adlr-gold" />
-                    <p className="text-xs font-medium uppercase tracking-wider text-white/50">{t('Sprache')}</p>
-                  </div>
-                  <LanguageSwitcher />
-                  {/* Branding last and collapsed: it changes every client's app */}
-                  <button onClick={() => { setMenuOpen(false); setQuestionsOpen(true); }} className="adlr-tap w-full flex items-center gap-2 mt-4 pt-3 border-t border-white/10 px-1 text-left">
-                    <ListChecks size={15} className="text-adlr-gold shrink-0" />
-                    <span className="flex-1 text-xs font-medium uppercase tracking-wider text-white/50">{t('Eigene Fragen')}</span>
-                  </button>
-                  <div className="mt-4 pt-3 border-t border-white/10"><BrandingSettings /></div>
-                  <button
-                    onClick={async () => { setMenuOpen(false); await signOut(); nav('/trainer-auth', { replace: true }); }}
-                    className="adlr-tap w-full flex items-center gap-2 mt-3 pt-3 border-t border-white/10 text-sm text-white/60 hover:text-white/90 px-1"
-                  >
-                    <LogOut size={15} /> {t('Abmelden')}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
       </header>
 
+      {menuOpen && (
+        <TrainerAccountSheet
+          onClose={() => setMenuOpen(false)}
+          onQuestions={() => { setMenuOpen(false); setQuestionsOpen(true); }}
+          onSignOut={async () => { setMenuOpen(false); await signOut(); nav('/trainer-auth', { replace: true }); }}
+        />
+      )}
       {questionsOpen && <CoachQuestionsEditor onClose={() => setQuestionsOpen(false)} />}
       <main className="flex-1 px-5 pb-28 pt-2">
         <div key={location.pathname} className="adlr-route">{children}</div>

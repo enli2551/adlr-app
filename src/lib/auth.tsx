@@ -23,6 +23,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const PROFILE_TIMEOUT_MS = 8000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -48,7 +50,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data) cacheSet(p.id, 'coach', data);
   };
 
-  const loadProfile = async (uid: string) => {
+  // Profile load with a time limit: the login must never hang on one slow request.
+  const loadProfile = (uid: string) => Promise.race([
+    loadProfileNow(uid),
+    new Promise<void>((resolve) => setTimeout(() => {
+      // Too slow — carry on with the last known profile (if any); the real load still lands later.
+      setProfile((p) => p ?? cacheGet<Profile>(uid, 'profile'));
+      resolve();
+    }, PROFILE_TIMEOUT_MS)),
+  ]);
+
+  const loadProfileNow = async (uid: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
     if (error) {
       // Offline start: keep working from the last known profile (training works offline).
@@ -72,6 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    // Safety net: the start screen never waits longer than this, whatever hangs.
+    const watchdog = setTimeout(() => mounted && setLoading(false), 12000);
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session);
@@ -80,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setLoading(false);
       }
-    });
+    }).catch(() => mounted && setLoading(false)).finally(() => clearTimeout(watchdog));
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);

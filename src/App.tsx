@@ -1,7 +1,6 @@
 import { useEffect, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { installGlobalTapHaptics } from '@/lib/haptics';
 import AuthScreen from '@/screens/AuthScreen';
 import ClientLayout from '@/screens/client/ClientLayout';
 import TrainerLayout from '@/screens/trainer/TrainerLayout';
@@ -54,7 +53,6 @@ function Splash() {
 }
 
 export default function App() {
-  useEffect(() => { installGlobalTapHaptics(); }, []);
   // Remount the routed tree on language change so every screen re-renders its strings.
   const lang = useLang();
   return (

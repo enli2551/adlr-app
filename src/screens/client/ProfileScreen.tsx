@@ -14,6 +14,7 @@ import WorkoutImportCard from '@/components/WorkoutImportCard';
 import { weeklyStreak } from '@/lib/streak';
 import { loadFrozenWeeks } from '@/lib/engagement';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
+import HapticsToggle from '@/components/HapticsToggle';
 import { t, tUserTitle, fmtDate } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { createPortal } from 'react-dom';
@@ -504,6 +505,7 @@ export default function ProfileScreen() {
               <>
                 <p className="text-base font-semibold text-white mb-3 flex items-center gap-2"><Palette size={16} className="text-adlr-gold" /> {t('Erscheinungsbild')}</p>
                 <div onClick={() => setThemeId(getTheme())}><ThemeSwitcher /></div>
+                <HapticsToggle />
               </>
             )}
             {sheet === 'lang' && (

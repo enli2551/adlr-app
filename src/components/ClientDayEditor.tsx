@@ -49,7 +49,6 @@ export default function ClientDayEditor({ day, onClose, onSaved, saveExercises }
         ? { name: row.name, sets: e.sets, reps: e.reps, rest_sec: e.rest_sec ?? row.default_rest_sec, group: e.group, group_type: e.group_type, rpe: e.rpe, rir: e.rir }
         : e)));
     }
-    haptic.light();
     setPicking(null);
   };
 
