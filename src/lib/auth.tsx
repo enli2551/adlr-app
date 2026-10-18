@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { Profile } from './types';
@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [coach, setCoach] = useState<CoachInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const signupRole = useRef<'trainer' | 'client' | null>(null);
   useEffect(() => { setMonitoringUser(profile?.id ?? null, profile?.role); }, [profile?.id, profile?.role]);
   // The coach's colour replaces ADLR gold everywhere; remembered for the next start.
   useEffect(() => {
@@ -70,14 +71,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (data) { setProfile(data as Profile); cacheSet(uid, 'profile', data); await loadCoach(data as Profile); return; }
-    // Profile row missing — create a minimal client profile so the app works.
+    // Profile row missing — create a minimal profile so the app works. During sign-up the
+    // auth listener gets here before signUp's own upsert: use the role being signed up for,
+    // otherwise a new trainer became a client (the role can't be changed afterwards).
     const { data: user } = await supabase.auth.getUser();
     const email = user?.user?.email ?? '';
     const { data: created, error: cErr } = await supabase
       .from('profiles')
-      .insert({ id: uid, email, role: 'client' })
+      .insert({ id: uid, email, role: signupRole.current ?? 'client' })
       .select('*')
       .maybeSingle();
+    if (cErr?.code === '23505') { // created concurrently (signUp's upsert) — just read it
+      const { data: again } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
+      if (again) { setProfile(again as Profile); cacheSet(uid, 'profile', again); await loadCoach(again as Profile); }
+      return;
+    }
     if (cErr) { console.error('profile create', cErr); return; }
     setProfile(created as Profile);
   };
@@ -110,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, role: 'trainer' | 'client') => {
+    signupRole.current = role;
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       // Account already exists — fall back to sign-in so the user isn't stuck.
