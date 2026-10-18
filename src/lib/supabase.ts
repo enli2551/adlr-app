@@ -60,7 +60,14 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
       });
       // Response requires a status in 200–599; guard against XHR's 0.
       const status = xhr.status >= 200 && xhr.status <= 599 ? xhr.status : 500;
-      resolve(new Response(xhr.responseText, { status, statusText: xhr.statusText, headers: respHeaders }));
+      // 204/205/304 must have a null body: current Chromium throws on '' and the request
+      // (every plain .update()) never settled — saves hung on "Speichert…".
+      const nullBody = status === 204 || status === 205 || status === 304;
+      try {
+        resolve(new Response(nullBody ? null : xhr.responseText, { status, statusText: xhr.statusText, headers: respHeaders }));
+      } catch (e) {
+        reject(e);
+      }
     };
     xhr.onerror = () => reject(new TypeError('Network request failed'));
     xhr.ontimeout = () => reject(new TypeError('Network request timed out'));
