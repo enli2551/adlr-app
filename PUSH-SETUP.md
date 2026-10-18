@@ -53,10 +53,9 @@ Androidon `google-services.json` nélkül az app nem is próbál regisztrálni.
 ## 4. App ID + provisioning profil (iOS, egyszer)
 1. Apple Developer → **Identifiers** → `com.adlr.app` → pipáld: **Push Notifications** → Save.
    (A widget, `com.adlr.app.RestTimerWidget`, NEM kell.)
-2. Apple Developer → **Profiles** → a `com.adlr.app` **App Store** profil(ok) → **Delete**.
-   Ok: a régi profilban nincs push-jogosultság, az `App.entitlements` viszont már kéri (`aps-environment = production`) → aláírási hiba lenne.
-   A következő Codemagic `ios-release` a `fetch-signing-files --create`-tel új, push-os profilt gyárt.
-3. Ha a Codemagic mégis „entitlement … not included in profile" hibát ad: ellenőrizd, hogy az 1–2. lépés megtörtént, és indítsd újra.
+2. Profilokat **nem kell törölni**: a régiek „Invalid"-dá válnak, a Codemagic `fetch-signing-files --create`
+   minden buildnél úgyis új profilt gyárt, és abban már benne lesz a push.
+3. Ha a Codemagic mégis „entitlement … not included in profile" hibát ad: ellenőrizd az 1. lépést, és indítsd újra.
 
 ## 5. Webhook-titok (közös a DB és a függvény között)
 1. Generálj egy véletlen stringet (pl. https://www.random.org/strings vagy jelszókezelő, 32+ karakter).

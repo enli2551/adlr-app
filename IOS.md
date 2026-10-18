@@ -42,9 +42,9 @@ de **nem kell saját Mac**: egy felhős macOS-CI (itt **Codemagic**) elkészíti
   kellene — külön, nagyobb feladat, ha később kell.
 - **Push-értesítés (2026-10):** szerveres push is van (`@capacitor/push-notifications`, iOS-en
   közvetlenül APNs, Firebase SDK nélkül). Az `App.entitlements`-ben `aps-environment = production`
-  → **egyszer:** Apple Developer → Identifiers → com.adlr.app → *Push Notifications* bekapcsolása,
-  majd Profiles → a régi com.adlr.app App Store profil **törlése**, hogy a Codemagic
-  `fetch-signing-files --create` új, push-os profilt gyártson. Részletek: `PUSH-SETUP.md`.
+  → **egyszer:** Apple Developer → Identifiers → com.adlr.app → *Push Notifications* bekapcsolása
+  (KÉSZ, 2026-10-18). Profilt nem kell törölni: a Codemagic `fetch-signing-files --create` minden
+  buildnél új, push-os profilt gyárt. Részletek: `PUSH-SETUP.md`.
 
 ## Alternatíva (ha nem Codemagic)
 - **Ionic Appflow** (a Capacitor-csapattól) vagy **GitHub Actions** `macos-latest` runner

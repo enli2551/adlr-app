@@ -51,9 +51,8 @@ workflows:
           # Create (from that key) the distribution certificate AND the App Store
           # provisioning profile for the bundle id, and download them.
           # PUSH (2026-10): App.entitlements has aps-environment. Enable "Push Notifications"
-          # on the com.adlr.app App ID in the Apple Developer portal and DELETE the old
-          # com.adlr.app App Store profile there once, so --create makes a fresh profile
-          # that contains the push entitlement (otherwise signing fails). See PUSH-SETUP.md.
+          # on the com.adlr.app App ID (done 2026-10-18); --create makes a fresh profile on
+          # every run, which then contains the push entitlement. See PUSH-SETUP.md.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --certificate-key @file:/tmp/adlr_cert_key.pem \
