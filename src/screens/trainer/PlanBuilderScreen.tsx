@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
 import { captureError } from '@/lib/monitoring';
@@ -67,6 +67,12 @@ export default function PlanBuilderScreen() {
   const libByName = useMemo(() => (lib ? new Map(lib.map((e) => [e.name, e])) : null), [lib]);
 
   useEffect(() => { load(); }, [profile?.id]);
+  // The plan created with "Neuer Plan" in this visit — the ONLY plan that may ever be removed
+  // without the coach asking (when they leave it untouched). Nothing else is deleted
+  // automatically: a failed/slow request must never look like "empty plan" (that deleted
+  // real client plans on a bad connection).
+  const freshPlanId = useRef<string | null>(null);
+  const [metaOk, setMetaOk] = useState(false);
 
   // quiet = refresh in place (back from the editor) without the loading spinner
   const load = async (quiet = false) => {
@@ -76,11 +82,11 @@ export default function PlanBuilderScreen() {
       supabase.from('plans').select('*').eq('trainer_id', profile.id).order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('first_name'),
     ]);
-    let planList = (pl ?? []) as Plan[];
+    const planList = (pl ?? []) as Plan[];
     const ids = planList.map((p) => p.id);
     const m = new Map<string, PlanMeta>(ids.map((id) => [id, { active: [], everAssigned: false, trainingDays: 0, exercises: 0 }]));
     if (ids.length > 0) {
-      const [{ data: cps }, { data: pds }] = await Promise.all([
+      const [{ data: cps, error: cpsErr }, { data: pds, error: pdsErr }] = await Promise.all([
         supabase.from('client_plans').select('plan_id, client_id, is_active').in('plan_id', ids),
         supabase.from('plan_days').select('plan_id, is_rest_day, exercises').in('plan_id', ids),
       ]);
@@ -95,13 +101,10 @@ export default function PlanBuilderScreen() {
         x.exercises += n;
         if (!d.is_rest_day && n > 0) x.trainingDays++;
       }
-      // Empty plans nobody ever had (an abandoned "Neuer Plan", autofill mishaps) are removed
-      // after an hour, so the list doesn't fill up with clutter again.
-      const stale = planList.filter((p) => !p.is_template && !(p as Plan & { is_starter?: boolean }).is_starter
-        && m.get(p.id)!.exercises === 0 && !m.get(p.id)!.everAssigned
-        && Date.now() - new Date(p.created_at).getTime() > 60 * 60 * 1000);
-      for (const p of stale) await deletePlanQuietly(p.id);
-      if (stale.length > 0) planList = planList.filter((p) => !stale.includes(p));
+      // Only trust "empty" when both lookups really succeeded (the manual clean-up button).
+      setMetaOk(!cpsErr && !pdsErr && cps != null && pds != null);
+    } else {
+      setMetaOk(true);
     }
     setMeta(m);
     setPlans(planList);
@@ -125,15 +128,18 @@ export default function PlanBuilderScreen() {
     const p = activePlan;
     setMode('list');
     setActivePlan(null);
-    if (p && !p.is_template && days.every((d) => (d.exercises?.length ?? 0) === 0)) {
-      const { count } = await supabase.from('client_plans').select('plan_id', { count: 'exact', head: true }).eq('plan_id', p.id);
-      if (!count) await deletePlanQuietly(p.id);
+    if (p && p.id === freshPlanId.current && days.length > 0 && days.every((d) => (d.exercises?.length ?? 0) === 0)) {
+      const { count, error } = await supabase.from('client_plans').select('plan_id', { count: 'exact', head: true }).eq('plan_id', p.id);
+      if (!error && count === 0) await deletePlanQuietly(p.id);
     }
+    freshPlanId.current = null;
     await load(true);
   };
 
   const removeEmptyPlans = async () => {
-    const empty = plans.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0 && (meta.get(p.id)?.exercises ?? 0) === 0);
+    if (!metaOk) return;
+    const empty = plans.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0 && !meta.get(p.id)?.everAssigned && (meta.get(p.id)?.exercises ?? 0) === 0);
+    if (!empty.length || !window.confirm(t('{n} leere Pläne löschen?', { n: empty.length }) + '\n\n' + empty.map((p) => p.name).join('\n'))) return;
     for (const p of empty) await deletePlanQuietly(p.id);
     await load();
   };
@@ -169,6 +175,7 @@ export default function PlanBuilderScreen() {
     setNewPlanName('');
     setShowNewForm(false);
     setPlans((prev) => [data as Plan, ...prev]);
+    freshPlanId.current = (data as Plan).id;
     setActivePlan(data as Plan);
     setDays((pd ?? []) as PlanDay[]);
     setMode('edit');
@@ -426,7 +433,7 @@ export default function PlanBuilderScreen() {
     const assigned = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) > 0);
     const templates = visible.filter((p) => p.is_template);
     const others = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0);
-    const emptyOthers = others.filter((p) => (meta.get(p.id)?.exercises ?? 0) === 0);
+    const emptyOthers = metaOk ? others.filter((p) => !meta.get(p.id)?.everAssigned && (meta.get(p.id)?.exercises ?? 0) === 0) : [];
 
     const planRow = (p: Plan, kind: 'assigned' | 'template' | 'other') => {
       const m = meta.get(p.id);
@@ -629,7 +636,7 @@ export default function PlanBuilderScreen() {
             </button>
             {(showOthers || q) && (
               <div className="space-y-2 adlr-fade-in">
-                <p className="text-[11px] text-white/35 mb-1">{t('Entwürfe, Kopien und Pläne, die gerade niemand hat. Leere Pläne werden automatisch entfernt.')}</p>
+                <p className="text-[11px] text-white/35 mb-1">{t('Entwürfe, Kopien und Pläne, die gerade niemand hat.')}</p>
                 {others.map((p) => planRow(p, 'other'))}
                 {emptyOthers.length > 1 && (
                   <button onClick={removeEmptyPlans} className="adlr-tap w-full mt-1 py-2.5 rounded-xl text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/25">
