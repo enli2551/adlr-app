@@ -1323,6 +1323,14 @@ const dict: Record<string, string> = {
   "Branding": "Branding",
   "Logo & Farbe in der App deiner Klienten": "Logo & colour in your clients' app",
   "Vibration bei Aktionen": "Vibrate on actions",
+  // ── Plan trash / safety ──
+  "Dieser Plan ist bei einem Klienten aktiv. Weise ihm zuerst einen anderen Plan zu.": "This plan is active for a client. Assign them another plan first.",
+  "Plan konnte nicht wiederhergestellt werden.": "The plan could not be restored.",
+  "Papierkorb": "Trash",
+  "Gelöschte Pläne — mit einem Tipp wiederherstellen.": "Deleted plans — restore with one tap.",
+  "Wiederherstellen": "Restore",
+  "{n} leere Pläne löschen?": "Delete {n} empty plans?",
+  "Entwürfe, Kopien und Pläne, die gerade niemand hat.": "Drafts, copies and plans nobody has right now.",
 };
 
 export default dict;

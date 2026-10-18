@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Pencil, Trash2, Check, ChevronRight, ArrowLeft, Crown, Dumbbell } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isMissingFunction } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { t } from '@/lib/i18n';
 import { haptic } from '@/lib/haptics';
@@ -89,9 +89,12 @@ export default function MyPlans({ onClose, onChanged }: { onClose: () => void; o
     for (const d of (days ?? []) as { id: string; workout_name: string | null }[]) {
       if (d.workout_name) await supabase.from('workout_completions').update({ title: d.workout_name }).eq('plan_day_id', d.id).is('title', null);
     }
-    if (activeId === planId) await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id).eq('plan_id', planId);
-    await supabase.from('plan_days').delete().eq('plan_id', planId);
-    await supabase.from('plans').delete().eq('id', planId);
+    const { error } = await supabase.rpc('trainer_delete_plan', { p_plan: planId });
+    if (error && isMissingFunction(error)) {
+      if (activeId === planId) await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id).eq('plan_id', planId);
+      await supabase.from('plan_days').delete().eq('plan_id', planId);
+      await supabase.from('plans').delete().eq('id', planId);
+    }
     setBusy(null); setConfirmDel(null);
     if (activeId === planId) { setActiveId(null); onChanged(); }
     await load();

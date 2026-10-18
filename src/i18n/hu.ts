@@ -1324,6 +1324,14 @@ const dict: Record<string, string> = {
   "Branding": "Arculat",
   "Logo & Farbe in der App deiner Klienten": "Logó és szín a klienseid appjában",
   "Vibration bei Aktionen": "Rezgés műveleteknél",
+  // ── Plan trash / safety ──
+  "Dieser Plan ist bei einem Klienten aktiv. Weise ihm zuerst einen anderen Plan zu.": "Ez a terv aktív egy kliensnél. Előbb ossz ki neki egy másik tervet.",
+  "Plan konnte nicht wiederhergestellt werden.": "A tervet nem sikerült visszaállítani.",
+  "Papierkorb": "Lomtár",
+  "Gelöschte Pläne — mit einem Tipp wiederherstellen.": "Törölt tervek — egy koppintással visszaállíthatók.",
+  "Wiederherstellen": "Visszaállítás",
+  "{n} leere Pläne löschen?": "Törlöd a(z) {n} üres tervet?",
+  "Entwürfe, Kopien und Pläne, die gerade niemand hat.": "Vázlatok, másolatok és tervek, amelyek most senkinél sincsenek.",
 };
 
 export default dict;

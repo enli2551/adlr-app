@@ -371,6 +371,11 @@ export default function PlanBuilderScreen() {
       const res = await supabase.from('plans').delete().eq('id', plan.id).select('id');
       error = res.error ?? (res.data?.length ? null : { message: 'nothing deleted' } as typeof error);
     }
+    if (error && /plan_in_use/.test(error.message ?? '')) {
+      setDeleteErr(t('Dieser Plan ist bei einem Klienten aktiv. Weise ihm zuerst einen anderen Plan zu.'));
+      setTimeout(() => setDeleteErr(null), 6000);
+      return;
+    }
     if (error) {
       captureError(error, { action: 'trainer_delete_plan' });
       setDeleteErr(t('Plan konnte nicht gelöscht werden.'));
@@ -379,6 +384,21 @@ export default function PlanBuilderScreen() {
     }
     if (activePlan?.id === plan.id) { setActivePlan(null); setMode('list'); }
     await load();
+    loadTrash();
+  };
+
+  // Trash: deleted plans stay restorable (own plans; the master trainer sees every coach's).
+  const [trash, setTrash] = useState<{ id: string; name: string; trainer_id: string; trainer_name: string | null; deleted_at: string; exercises: number }[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const loadTrash = async () => {
+    const { data, error } = await supabase.rpc('trainer_deleted_plans');
+    setTrash(error ? [] : ((data ?? []) as typeof trash));
+  };
+  useEffect(() => { if (profile) loadTrash(); }, [profile?.id]);
+  const restorePlan = async (id: string) => {
+    const { error } = await supabase.rpc('trainer_restore_plan', { p_plan: id });
+    if (error) { setDeleteErr(t('Plan konnte nicht wiederhergestellt werden.')); setTimeout(() => setDeleteErr(null), 5000); return; }
+    await Promise.all([load(true), loadTrash()]);
   };
 
   // Deep-copy a plan's days into a freshly created plan (shared by duplicate / template flows).
@@ -653,6 +673,33 @@ export default function PlanBuilderScreen() {
           </div>
         )}
 
+        {trash.length > 0 && !q && (
+          <div className="mb-6">
+            <button onClick={() => setShowTrash((v) => !v)} className="adlr-tap w-full flex items-center justify-between mb-2">
+              <span className="text-xs uppercase tracking-wider text-white/40 flex items-center gap-1.5"><Trash2 size={12} /> {t('Papierkorb')} · {trash.length}</span>
+              {showTrash ? <ChevronUp size={15} className="text-white/35" /> : <ChevronDown size={15} className="text-white/35" />}
+            </button>
+            {showTrash && (
+              <div className="space-y-2 adlr-fade-in">
+                <p className="text-[11px] text-white/35 mb-1">{t('Gelöschte Pläne — mit einem Tipp wiederherstellen.')}</p>
+                {trash.map((p) => (
+                  <div key={p.id} className="rounded-xl px-3.5 py-3 flex items-center gap-3" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.06)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white/70 truncate">{p.name}</p>
+                      <p className="text-[11px] text-white/35 truncate">
+                        {[p.trainer_id !== profile?.id ? p.trainer_name : null, t('{n} Übungen', { n: p.exercises }), fmtDate(p.deleted_at, { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <button onClick={() => restorePlan(p.id)} className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}>
+                      {t('Wiederherstellen')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {q && visible.length === 0 && <p className="text-sm text-white/35 text-center py-8">{t('Nichts gefunden.')}</p>}
 
         {plans.length === 0 && !createError && (
@@ -715,8 +762,10 @@ export default function PlanBuilderScreen() {
             <button onClick={() => copyPlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Duplizieren')}>
               <Copy size={16} />
             </button>
-            <button onClick={() => deletePlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgba(248,113,113,0.4)' }} title={t('Plan löschen')}>
-              <Trash2 size={16} />
+            <button onClick={() => requestDelete(activePlan)} className="adlr-tap p-1.5 rounded-lg flex items-center gap-1 text-[11px] font-semibold"
+              style={pendingDelete === activePlan.id ? { color: '#f87171', background: 'rgb(239 68 68 / 0.12)' } : { color: 'rgba(248,113,113,0.4)' }}
+              title={pendingDelete === activePlan.id ? t('Nochmal tippen zum Löschen') : t('Plan löschen')}>
+              <Trash2 size={16} />{pendingDelete === activePlan.id && t('Nochmal tippen zum Löschen')}
             </button>
           </>
         )}
