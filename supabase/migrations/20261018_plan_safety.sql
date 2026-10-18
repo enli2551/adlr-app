@@ -12,6 +12,16 @@
 ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 ALTER TABLE public.plans ADD COLUMN IF NOT EXISTS deleted_by uuid;
 
+-- Helper: drop every policy on a table (handles drift between files and the live DB).
+CREATE OR REPLACE FUNCTION public._adlr_drop_policies(p_table text)
+RETURNS void LANGUAGE plpgsql AS $
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = p_table LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', r.policyname, p_table);
+  END LOOP;
+END $;
+
 -- ── plans ──
 SELECT public._adlr_drop_policies('plans');
 CREATE POLICY "plans_select" ON plans FOR SELECT TO authenticated
@@ -113,3 +123,5 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+
+DROP FUNCTION public._adlr_drop_policies(text);
