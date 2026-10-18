@@ -51,11 +51,11 @@ export default function MyPlans({ onClose, onChanged }: { onClose: () => void; o
   const activate = async (planId: string) => {
     if (!profile) return;
     setBusy(planId);
-    await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id);
-    await supabase.from('client_plans').upsert(
+    const { error } = await supabase.from('client_plans').upsert(
       { client_id: profile.id, plan_id: planId, is_active: true, assigned_at: new Date().toISOString() },
       { onConflict: 'client_id,plan_id' },
     );
+    if (!error) await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id).neq('plan_id', planId);
     setBusy(null);
     setActiveId(planId);
     haptic.success();

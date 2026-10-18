@@ -928,7 +928,10 @@ export default function PlanScreen() {
     setStarterBusy(true);
     const { data: sp } = await supabase.from('plans').select('id').eq('is_starter', true).limit(1).maybeSingle();
     if (sp) {
-      await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id);
+      // Starter only when the client really has no active plan (a failed load showed the
+      // empty state and the starter replaced the coach's plan).
+      const { data: cur, error: curErr } = await supabase.from('client_plans').select('plan_id').eq('client_id', profile.id).eq('is_active', true).limit(1);
+      if (curErr || (cur ?? []).length > 0) { setStarterBusy(false); load(); return; }
       await supabase.from('client_plans').upsert(
         { client_id: profile.id, plan_id: sp.id, is_active: true, assigned_at: new Date().toISOString() },
         { onConflict: 'client_id,plan_id' },

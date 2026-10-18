@@ -122,10 +122,10 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   };
 
   const assignPlan = async (planId: string) => {
-    if (activePlan) {
-      await supabase.from('client_plans').update({ is_active: false }).eq('id', activePlan.id);
-    }
-    await supabase.from('client_plans').insert({ client_id: clientId, plan_id: planId, is_active: true });
+    // New assignment first, then retire the old one — never leave the client without a plan.
+    const { error } = await supabase.from('client_plans').upsert({ client_id: clientId, plan_id: planId, is_active: true }, { onConflict: 'client_id,plan_id' });
+    if (error) { captureError(error, { action: 'assign_plan' }); return; }
+    await supabase.from('client_plans').update({ is_active: false }).eq('client_id', clientId).neq('plan_id', planId);
     setEditingPlan(false);
     load();
   };

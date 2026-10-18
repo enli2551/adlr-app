@@ -212,12 +212,17 @@ export default function PlanBuilderScreen() {
 
   const assignPlan = async () => {
     if (!activePlan || !selectedClientId) return;
-    // Deactivate any other active plans for this client so only one is active.
-    await supabase.from('client_plans').update({ is_active: false }).eq('client_id', selectedClientId).neq('plan_id', activePlan.id);
-    const { error } = await supabase.from('client_plans').upsert(
+    // Assign first; only when that worked deactivate the client's other plans (the old order
+    // left the client with NO active plan whenever the assignment failed).
+    let { error } = await supabase.from('client_plans').upsert(
       { client_id: selectedClientId, plan_id: activePlan.id, is_active: true, assigned_at: new Date().toISOString() },
       { onConflict: 'client_id,plan_id' }
     );
+    if (error && /assigned_at/.test(error.message)) {
+      ({ error } = await supabase.from('client_plans').upsert(
+        { client_id: selectedClientId, plan_id: activePlan.id, is_active: true }, { onConflict: 'client_id,plan_id' }));
+    }
+    if (!error) ({ error } = await supabase.from('client_plans').update({ is_active: false }).eq('client_id', selectedClientId).neq('plan_id', activePlan.id));
     if (error) {
       console.error('assignPlan', error);
       setAssignError(true);
