@@ -1363,6 +1363,14 @@ const dict: Record<string, string> = {
   "{name} hat noch keinen Check-in ausgefüllt.": "{name} még nem töltött ki check-int.",
   "vom Klienten angepasst": "a kliens módosította",
   "{n} kg in 30 Tagen": "{n} kg 30 nap alatt",
+  // ── Replace exercise ──
+  "Übung ersetzen": "Gyakorlat cseréje",
+  "{name} ist an diesem Tag schon im Plan.": "{name} már szerepel ezen a napon.",
+  "Sätze, Wdh und Pause bleiben": "sorozat, ismétlés és pihenő marad",
+  "Deine Alternativen": "Az alternatíváid",
+  "tauschen": "csere",
+  "nur für dieses Training": "csak erre az edzésre",
+  "{name} ist schon in diesem Training.": "{name} már szerepel ebben az edzésben.",
 };
 
 export default dict;

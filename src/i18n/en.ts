@@ -1362,6 +1362,14 @@ const dict: Record<string, string> = {
   "{name} hat noch keinen Check-in ausgefüllt.": "{name} hasn't filled in a check-in yet.",
   "vom Klienten angepasst": "adjusted by the client",
   "{n} kg in 30 Tagen": "{n} kg in 30 days",
+  // ── Replace exercise ──
+  "Übung ersetzen": "Replace exercise",
+  "{name} ist an diesem Tag schon im Plan.": "{name} is already in this day.",
+  "Sätze, Wdh und Pause bleiben": "sets, reps and rest stay",
+  "Deine Alternativen": "Your alternatives",
+  "tauschen": "swap",
+  "nur für dieses Training": "this workout only",
+  "{name} ist schon in diesem Training.": "{name} is already in this workout.",
 };
 
 export default dict;

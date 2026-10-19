@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
 import { captureError } from '@/lib/monitoring';
 import type { Plan, PlanDay, Exercise, Profile } from '@/lib/types';
 import { Loading } from '@/components/ui';
-import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
+import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown, Pencil, Shuffle } from 'lucide-react';
 import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
@@ -42,6 +43,24 @@ export default function PlanBuilderScreen() {
   const [exForm, setExForm] = useState<Exercise>({ name: '', sets: 3, reps: 12, rest_sec: 60, tempo: '' });
   const [demoEx, setDemoEx] = useState<ExerciseRow | null>(null);
   const [altPicker, setAltPicker] = useState<{ dayIdx: number; exIdx: number; slot: number } | null>(null);
+  // Replace an exercise in place: sets, reps, rest, superset group and intensity stay;
+  // loads and the old exercise's alternatives don't carry over to a different movement.
+  const [replacePicker, setReplacePicker] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  const [replaceErr, setReplaceErr] = useState<string | null>(null);
+  const replaceExercise = async (dayIdx: number, exIdx: number, row: ExerciseRow) => {
+    const day = days[dayIdx];
+    const old = day?.exercises?.[exIdx];
+    if (!day || !old) return;
+    if (day.exercises.some((e, i) => i !== exIdx && e.name === row.name)) { setReplaceErr(t('{name} ist an diesem Tag schon im Plan.', { name: t(row.name) })); return; }
+    await updateExercise(dayIdx, exIdx, {
+      name: row.name,
+      weight_kg: undefined,
+      set_details: old.set_details?.map((d) => ({ reps: d.reps })),
+      alternatives: undefined,
+    });
+    setReplacePicker(null);
+    setReplaceErr(null);
+  };
   const [savingDay, setSavingDay] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -1074,6 +1093,15 @@ export default function PlanBuilderScreen() {
                                 <ArrowDown size={13} />
                               </button>
                               <button
+                                onClick={() => { setReplaceErr(null); setReplacePicker({ dayIdx: idx, exIdx }); }}
+                                className="adlr-tap p-1.5 rounded-lg"
+                                style={{ color: 'rgb(var(--adlr-gold))' }}
+                                title={t('Übung ersetzen')}
+                                aria-label={t('Übung ersetzen')}
+                              >
+                                <Shuffle size={13} />
+                              </button>
+                              <button
                                 onClick={() => removeExercise(idx, exIdx)}
                                 className="adlr-tap p-1.5 rounded-lg"
                                 style={{ color: 'rgba(248,113,113,0.5)' }}
@@ -1226,8 +1254,40 @@ export default function PlanBuilderScreen() {
           </button>
         </>
       )}
-      {altPicker && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4" onClick={() => setAltPicker(null)}>
+      {replacePicker && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 sm:p-4" onClick={() => setReplacePicker(null)}>
+          <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{t('Übung ersetzen')}</p>
+                <p className="text-[11px] text-white/45 truncate">{t(days[replacePicker.dayIdx]?.exercises?.[replacePicker.exIdx]?.name ?? '')} → ? · {t('Sätze, Wdh und Pause bleiben')}</p>
+              </div>
+              <button onClick={() => setReplacePicker(null)} className="adlr-tap p-1 text-white/50"><X size={18} /></button>
+            </div>
+            {replaceErr && <p className="text-xs text-red-400 px-4 pt-2">{replaceErr}</p>}
+            {(() => {
+              const alts = (days[replacePicker.dayIdx]?.exercises?.[replacePicker.exIdx]?.alternatives ?? []).filter(Boolean) as string[];
+              const rows = alts.map((a) => libByName?.get(a)).filter(Boolean) as ExerciseRow[];
+              return rows.length > 0 ? (
+                <div className="px-3 pt-3">
+                  <p className="text-[11px] text-white/40 mb-1.5">{t('Deine Alternativen')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rows.map((r) => (
+                      <button key={r.name} onClick={() => replaceExercise(replacePicker.dayIdx, replacePicker.exIdx, r)} className="adlr-tap px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}>{t(r.name)}</button>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="overflow-y-auto p-3">
+              <ExerciseLibrary canAdd={true} onDemo={(exRow) => setDemoEx(exRow)} onAdd={(exRow) => replaceExercise(replacePicker.dayIdx, replacePicker.exIdx, exRow)} />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      {altPicker && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4" onClick={() => setAltPicker(null)}>
           <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
               <p className="text-sm font-semibold text-white">{t('Alternative {n} wählen', { n: altPicker.slot + 1 })}</p>
@@ -1247,7 +1307,8 @@ export default function PlanBuilderScreen() {
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       {demoEx && <ExerciseDemoModal ex={demoEx} onClose={() => setDemoEx(null)} />}
     </div>
