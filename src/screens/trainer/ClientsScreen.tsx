@@ -18,7 +18,8 @@ export default function ClientsScreen() {
   const [query, setQuery] = useState('');
   const [goalFilter, setGoalFilter] = useState('Alle');
   const [params, setParams] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(() => params.get('client'));
+  const selected = params.get('client');
+  const setSelected = (id: string | null) => setParams(id ? { client: id } : {}, { replace: !id });
 
   const load = async () => {
     if (!profile) return;
@@ -33,7 +34,7 @@ export default function ClientsScreen() {
   useEffect(() => { load(); }, [profile?.id]);
 
   if (loading) return <Loading />;
-  if (selected) return <ClientDetail clientId={selected} onBack={() => { setSelected(null); if (params.get('client')) setParams({}, { replace: true }); load(); }} />;
+  if (selected) return <ClientDetail key={selected} clientId={selected} onBack={() => { setSelected(null); load(); }} />;
 
   const goals = ['Alle', 'Gewicht reduzieren', 'Muskeln aufbauen', 'Allgemeine Fitness & Energie'];
   const filtered = clients.filter((c) => {

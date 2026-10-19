@@ -15,6 +15,9 @@ interface Props {
   entries: ProgressEntry[];
   activePlan: ClientPlan | null;
   muscleOf: (exercise: string) => string;
+  /** glance = three key numbers + status chips (client overview); details = compliance,
+   *  nutrition, stats; notes = private coach notes. Default: details + notes. */
+  part?: 'glance' | 'details' | 'notes';
 }
 
 interface Note { id: string; body: string; created_at: string }
@@ -46,7 +49,7 @@ const tagLabel = (a: AttentionItem) => {
 };
 
 /** Trainerize-style at-a-glance block for the top of the trainer's client page. */
-export default function ClientSummary({ client, completions, setLogs, entries, activePlan, muscleOf }: Props) {
+export default function ClientSummary({ client, completions, setLogs, entries, activePlan, muscleOf, part }: Props) {
   const [target, setTarget] = useState(0);
   const [tags, setTags] = useState<AttentionItem[]>([]);
   const [healthRows, setHealthRows] = useState<{ day: string; kcal_in: number | null; updated_at: string }[]>([]);
@@ -157,9 +160,46 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
 
   const visibleNotes = showAllNotes ? notes : notes.slice(0, 2);
 
+  const chips = (
+    <>
+      {tags.map((tag, i) => (
+        <span key={i} className="px-2.5 py-1 rounded-lg text-[11px] font-medium" style={tag.severity >= 45
+          ? { background: 'rgb(var(--adlr-gold) / 0.16)', color: 'rgb(var(--adlr-gold))' }
+          : { background: 'rgba(251,146,60,0.12)', color: '#fb923c' }}>
+          {tagLabel(tag)}
+        </span>
+      ))}
+      {isNew && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 text-white/60">{t('Neu')} · {ago(client.created_at)}</span>}
+      {weekStreak > 0 && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 text-white/60">🔥 {weekStreak === 1 ? t('1 Woche in Folge') : t('{n} Wochen in Folge', { n: weekStreak })}</span>}
+      {tags.length === 0 && <span className="px-2.5 py-1 rounded-lg text-[11px] font-medium" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>{t('Alles im grünen Bereich')}</span>}
+    </>
+  );
+
+  if (part === 'glance') {
+    const wk = weeks[2];
+    const wkColor = target === 0 ? 'rgb(var(--text) / 0.85)' : wk.pct >= 100 ? '#22c55e' : wk.pct >= 50 ? 'rgb(var(--adlr-gold))' : '#fb923c';
+    const tile = (value: React.ReactNode, label: string, color?: string, sub?: string | null) => (
+      <div className="rounded-2xl px-3 py-2.5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.06)' }}>
+        <p className="text-[10px] uppercase tracking-wide text-white/40 truncate">{label}</p>
+        <p className="text-[15px] font-bold leading-tight mt-1" style={{ color: color ?? 'rgb(var(--text) / 0.92)' }}>{value}</p>
+        {sub && <p className="text-[10px] text-white/40 mt-0.5">{sub}</p>}
+      </div>
+    );
+    return (
+      <div className="mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {tile(target > 0 ? `${wk.done}/${target}` : String(wk.done), t('Diese Woche'), wkColor, t('Trainings'))}
+          {tile(lastTraining ? ago(lastTraining) : '—', t('Letztes Training'))}
+          {tile(latestW ? `${latestW.weight_kg} kg` : '—', t('Gewicht'), undefined, wDelta != null && wDelta !== 0 ? t('{n} kg in 30 Tagen', { n: `${wDelta > 0 ? '+' : ''}${wDelta}` }) : null)}
+        </div>
+        <div className="flex flex-wrap gap-1.5">{chips}</div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="adlr-card p-5 mb-4">
+      {part !== 'notes' && <div className="adlr-card p-5 mb-4">
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mb-4">
           {tags.map((tag, i) => (
@@ -281,10 +321,10 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* Trainer notes (private) */}
-      <div className="adlr-card p-5 mb-4">
+      {part !== 'details' && <div className="adlr-card p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-white/80 flex items-center gap-2"><StickyNote size={16} className="text-adlr-gold" /> {t('Trainer-Notizen')}</p>
           <span className="text-[11px] text-white/35">{t('nur für dich sichtbar')}</span>
@@ -315,7 +355,7 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
             +
           </button>
         </div>
-      </div>
+      </div>}
     </>
   );
 }

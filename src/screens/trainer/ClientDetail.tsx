@@ -9,7 +9,8 @@ import { AnswerList } from '@/components/QuestionFields';
 import { intakeAnswers } from '@/lib/coachQuestions';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
-import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText, Activity, StickyNote, ClipboardCheck, Wallet, X, TrendingUp, HeartPulse } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import ClientPlanCard from '@/components/ClientPlanCard';
 import MonthlyReport from '@/components/MonthlyReport';
 import TrainingHistory from '@/components/TrainingHistory';
@@ -22,7 +23,7 @@ import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import SignedPhoto from '@/components/SignedPhoto';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { t, fmtDate } from '@/lib/i18n';
+import { t, fmtDate, tUserTitle } from '@/lib/i18n';
 import ProgressReport from '@/components/ProgressReport';
 import { guessMuscle } from '@/lib/muscleGuess';
 
@@ -53,6 +54,12 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const [loading, setLoading] = useState(true);
   // Sections as tabs — the page used to be one long scroll with the plan hidden at the bottom.
   const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem('adlr_client_tab') as Tab) || 'overview'; } catch { return 'overview'; } });
+  const [sheet, setSheet] = useState<null | 'status' | 'notes' | 'checkins' | 'package'>(null);
+  const [checkinInfo, setCheckinInfo] = useState<{ total: number; open: number } | null>(null);
+  useEffect(() => {
+    supabase.from('weekly_checkins').select('replied_at').eq('client_id', clientId).order('week_start', { ascending: false }).limit(12)
+      .then(({ data, error }) => setCheckinInfo(error ? null : { total: (data ?? []).length, open: (data ?? []).filter((r: { replied_at: string | null }) => !r.replied_at).length }));
+  }, [clientId, sheet]);
   const pickTab = (x: Tab) => { setTab(x); try { sessionStorage.setItem('adlr_client_tab', x); } catch { /* ignore */ } };
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activePlan, setActivePlan] = useState<ClientPlan | null>(null);
@@ -176,12 +183,33 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       <div key={tab} className="adlr-fade-in">
       {tab === 'overview' && (
         <>
+          {/* Like Everfit/Trainerize: a few key numbers, the plan, tiles that open details — nothing expanded by default */}
+          <ClientSummary part="glance" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />
           <ClientPlanCard client={client} activePlan={activePlan} plans={plans} onAssign={assignPlan}
-            onOpen={(id) => nav(`/trainer/plan-builder?plan=${id}&client=${client.id}`)} onAi={() => nav(`/trainer/plan-builder?ai=${client.id}`)}
-            onToggleCanEdit={toggleCanEdit} canEditErr={canEditErr} />
-          <ClientSummary client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />
-          <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
-          <ClientPackageCard clientId={clientId} />
+            onOpen={(id) => nav(`/trainer/plan-builder?plan=${id}&client=${client.id}`)} onAi={() => nav(`/trainer/plan-builder?ai=${client.id}`)} />
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <Tile icon={Activity} title={t('Status & Ernährung')} hint={t('Compliance, Kalorien, Zahlen')} onClick={() => setSheet('status')} />
+            <Tile icon={StickyNote} title={t('Notizen')} hint={t('nur für dich sichtbar')} onClick={() => setSheet('notes')} />
+            <Tile icon={ClipboardCheck} title={t('Check-ins')} onClick={() => setSheet('checkins')}
+              hint={!checkinInfo || checkinInfo.total === 0 ? t('Noch keiner') : checkinInfo.open > 0 ? t('{n} unbeantwortet', { n: checkinInfo.open }) : t('Alle beantwortet')}
+              badge={!!checkinInfo && checkinInfo.open > 0} />
+            <Tile icon={Wallet} title={t('Paket & Zahlungen')} hint={t('Einheiten, offene Beträge')} onClick={() => setSheet('package')} />
+          </div>
+          {completions.length > 0 && (
+            <div className="adlr-card p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] uppercase tracking-wider text-white/40">{t('Letzte Trainings')}</p>
+                <button onClick={() => pickTab('training')} className="adlr-tap text-xs font-medium text-adlr-gold flex items-center gap-0.5">{t('Alle')} <ChevronRight size={13} /></button>
+              </div>
+              {completions.slice(0, 3).map((c) => (
+                <div key={c.id} className="flex items-center gap-3 py-2" style={{ borderTop: '1px solid rgb(var(--text) / 0.05)' }}>
+                  <Dumbbell size={14} className="text-white/35 shrink-0" />
+                  <span className="flex-1 min-w-0 text-sm text-white/80 truncate">{c.plan_day_id ? dayNameById.get(c.plan_day_id) ?? t('Training') : tUserTitle(c.title) || t('Freies Training')}</span>
+                  <span className="text-[11px] text-white/40 shrink-0">{[c.duration_sec ? `${Math.round(c.duration_sec / 60)} min` : null, fmtDate(c.completed_at, { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -190,10 +218,9 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
           <Card className="mb-4">
             <TrainingHistory completions={completions} setLogs={setLogs} dayNameById={dayNameById} muscleOf={muscleOf} limit={10} collapsible onChanged={() => load(true)} />
           </Card>
-          <Card className="mb-4">
-            <p className="text-sm font-medium text-white/80 mb-3">{t('Kraftentwicklung')}</p>
+          <CollapsibleCard id="cd_strength" className="mb-4" icon={TrendingUp} title={t('Kraftentwicklung')} subtitle={t('Verlauf je Übung')}>
             <ExerciseProgress setLogs={setLogs} completions={completions} />
-          </Card>
+          </CollapsibleCard>
           <Card className="mb-4">
             <PersonalRecords prs={prs} />
           </Card>
@@ -220,10 +247,9 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
               </ResponsiveContainer>
             </Card>
           )}
-          <Card className="mb-4">
-            <p className="text-sm font-medium text-white/80 mb-3">{t('Gesundheit · letzte 7 Tage')}</p>
+          <CollapsibleCard id="cd_health" className="mb-4" icon={HeartPulse} title={t('Gesundheit · letzte 7 Tage')} subtitle={t('Schritte, Schlaf, Kalorien')}>
             <HealthSummary clientId={clientId} emptyText={t('Noch keine Daten — der Klient kann Apple Health / Health Connect im Profil verbinden.')} />
-          </Card>
+          </CollapsibleCard>
           {photos.length > 0 && (
             <CollapsibleCard className="mb-4" title={t('Fortschrittsfotos')} subtitle={`${t(photos.length === 1 ? '{n} Foto' : '{n} Fotos', { n: photos.length })} · ${t('zuletzt')} ${fmtDate(photos[0].photo_date, { day: '2-digit', month: '2-digit', year: '2-digit' })}`}>
               <div className="grid grid-cols-3 gap-2">
@@ -239,7 +265,18 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       {tab === 'profile' && (
         <>
           <Card className="mb-4">
-            <p className="text-sm font-medium text-white/80 mb-3">{t('Intake Antworten')}</p>
+            <button onClick={toggleCanEdit} className="adlr-tap w-full flex items-center justify-between gap-3 text-left">
+              <span className="min-w-0">
+                <span className="block text-sm text-white/80">{t('Klient darf Plan selbst anpassen')}</span>
+                <span className="block text-xs text-white/40">{t('Übungen tauschen, hinzufügen, Sätze/Wdh ändern — nur aus der Übungsbibliothek.')}</span>
+              </span>
+              <span className="relative shrink-0 w-11 h-6 rounded-full transition-colors" style={{ background: client.can_edit_plan ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.15)' }}>
+                <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: client.can_edit_plan ? 22 : 2 }} />
+              </span>
+            </button>
+            {canEditErr && <p className="text-xs text-red-400 mt-1">{canEditErr}</p>}
+          </Card>
+          <CollapsibleCard id="cd_intake" className="mb-4" title={t('Intake Antworten')} subtitle={(intake.goals ?? []).map((x) => t(x)).join(', ') || t('Onboarding-Angaben')}>
             <div className="space-y-1.5 text-sm">
               <Row label={t('Ziele')} value={(intake.goals ?? []).map((x) => t(x)).join(', ')} />
               <Row label={t('Erfahrung')} value={intake.experience && t(`exp|${intake.experience}`)} />
@@ -256,7 +293,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
                 <AnswerList answers={intakeAnswers(intake)} />
               </div>
             )}
-          </Card>
+          </CollapsibleCard>
           <Card className="mb-4">
             <p className="text-sm font-medium text-white/80 mb-2">{t('Kontakt')}</p>
             <div className="space-y-1.5 text-sm">
@@ -279,6 +316,16 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
         </>
       )}
       </div>
+      {sheet && (
+        <DetailSheet onClose={() => setSheet(null)} title={sheet === 'status' ? t('Status & Ernährung') : sheet === 'notes' ? t('Notizen') : sheet === 'checkins' ? t('Check-ins') : t('Paket & Zahlungen')}>
+          {sheet === 'status' && <ClientSummary part="details" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
+          {sheet === 'notes' && <ClientSummary part="notes" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
+          {sheet === 'checkins' && (checkinInfo && checkinInfo.total > 0
+            ? <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
+            : <p className="text-sm text-white/45 text-center py-8">{t('{name} hat noch keinen Check-in ausgefüllt.', { name: client.first_name ?? '' })}</p>)}
+          {sheet === 'package' && <ClientPackageCard clientId={clientId} />}
+        </DetailSheet>
+      )}
       {showProgress && <ProgressReport client={client} trainerMode onClose={() => setShowProgress(false)} />}
       {showReport && <MonthlyReport clientId={clientId} clientName={client.first_name ?? undefined} onClose={() => setShowReport(false)} />}
     </div>
@@ -292,6 +339,32 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'progress', label: 'Fortschritt' },
   { id: 'profile', label: 'Profil' },
 ];
+
+function Tile({ icon: Icon, title, hint, onClick, badge }: { icon: typeof Sparkles; title: string; hint: string; onClick: () => void; badge?: boolean }) {
+  return (
+    <button onClick={onClick} className="adlr-tap adlr-card p-3.5 text-left relative">
+      {badge && <span className="absolute top-3 right-3 w-2 h-2 rounded-full" style={{ background: 'rgb(var(--adlr-gold))' }} />}
+      <Icon size={17} className="text-adlr-gold mb-2" />
+      <p className="text-sm font-semibold text-white leading-tight">{title}</p>
+      <p className="text-[11px] text-white/40 mt-0.5 truncate">{hint}</p>
+    </button>
+  );
+}
+
+function DetailSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center adlr-fade-in" onClick={onClose}>
+      <div className="w-full max-w-md max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-adlr-black" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <p className="text-lg font-bold text-white">{title}</p>
+          <button onClick={onClose} aria-label={t('Schließen')} className="adlr-tap p-1.5 text-white/40"><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 function ActionRow({ icon: Icon, title, subtitle, onClick }: { icon: typeof Sparkles; title: string; subtitle: string; onClick: () => void }) {
   return (

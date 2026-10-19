@@ -1348,6 +1348,21 @@ const dict: Record<string, string> = {
   "Plan suchen": "Terv keresése",
   "aktuell aktiv": "jelenleg aktív",
   "Training {n}": "{n}. edzés",
+  // ── Client overview tiles ──
+  "Status & Ernährung": "Állapot és táplálkozás",
+  "Compliance, Kalorien, Zahlen": "Teljesítés, kalória, számok",
+  "Notizen": "Jegyzetek",
+  "Check-ins": "Check-inek",
+  "Noch keiner": "Még nincs",
+  "{n} unbeantwortet": "{n} megválaszolatlan",
+  "Alle beantwortet": "Mind megválaszolva",
+  "Einheiten, offene Beträge": "Alkalmak, nyitott tételek",
+  "Letzte Trainings": "Legutóbbi edzések",
+  "Verlauf je Übung": "Gyakorlatonkénti alakulás",
+  "Schritte, Schlaf, Kalorien": "Lépés, alvás, kalória",
+  "{name} hat noch keinen Check-in ausgefüllt.": "{name} még nem töltött ki check-int.",
+  "vom Klienten angepasst": "a kliens módosította",
+  "{n} kg in 30 Tagen": "{n} kg 30 nap alatt",
 };
 
 export default dict;

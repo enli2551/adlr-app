@@ -1347,6 +1347,21 @@ const dict: Record<string, string> = {
   "Plan suchen": "Search plans",
   "aktuell aktiv": "currently active",
   "Training {n}": "Workout {n}",
+  // ── Client overview tiles ──
+  "Status & Ernährung": "Status & nutrition",
+  "Compliance, Kalorien, Zahlen": "Compliance, calories, numbers",
+  "Notizen": "Notes",
+  "Check-ins": "Check-ins",
+  "Noch keiner": "None yet",
+  "{n} unbeantwortet": "{n} unanswered",
+  "Alle beantwortet": "All answered",
+  "Einheiten, offene Beträge": "Sessions, open amounts",
+  "Letzte Trainings": "Recent workouts",
+  "Verlauf je Übung": "History per exercise",
+  "Schritte, Schlaf, Kalorien": "Steps, sleep, calories",
+  "{name} hat noch keinen Check-in ausgefüllt.": "{name} hasn't filled in a check-in yet.",
+  "vom Klienten angepasst": "adjusted by the client",
+  "{n} kg in 30 Tagen": "{n} kg in 30 days",
 };
 
 export default dict;
