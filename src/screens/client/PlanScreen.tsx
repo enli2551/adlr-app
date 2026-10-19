@@ -141,6 +141,8 @@ export default function PlanScreen() {
   // Cardio exercises log time/distance instead of kg × reps.
   const cardioNames = useMemo(() => new Set((lib ?? []).filter((e) => e.muscle_group === 'Cardio').map((e) => e.name)), [lib]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Swapping an exercise during a workout (machine taken, pain …): index in the session day
+  const [replaceIdx, setReplaceIdx] = useState<number | null>(null);
   // the client's own plan (built by themselves): its day names are theirs, never translated
   const [ownPlan, setOwnPlan] = useState(false);
   const dayTitle = (d: PlanDay) => (d.is_free || ownPlan ? tUserTitle(d.workout_name) : t(d.workout_name ?? 'Training'));
@@ -503,7 +505,6 @@ export default function PlanScreen() {
     if (next <= Date.now() + 1000) { setRestEndAt(null); return; }
     setRestEndAt(next);
     setRestTotal((r) => Math.max(1, r + delta));
-    haptic.light();
   };
   const stopRestTimer = () => setRestEndAt(null);
 
@@ -642,7 +643,6 @@ export default function PlanScreen() {
         km: lastLogs[i]?.distance_km?.toString() ?? '',
       })),
     }));
-    haptic.light();
   };
 
   // Free workout editing: remove an exercise, remove a single set, add a set.
@@ -661,7 +661,6 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.filter((e) => e.name !== name) } : d)));
     setSetInputs((prev) => { const next = { ...prev }; delete next[name]; return next; });
     remapChecked(name, () => null);
-    haptic.light();
   };
   const removeFreeSet = (name: string, idx: number) => {
     const ex = (activeDayIdx !== null ? days[activeDayIdx] : undefined)?.exercises.find((e) => e.name === name);
@@ -670,7 +669,36 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) - 1 } : e)) } : d)));
     setSetInputs((prev) => ({ ...prev, [name]: (prev[name] ?? []).filter((_, i) => i !== idx) }));
     remapChecked(name, (i) => (i === idx ? null : i > idx ? i - 1 : i));
+  };
+  // Swap an exercise for THIS workout only: sets/reps/rest/group stay, inputs are prefilled
+  // from the new exercise's last session (loads don't carry over between movements).
+  const [replaceErr, setReplaceErr] = useState<string | null>(null);
+  const replaceSessionExercise = (idx: number, name: string, row?: ExerciseRow): boolean => {
+    const active = activeDayIdx !== null ? days[activeDayIdx] : undefined;
+    const old = active?.exercises[idx];
+    if (!active || !old || old.name === name) return false;
+    if (active.exercises.some((e) => e.name === name)) { setReplaceErr(t('{name} ist schon in diesem Training.', { name: t(name) })); return false; }
+    setReplaceErr(null);
+    const sets = old.sets ?? row?.default_sets ?? 3;
+    setDays((prev) => prev.map((d) => (isSessionDay(d)
+      ? { ...d, exercises: d.exercises.map((e, i) => (i === idx ? { ...e, name, weight_kg: undefined, set_details: e.set_details?.map((x) => ({ reps: x.reps })), alternatives: undefined, notes: undefined } : e)) }
+      : d)));
+    const lastLogs = getLastSessionLogs(name).logs;
+    setSetInputs((prev) => {
+      const next = { ...prev };
+      delete next[old.name];
+      next[name] = Array.from({ length: sets }, (_, i) => ({
+        weight: lastLogs[i]?.weight_kg?.toString() ?? '',
+        reps: lastLogs[i]?.reps?.toString() ?? (old.reps != null ? String(old.reps) : row?.default_reps ? String(row.default_reps) : ''),
+        type: (prev[old.name]?.[i]?.type ?? 'working') as SetType,
+        min: lastLogs[i]?.duration_sec ? String(Math.round(lastLogs[i].duration_sec! / 60)) : '',
+        km: lastLogs[i]?.distance_km?.toString() ?? '',
+      }));
+      return next;
+    });
+    remapChecked(old.name, () => null);
     haptic.light();
+    return true;
   };
   // Reorder the session's exercises (set keys are name-based, so ticks and inputs move along).
   const moveSessionExercise = (idx: number, dir: -1 | 1) => {
@@ -682,7 +710,6 @@ export default function PlanScreen() {
       [exs[idx], exs[to]] = [exs[to], exs[idx]];
       return { ...d, exercises: exs };
     }));
-    haptic.light();
   };
   const addFreeSet = (name: string) => {
     setDays((prev) => prev.map((d) => (isSessionDay(d) ? { ...d, exercises: d.exercises.map((e) => (e.name === name ? { ...e, sets: (e.sets ?? 1) + 1 } : e)) } : d)));
@@ -692,7 +719,6 @@ export default function PlanScreen() {
       arr.push(last ? { ...last, type: 'working' } : { weight: '', reps: '', type: 'working' });
       return { ...prev, [name]: arr };
     });
-    haptic.light();
   };
 
   // Initialize set inputs when training starts (prefilled from the given Studio's last session)
@@ -901,6 +927,7 @@ export default function PlanScreen() {
       return next;
     });
     if (!wasChecked) {
+      haptic.light();
       const rest = restPrefs.auto ? restAfter(days[activeDayIdx], ex) : 0;
       if (rest > 0) {
         setRestTotal(rest);
@@ -933,7 +960,10 @@ export default function PlanScreen() {
     setStarterBusy(true);
     const { data: sp } = await supabase.from('plans').select('id').eq('is_starter', true).limit(1).maybeSingle();
     if (sp) {
-      await supabase.from('client_plans').update({ is_active: false }).eq('client_id', profile.id);
+      // Starter only when the client really has no active plan (a failed load showed the
+      // empty state and the starter replaced the coach's plan).
+      const { data: cur, error: curErr } = await supabase.from('client_plans').select('plan_id').eq('client_id', profile.id).eq('is_active', true).limit(1);
+      if (curErr || (cur ?? []).length > 0) { setStarterBusy(false); load(); return; }
       await supabase.from('client_plans').upsert(
         { client_id: profile.id, plan_id: sp.id, is_active: true, assigned_at: new Date().toISOString() },
         { onConflict: 'client_id,plan_id' },
@@ -1548,11 +1578,15 @@ export default function PlanScreen() {
                                         <Repeat size={12} /> {t('Alternativen')}
                                       </summary>
                                       <div className="mt-1.5 space-y-1 pl-1">
-                                        {ex.alternatives.filter((a) => a).map((a, ai) => (
+                                        {ex.alternatives.filter((a) => a).map((a, ai) => (isTraining ? (
+                                          <button key={ai} onClick={() => replaceSessionExercise(i, a, libMap?.get(a))} className="adlr-tap text-xs text-white/75 flex items-center gap-1.5">
+                                            <Shuffle size={11} className="text-adlr-gold/70" /> {t(a)} <span className="text-adlr-gold/70">· {t('tauschen')}</span>
+                                          </button>
+                                        ) : (
                                           <p key={ai} className="text-xs text-white/60 flex items-center gap-1.5">
                                             <span className="w-1 h-1 rounded-full bg-adlr-gold/50" /> {t(a)}
                                           </p>
-                                        ))}
+                                        )))}
                                       </div>
                                     </details>
                                   )}
@@ -1663,6 +1697,9 @@ export default function PlanScreen() {
                                       <ChevronUp size={16} />
                                     </button>
                                   )}
+                                  <button onClick={() => { setReplaceErr(null); setReplaceIdx(i); }} className="adlr-tap p-1 text-adlr-gold/80" aria-label={t('Übung ersetzen')} title={t('Übung ersetzen')}>
+                                    <Shuffle size={15} />
+                                  </button>
                                   <button onClick={() => removeFreeExercise(ex.name)} className="adlr-tap p-1 text-white/30 hover:text-red-400" aria-label={t('Übung entfernen')}>
                                     <Trash2 size={16} />
                                   </button>
@@ -1758,7 +1795,7 @@ export default function PlanScreen() {
                 return (
                   <button
                     key={sec}
-                    onClick={() => { setRestPrefs({ ...restPrefs, overrides: { ...restPrefs.overrides, [restSheet.name]: sec } }); setRestSheet(null); haptic.light(); }}
+                    onClick={() => { setRestPrefs({ ...restPrefs, overrides: { ...restPrefs.overrides, [restSheet.name]: sec } }); setRestSheet(null); }}
                     className="adlr-tap py-2.5 rounded-xl text-sm font-medium tabular-nums"
                     style={active ? { background: 'rgb(var(--adlr-gold) / 0.16)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.45)' } : { background: 'rgb(var(--text) / 0.04)', color: 'rgb(var(--text) / 0.8)', border: '1px solid transparent' }}
                   >
@@ -1823,6 +1860,26 @@ export default function PlanScreen() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto pb-4">
               <ExerciseLibrary onAdd={addFreeExercise} onDemo={setDemoEx} canAdd />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {replaceIdx !== null && activeDayIdx !== null && days[activeDayIdx]?.exercises[replaceIdx] && createPortal(
+        <div className="fixed inset-0 z-[65] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">
+            <div className="flex items-center gap-3 py-4">
+              <button onClick={() => setReplaceIdx(null)} className="adlr-tap -ml-2 p-2 rounded-xl text-white/70 flex items-center gap-1 text-sm" aria-label={t('Zurück')}>
+                <ChevronLeft size={20} /> {t('Zurück')}
+              </button>
+              <div className="flex-1 min-w-0">
+                <p className="text-lg font-semibold text-white truncate">{t('Übung ersetzen')}</p>
+                <p className="text-xs text-white/45 truncate">{t(days[activeDayIdx].exercises[replaceIdx].name)} · {t('nur für dieses Training')}</p>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4">
+              {replaceErr && <p className="text-xs text-red-400 mb-2">{replaceErr}</p>}
+              <ExerciseLibrary canAdd onDemo={setDemoEx} onAdd={(row) => { if (replaceSessionExercise(replaceIdx, row.name, row)) setReplaceIdx(null); }} />
             </div>
           </div>
         </div>,

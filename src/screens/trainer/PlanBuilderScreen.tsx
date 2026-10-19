@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useIsDesktop } from '@/lib/useMediaQuery';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase, isMissingFunction } from '@/lib/supabase';
 import { captureError } from '@/lib/monitoring';
 import type { Plan, PlanDay, Exercise, Profile } from '@/lib/types';
 import { Loading } from '@/components/ui';
-import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown, Pencil } from 'lucide-react';
+import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, Check, ArrowUp, ArrowDown, Pencil, Shuffle } from 'lucide-react';
 import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useIsDesktop } from '@/lib/useMediaQuery';
 import AiPlanSheet, { type AiPlanResult } from '@/components/AiPlanSheet';
 import ProgramEditor from '@/components/ProgramEditor';
 import { Sparkles } from 'lucide-react';
@@ -33,6 +34,9 @@ export default function PlanBuilderScreen() {
   // Per plan: clients it is active for, whether it was ever assigned, size — for the grouped list.
   const [meta, setMeta] = useState<Map<string, PlanMeta>>(new Map());
   const [selectedClientId, setSelectedClientId] = useState('');
+  const navigate = useNavigate();
+  // Opened from a client's page: preselect them and go back there afterwards.
+  const returnClient = useRef<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [assignError, setAssignError] = useState(false);
   const [expandedDay, setExpandedDay] = useState<number | null>(0);
@@ -40,6 +44,27 @@ export default function PlanBuilderScreen() {
   const [exForm, setExForm] = useState<Exercise>({ name: '', sets: 3, reps: 12, rest_sec: 60, tempo: '' });
   const [demoEx, setDemoEx] = useState<ExerciseRow | null>(null);
   const [altPicker, setAltPicker] = useState<{ dayIdx: number; exIdx: number; slot: number } | null>(null);
+  // Replace an exercise in place: sets, reps, rest, superset group and intensity stay;
+  // loads and the old exercise's alternatives don't carry over to a different movement.
+  const [replacePicker, setReplacePicker] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  // The exercise library opens on demand (it used to sit fully open inside every day)
+  const [addPicker, setAddPicker] = useState<number | null>(null);
+  const [addedNow, setAddedNow] = useState(0);
+  const [replaceErr, setReplaceErr] = useState<string | null>(null);
+  const replaceExercise = async (dayIdx: number, exIdx: number, row: ExerciseRow) => {
+    const day = days[dayIdx];
+    const old = day?.exercises?.[exIdx];
+    if (!day || !old) return;
+    if (day.exercises.some((e, i) => i !== exIdx && e.name === row.name)) { setReplaceErr(t('{name} ist an diesem Tag schon im Plan.', { name: t(row.name) })); return; }
+    await updateExercise(dayIdx, exIdx, {
+      name: row.name,
+      weight_kg: undefined,
+      set_details: old.set_details?.map((d) => ({ reps: d.reps })),
+      alternatives: undefined,
+    });
+    setReplacePicker(null);
+    setReplaceErr(null);
+  };
   const [savingDay, setSavingDay] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -54,13 +79,14 @@ export default function PlanBuilderScreen() {
   const [aiInfo, setAiInfo] = useState<{ unknown: string[]; used: number; limit: number } | null>(null);
   const [showRationale, setShowRationale] = useState(true);
   const isDesktop = useIsDesktop();
+  // Keyboard: a focused number is selected, so typing replaces it; Esc closes the pickers.
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.select();
   useEffect(() => {
-    if (!altPicker) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAltPicker(null); };
+    if (!altPicker && !replacePicker && addPicker === null) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setAltPicker(null); setReplacePicker(null); setAddPicker(null); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [altPicker]);
+  }, [altPicker, replacePicker, addPicker]);
   const onAiCreated = async (r: AiPlanResult, clientId: string) => {
     setAiOpen(null);
     if (params.get('ai') !== null) { params.delete('ai'); setParams(params, { replace: true }); }
@@ -76,6 +102,12 @@ export default function PlanBuilderScreen() {
   const libByName = useMemo(() => (lib ? new Map(lib.map((e) => [e.name, e])) : null), [lib]);
 
   useEffect(() => { load(); }, [profile?.id]);
+  // The plan created with "Neuer Plan" in this visit — the ONLY plan that may ever be removed
+  // without the coach asking (when they leave it untouched). Nothing else is deleted
+  // automatically: a failed/slow request must never look like "empty plan" (that deleted
+  // real client plans on a bad connection).
+  const freshPlanId = useRef<string | null>(null);
+  const [metaOk, setMetaOk] = useState(false);
 
   // quiet = refresh in place (back from the editor) without the loading spinner
   const load = async (quiet = false) => {
@@ -85,11 +117,11 @@ export default function PlanBuilderScreen() {
       supabase.from('plans').select('*').eq('trainer_id', profile.id).order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('first_name'),
     ]);
-    let planList = (pl ?? []) as Plan[];
+    const planList = (pl ?? []) as Plan[];
     const ids = planList.map((p) => p.id);
     const m = new Map<string, PlanMeta>(ids.map((id) => [id, { active: [], everAssigned: false, trainingDays: 0, exercises: 0 }]));
     if (ids.length > 0) {
-      const [{ data: cps }, { data: pds }] = await Promise.all([
+      const [{ data: cps, error: cpsErr }, { data: pds, error: pdsErr }] = await Promise.all([
         supabase.from('client_plans').select('plan_id, client_id, is_active').in('plan_id', ids),
         supabase.from('plan_days').select('plan_id, is_rest_day, exercises').in('plan_id', ids),
       ]);
@@ -104,16 +136,22 @@ export default function PlanBuilderScreen() {
         x.exercises += n;
         if (!d.is_rest_day && n > 0) x.trainingDays++;
       }
-      // Empty plans nobody ever had (an abandoned "Neuer Plan", autofill mishaps) are removed
-      // after an hour, so the list doesn't fill up with clutter again.
-      const stale = planList.filter((p) => !p.is_template && !(p as Plan & { is_starter?: boolean }).is_starter
-        && m.get(p.id)!.exercises === 0 && !m.get(p.id)!.everAssigned
-        && Date.now() - new Date(p.created_at).getTime() > 60 * 60 * 1000);
-      for (const p of stale) await deletePlanQuietly(p.id);
-      if (stale.length > 0) planList = planList.filter((p) => !stale.includes(p));
+      // Only trust "empty" when both lookups really succeeded (the manual clean-up button).
+      setMetaOk(!cpsErr && !pdsErr && cps != null && pds != null);
+    } else {
+      setMetaOk(true);
     }
     setMeta(m);
     setPlans(planList);
+    // Deep link from the client page ("Plan bearbeiten")
+    const want = params.get('plan');
+    if (want) {
+      const from = params.get('client');
+      if (from) { returnClient.current = from; setSelectedClientId(from); }
+      params.delete('plan'); params.delete('client'); setParams(params, { replace: true });
+      const target = planList.find((p) => p.id === want);
+      if (target) selectPlan(target);
+    }
     setClients((cl ?? []) as Profile[]);
     setLoading(false);
   };
@@ -130,32 +168,38 @@ export default function PlanBuilderScreen() {
 
   // Leaving the editor: a plan that is still completely empty and was never assigned is
   // dropped right away (tapping "Neuer Plan" and going back used to leave it behind).
-  const discardIfEmpty = async (p: Plan | null, d: PlanDay[]) => {
-    if (p && !p.is_template && d.every((x) => (x.exercises?.length ?? 0) === 0)) {
-      const { count } = await supabase.from('client_plans').select('plan_id', { count: 'exact', head: true }).eq('plan_id', p.id);
-      if (!count) await deletePlanQuietly(p.id);
-    }
-  };
   const backToList = async () => {
+    if (returnClient.current) {
+      const c = returnClient.current;
+      returnClient.current = null;
+      navigate(`/trainer/klienten?client=${c}`);
+      return;
+    }
     const p = activePlan;
     setMode('list');
     setActivePlan(null);
-    await discardIfEmpty(p, days);
+    await dropFreshIfUntouched(p, days);
     await load(true);
+  };
+  const dropFreshIfUntouched = async (p: Plan | null, d: PlanDay[]) => {
+    if (p && p.id === freshPlanId.current && d.length > 0 && d.every((x) => (x.exercises?.length ?? 0) === 0)) {
+      const { count, error } = await supabase.from('client_plans').select('plan_id', { count: 'exact', head: true }).eq('plan_id', p.id);
+      if (!error && count === 0) await deletePlanQuietly(p.id);
+    }
+    freshPlanId.current = null;
   };
 
   const removeEmptyPlans = async () => {
-    const empty = plans.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0 && (meta.get(p.id)?.exercises ?? 0) === 0);
+    if (!metaOk) return;
+    const empty = plans.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0 && !meta.get(p.id)?.everAssigned && (meta.get(p.id)?.exercises ?? 0) === 0);
+    if (!empty.length || !window.confirm(t('{n} leere Pläne löschen?', { n: empty.length }) + '\n\n' + empty.map((p) => p.name).join('\n'))) return;
     for (const p of empty) await deletePlanQuietly(p.id);
     await load();
   };
 
   const selectPlan = async (plan: Plan) => {
-    // Desktop: the list stays next to the editor, so switching plans must clean up like "back" does.
-    if (isDesktop && activePlan && activePlan.id !== plan.id) {
-      const prev = activePlan, prevDays = days;
-      discardIfEmpty(prev, prevDays).then(() => load(true));
-    }
+    // Desktop: the list stays next to the editor, so switching plans leaves the old one like "back" does.
+    if (isDesktop && activePlan && activePlan.id !== plan.id) dropFreshIfUntouched(activePlan, days).then(() => load(true));
     setActivePlan(plan);
     setMode('edit');
     setExpandedDay(0);
@@ -186,6 +230,7 @@ export default function PlanBuilderScreen() {
     setNewPlanName('');
     setShowNewForm(false);
     setPlans((prev) => [data as Plan, ...prev]);
+    freshPlanId.current = (data as Plan).id;
     setActivePlan(data as Plan);
     setDays((pd ?? []) as PlanDay[]);
     setMode('edit');
@@ -222,12 +267,17 @@ export default function PlanBuilderScreen() {
 
   const assignPlan = async () => {
     if (!activePlan || !selectedClientId) return;
-    // Deactivate any other active plans for this client so only one is active.
-    await supabase.from('client_plans').update({ is_active: false }).eq('client_id', selectedClientId).neq('plan_id', activePlan.id);
-    const { error } = await supabase.from('client_plans').upsert(
+    // Assign first; only when that worked deactivate the client's other plans (the old order
+    // left the client with NO active plan whenever the assignment failed).
+    let { error } = await supabase.from('client_plans').upsert(
       { client_id: selectedClientId, plan_id: activePlan.id, is_active: true, assigned_at: new Date().toISOString() },
       { onConflict: 'client_id,plan_id' }
     );
+    if (error && /assigned_at/.test(error.message)) {
+      ({ error } = await supabase.from('client_plans').upsert(
+        { client_id: selectedClientId, plan_id: activePlan.id, is_active: true }, { onConflict: 'client_id,plan_id' }));
+    }
+    if (!error) ({ error } = await supabase.from('client_plans').update({ is_active: false }).eq('client_id', selectedClientId).neq('plan_id', activePlan.id));
     if (error) {
       console.error('assignPlan', error);
       setAssignError(true);
@@ -306,6 +356,23 @@ export default function PlanBuilderScreen() {
   };
 
   // Per-set weight/reps helpers (pyramid sets etc.)
+  // Exercise cards are compact by default (name + one summary line); tap to edit the details.
+  const [openEx, setOpenEx] = useState<Set<string>>(new Set());
+  const exKey = (dayIdx: number, exIdx: number) => `${days[dayIdx]?.id}:${exIdx}`;
+  const toggleEx = (dayIdx: number, exIdx: number) => setOpenEx((prev) => { const n = new Set(prev); const k = exKey(dayIdx, exIdx); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const exSummary = (ex: Exercise) => {
+    const sd = setDetailsOf(ex);
+    const reps = [...new Set(sd.map((d) => d.reps).filter((r) => r != null))];
+    const kgs = [...new Set(sd.map((d) => d.weight_kg).filter((w) => w != null))];
+    return [
+      `${ex.sets ?? sd.length ?? 0} × ${reps.length ? reps.join('/') : '–'}`,
+      kgs.length ? `${kgs.join('/')} kg` : null,
+      ex.rest_sec ? `${t('Pause')} ${ex.rest_sec}s` : null,
+      ex.rpe != null ? `RPE ${ex.rpe}` : ex.rir != null ? `RIR ${ex.rir}` : null,
+      (ex.alternatives ?? []).filter(Boolean).length ? t('{n} Alt.', { n: (ex.alternatives ?? []).filter(Boolean).length }) : null,
+    ].filter(Boolean).join(' · ');
+  };
+
   const setDetailsOf = (ex: Exercise): { weight_kg?: number; reps?: number }[] => {
     const n = Math.max(1, ex.sets ?? 1);
     const base = ex.set_details ?? [];
@@ -376,6 +443,11 @@ export default function PlanBuilderScreen() {
       const res = await supabase.from('plans').delete().eq('id', plan.id).select('id');
       error = res.error ?? (res.data?.length ? null : { message: 'nothing deleted' } as typeof error);
     }
+    if (error && /plan_in_use/.test(error.message ?? '')) {
+      setDeleteErr(t('Dieser Plan ist bei einem Klienten aktiv. Weise ihm zuerst einen anderen Plan zu.'));
+      setTimeout(() => setDeleteErr(null), 6000);
+      return;
+    }
     if (error) {
       captureError(error, { action: 'trainer_delete_plan' });
       setDeleteErr(t('Plan konnte nicht gelöscht werden.'));
@@ -384,6 +456,21 @@ export default function PlanBuilderScreen() {
     }
     if (activePlan?.id === plan.id) { setActivePlan(null); setMode('list'); }
     await load();
+    loadTrash();
+  };
+
+  // Trash: deleted plans stay restorable (own plans; the master trainer sees every coach's).
+  const [trash, setTrash] = useState<{ id: string; name: string; trainer_id: string; trainer_name: string | null; deleted_at: string; exercises: number }[]>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const loadTrash = async () => {
+    const { data, error } = await supabase.rpc('trainer_deleted_plans');
+    setTrash(error ? [] : ((data ?? []) as typeof trash));
+  };
+  useEffect(() => { if (profile) loadTrash(); }, [profile?.id]);
+  const restorePlan = async (id: string) => {
+    const { error } = await supabase.rpc('trainer_restore_plan', { p_plan: id });
+    if (error) { setDeleteErr(t('Plan konnte nicht wiederhergestellt werden.')); setTimeout(() => setDeleteErr(null), 5000); return; }
+    await Promise.all([load(true), loadTrash()]);
   };
 
   // Deep-copy a plan's days into a freshly created plan (shared by duplicate / template flows).
@@ -443,7 +530,7 @@ export default function PlanBuilderScreen() {
     const assigned = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) > 0);
     const templates = visible.filter((p) => p.is_template);
     const others = visible.filter((p) => !p.is_template && (meta.get(p.id)?.active.length ?? 0) === 0);
-    const emptyOthers = others.filter((p) => (meta.get(p.id)?.exercises ?? 0) === 0);
+    const emptyOthers = metaOk ? others.filter((p) => !meta.get(p.id)?.everAssigned && (meta.get(p.id)?.exercises ?? 0) === 0) : [];
 
     const planRow = (p: Plan, kind: 'assigned' | 'template' | 'other') => {
       const m = meta.get(p.id);
@@ -649,13 +736,40 @@ export default function PlanBuilderScreen() {
             </button>
             {(showOthers || q) && (
               <div className="space-y-2 adlr-fade-in">
-                <p className="text-[11px] text-white/35 mb-1">{t('Entwürfe, Kopien und Pläne, die gerade niemand hat. Leere Pläne werden automatisch entfernt.')}</p>
+                <p className="text-[11px] text-white/35 mb-1">{t('Entwürfe, Kopien und Pläne, die gerade niemand hat.')}</p>
                 {others.map((p) => planRow(p, 'other'))}
                 {emptyOthers.length > 1 && (
                   <button onClick={removeEmptyPlans} className="adlr-tap w-full mt-1 py-2.5 rounded-xl text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/25">
                     {t('{n} leere Pläne löschen', { n: emptyOthers.length })}
                   </button>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {trash.length > 0 && !q && (
+          <div className="mb-6">
+            <button onClick={() => setShowTrash((v) => !v)} className="adlr-tap w-full flex items-center justify-between mb-2">
+              <span className="text-xs uppercase tracking-wider text-white/40 flex items-center gap-1.5"><Trash2 size={12} /> {t('Papierkorb')} · {trash.length}</span>
+              {showTrash ? <ChevronUp size={15} className="text-white/35" /> : <ChevronDown size={15} className="text-white/35" />}
+            </button>
+            {showTrash && (
+              <div className="space-y-2 adlr-fade-in">
+                <p className="text-[11px] text-white/35 mb-1">{t('Gelöschte Pläne — mit einem Tipp wiederherstellen.')}</p>
+                {trash.map((p) => (
+                  <div key={p.id} className="rounded-xl px-3.5 py-3 flex items-center gap-3" style={{ background: 'rgb(var(--text) / 0.03)', border: '1px solid rgb(var(--text) / 0.06)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white/70 truncate">{p.name}</p>
+                      <p className="text-[11px] text-white/35 truncate">
+                        {[p.trainer_id !== profile?.id ? p.trainer_name : null, t('{n} Übungen', { n: p.exercises }), fmtDate(p.deleted_at, { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <button onClick={() => restorePlan(p.id)} className="adlr-tap px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}>
+                      {t('Wiederherstellen')}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -672,546 +786,613 @@ export default function PlanBuilderScreen() {
       </div>
     );
   };
+  if (!isDesktop && mode === 'list') return renderList();
 
   // ── EDIT VIEW ──────────────────────────────────────────────────────────────
-  const renderEdit = () => {
-    const activeDay = expandedDay !== null ? days[expandedDay] : null;
-    const canAdd = expandedDay !== null && days[expandedDay] && !days[expandedDay].is_rest_day;
-    void canAdd;
-    // Sequential "Trainingstag N" labels, not literal weekdays — the client no longer
-    // treats these as fixed calendar days, they're just slots in the rotation.
-    let trainingDayCounter = 0;
-    const dayLabels = new Map<string, string>();
-    for (const d of days) {
-      if (d.is_rest_day) continue;
-      trainingDayCounter++;
-      dayLabels.set(d.id, t('Trainingstag {n}', { n: trainingDayCounter }));
-    }
+  const activeDay = expandedDay !== null ? days[expandedDay] : null;
+  const canAdd = expandedDay !== null && days[expandedDay] && !days[expandedDay].is_rest_day;
+  void canAdd;
+  // Sequential "Trainingstag N" labels, not literal weekdays — the client no longer
+  // treats these as fixed calendar days, they're just slots in the rotation.
+  let trainingDayCounter = 0;
+  const dayLabels = new Map<string, string>();
+  for (const d of days) {
+    if (d.is_rest_day) continue;
+    trainingDayCounter++;
+    dayLabels.set(d.id, t('Trainingstag {n}', { n: trainingDayCounter }));
+  }
 
-    return (
-      <div className="adlr-fade-in pb-6">
-        {deleteErr && !isDesktop && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
-        <div className="flex items-center gap-3 mb-5">
-          <button onClick={backToList} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.4)' }}>
-            <ChevronDown size={18} className="rotate-90" />
-          </button>
-          <div className="flex-1 min-w-0">
-            {renaming && activePlan ? (
-              <input
-                autoFocus
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={() => renamePlan(activePlan, renameValue)}
-                onKeyDown={(e) => { if (e.key === 'Enter') renamePlan(activePlan, renameValue); if (e.key === 'Escape') setRenaming(false); }}
-                className="w-full bg-inset border border-white/15 rounded-lg px-2 py-1 text-lg font-bold text-white outline-none"
-              />
-            ) : (
-              <h1 className="text-lg font-bold text-white truncate">{activePlan?.name ?? t('Neuer Plan')}</h1>
-            )}
-            <p className="text-xs flex items-center gap-1">
-              {savingDay !== null ? (
-                <span className="text-adlr-gold/80">{t('Speichern…')}</span>
-              ) : (
-                <span className="text-green-500/70 flex items-center gap-1"><Check size={11} /> {t('Automatisch gespeichert')}</span>
-              )}
-            </p>
-          </div>
-          {activePlan && (
-            <>
-              <button onClick={() => { setRenameValue(activePlan.name); setRenaming(true); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Umbenennen')}>
-                <Pencil size={16} />
-              </button>
-              <button onClick={() => copyPlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Duplizieren')}>
-                <Copy size={16} />
-              </button>
-              <button onClick={() => deletePlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgba(248,113,113,0.4)' }} title={t('Plan löschen')}>
-                <Trash2 size={16} />
-              </button>
-            </>
-          )}
-        </div>
-
-        {activePlan && (
-          <div className="rounded-xl px-4 py-3 mb-5 flex items-center gap-3" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.07)' }}>
-            <select
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="flex-1 bg-transparent text-sm outline-none"
-              style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
-            >
-              <option value="">{t('Klient wählen...')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
-              ))}
-            </select>
-            <button
-              onClick={assignPlan}
-              disabled={!selectedClientId}
-              className="adlr-tap px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 transition-all flex items-center gap-1.5"
-              style={assignError
-                ? { background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
-                : assignSuccess
-                ? { background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
-                : { background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
-            >
-              {assignError ? t('Fehler') : assignSuccess ? <><Check size={12} /> {t('Zugewiesen')}</> : t('Zuweisen')}
-            </button>
-          </div>
-        )}
-
-        {activePlan?.ai_generated && (
-          <div className="rounded-xl px-4 py-3 mb-5 adlr-gold-border" style={{ background: 'rgb(var(--adlr-gold) / 0.06)' }}>
-            <button onClick={() => setShowRationale(!showRationale)} className="adlr-tap w-full flex items-center justify-between text-left">
-              <span className="text-xs font-semibold text-adlr-gold flex items-center gap-1.5"><Sparkles size={13} /> {t('KI-Entwurf — bitte prüfen, dann zuweisen')}</span>
-              {showRationale ? <ChevronUp size={14} className="text-white/40" /> : <ChevronDown size={14} className="text-white/40" />}
-            </button>
-            {showRationale && activePlan.ai_rationale && <p className="text-xs text-white/70 leading-relaxed mt-2">{activePlan.ai_rationale}</p>}
-            {showRationale && aiInfo && aiInfo.unknown.length > 0 && (
-              <p className="text-[11px] text-white/45 mt-2">{t('Nicht in deiner Bibliothek, daher weggelassen: {list}', { list: aiInfo.unknown.join(', ') })}</p>
-            )}
-            {showRationale && aiInfo && <p className="text-[10px] text-white/30 mt-2">{t('KI-Pläne diesen Monat: {u} / {l}', { u: aiInfo.used, l: aiInfo.limit })}</p>}
-          </div>
-        )}
-
-        {activePlan && (
-          <ProgramEditor
-            plan={activePlan}
-            onChange={(p) => { setActivePlan(p); setPlans((prev) => prev.map((x) => (x.id === p.id ? p : x))); }}
-          />
-        )}
-
-        {days.length > 0 && (
-          <div className="mb-2">
-            <p className="text-xs uppercase tracking-wider text-white/30 mb-2">{t('Trainingstage · tippe einen Tag an, um Übungen hinzuzufügen')}</p>
-          </div>
-        )}
-        {days.length > 0 && (
-          <div className="space-y-2 mb-6">
-            {days.map((day, idx) => {
-              const isOpen = expandedDay === idx;
-              const exCount = (day.exercises ?? []).length;
-              return (
-                <div
-                  key={day.id}
-                  className="rounded-2xl overflow-hidden transition-all"
-                  style={{ background: 'rgb(var(--text) / 0.04)', border: isOpen ? '1px solid rgb(var(--adlr-gold) / 0.25)' : '1px solid rgb(var(--text) / 0.07)' }}
-                >
-                  <button
-                    onClick={() => setExpandedDay(isOpen ? null : idx)}
-                    className="w-full flex items-center justify-between px-4 py-3.5"
-                  >
-                    <div className="text-left">
-                      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: isOpen ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.4)' }}>
-                        {day.is_rest_day ? t('Ruhetag') : dayLabels.get(day.id)}
-                      </p>
-                      <p className="text-sm font-semibold text-white mt-0.5">
-                        {day.is_rest_day ? t('Ruhetag') : (day.workout_name || t('Training'))}
-                      </p>
-                      {!day.is_rest_day && (
-                        <p className="text-xs text-white/30 mt-0.5">
-                          {exCount > 0 ? t(exCount === 1 ? '{n} Übung' : '{n} Übungen', { n: exCount }) : t('Tippen zum Hinzufügen')}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); updateDay(idx, { is_rest_day: !day.is_rest_day }); }}
-                        className="adlr-tap px-2.5 py-1 rounded-md text-xs border"
-                        style={day.is_rest_day
-                          ? { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.4)', borderColor: 'rgb(var(--text) / 0.1)' }
-                          : { background: 'rgb(var(--adlr-gold) / 0.1)', color: 'rgb(var(--adlr-gold))', borderColor: 'rgb(var(--adlr-gold) / 0.25)' }}
-                      >
-                        {day.is_rest_day ? t('Ruhe') : t('Aktiv')}
-                      </button>
-                      {isOpen ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
-                    </div>
-                  </button>
-
-                  {isOpen && !day.is_rest_day && (
-                    <div className="px-4 pb-4 space-y-3 adlr-fade-in">
-                      <input
-                        value={day.workout_name ?? ''}
-                        onChange={(e) => updateDay(idx, { workout_name: e.target.value })}
-                        placeholder={t('Workout Name')}
-                        className="w-full bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
-                      />
-
-                      {(day.exercises ?? []).length > 0 && (
-                        <div className="space-y-1.5">
-                          {day.exercises.map((ex, exIdx) => (
-                            <div
-                              key={exIdx}
-                              className="flex items-start gap-3 rounded-xl px-3 py-2.5"
-                              style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px solid rgb(var(--adlr-gold) / 0.12)' }}
-                            >
-                              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: 'rgb(var(--adlr-gold) / 0.15)' }}>
-                                <Dumbbell size={14} style={{ color: 'rgb(var(--adlr-gold))' }} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-white mb-2 flex items-center gap-1.5">
-                                  {ex.group && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{groupLabel(day.exercises, exIdx)}</span>}
-                                  <span className="min-w-0">{t(ex.name)}</span>
-                                </p>
-                                <div className="space-y-2 xl:space-y-0 xl:grid xl:grid-cols-2 xl:gap-x-6 xl:gap-y-2 xl:items-start">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Sätze')}</p>
-                                      <input
-                                        type="number"
-                                        onFocus={selectOnFocus}
-                                        value={ex.sets ?? ''}
-                                        onChange={(e) => updateSetsCount(idx, exIdx, Number(e.target.value))}
-                                        className="w-full bg-inset border border-white/10 rounded-md px-1 py-2 text-sm text-white outline-none text-center"
-                                      />
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Pause (s)')}</p>
-                                      <input
-                                        type="number"
-                                        onFocus={selectOnFocus}
-                                        value={ex.rest_sec ?? ''}
-                                        onChange={(e) => updateExercise(idx, exIdx, { rest_sec: Number(e.target.value) })}
-                                        className="w-full bg-inset border border-white/10 rounded-md px-1 py-2 text-sm text-white outline-none text-center"
-                                      />
-                                    </div>
-                                  </div>
-                                  {/* Superset / circuit group + intensity target (RPE or RIR) */}
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Gruppe')}</span>
-                                    {[null, 'A', 'B', 'C', 'D'].map((g) => (
-                                      <button
-                                        key={g ?? '-'}
-                                        onClick={() => setExerciseGroup(idx, exIdx, g)}
-                                        className="adlr-tap min-w-7 h-7 px-1.5 rounded-md text-xs font-semibold"
-                                        style={(ex.group ?? null) === g ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
-                                      >
-                                        {g ?? '–'}
-                                      </button>
-                                    ))}
-                                    {ex.group && (['superset', 'circuit'] as const).map((tp) => (
-                                      <button
-                                        key={tp}
-                                        onClick={() => setGroupType(idx, ex.group!, tp)}
-                                        className="adlr-tap h-7 px-2 rounded-md text-[11px] font-medium"
-                                        style={(ex.group_type ?? 'superset') === tp ? { background: 'rgb(var(--adlr-gold) / 0.2)', color: 'rgb(var(--adlr-gold))' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.45)' }}
-                                      >
-                                        {tp === 'superset' ? t('Supersatz') : t('Zirkel')}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Intensität')}</span>
-                                    {(['none', 'rpe', 'rir'] as const).map((mode) => {
-                                      const cur = ex.rpe != null ? 'rpe' : ex.rir != null ? 'rir' : 'none';
-                                      return (
-                                        <button
-                                          key={mode}
-                                          onClick={() => updateExercise(idx, exIdx, mode === 'rpe' ? { rpe: ex.rpe ?? 8, rir: null } : mode === 'rir' ? { rir: ex.rir ?? 2, rpe: null } : { rpe: null, rir: null })}
-                                          className="adlr-tap h-7 px-2 rounded-md text-[11px] font-semibold"
-                                          style={cur === mode ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
-                                        >
-                                          {mode === 'none' ? '–' : mode.toUpperCase()}
-                                        </button>
-                                      );
-                                    })}
-                                    {(ex.rpe != null || ex.rir != null) && (
-                                      <input
-                                        type="number"
-                                        onFocus={selectOnFocus}
-                                        inputMode="decimal"
-                                        step={ex.rpe != null ? 0.5 : 1}
-                                        min={ex.rpe != null ? 5 : 0}
-                                        max={ex.rpe != null ? 10 : 5}
-                                        value={ex.rpe ?? ex.rir ?? ''}
-                                        onChange={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); updateExercise(idx, exIdx, ex.rpe != null ? { rpe: v } : { rir: v }); }}
-                                        className="w-14 h-7 bg-inset border border-white/10 rounded-md px-1 text-sm text-white outline-none text-center"
-                                      />
-                                    )}
-                                  </div>
-                                  {/* Per-set weight × reps (pyramid etc.) */}
-                                  <div className="space-y-1.5 pt-0.5 xl:col-start-2 xl:row-start-1 xl:row-span-4">
-                                    <div className="flex items-center gap-2 px-0.5">
-                                      <span className="w-11 shrink-0" />
-                                      <span className="w-16 text-[9px] text-adlr-gold/60 uppercase tracking-wide text-center">{t('Gewicht')}</span>
-                                      <span className="w-4" />
-                                      <span className="w-16 text-[9px] text-white/40 uppercase tracking-wide text-center">{t('Wdh')}</span>
-                                    </div>
-                                    {setDetailsOf(ex).map((sd, si) => (
-                                      <div key={si} className="flex items-center gap-2">
-                                        <span className="text-[10px] text-white/40 w-11 shrink-0">{t('Satz {n}', { n: si + 1 })}</span>
-                                        <input
-                                          type="number"
-                                          onFocus={selectOnFocus}
-                                          value={sd.weight_kg ?? ''}
-                                          onChange={(e) => updateSetDetail(idx, exIdx, si, { weight_kg: e.target.value === '' ? undefined : Number(e.target.value) })}
-                                          placeholder="kg"
-                                          className="w-16 bg-adlr-gold/5 border border-adlr-gold/25 rounded-md px-1 py-1.5 text-sm text-white placeholder-white/25 outline-none text-center"
-                                        />
-                                        <span className="w-4 text-center text-white/25 text-xs">×</span>
-                                        <input
-                                          type="number"
-                                          onFocus={selectOnFocus}
-                                          value={sd.reps ?? ''}
-                                          onChange={(e) => updateSetDetail(idx, exIdx, si, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
-                                          placeholder={t('Wdh')}
-                                          className="w-16 bg-inset border border-white/10 rounded-md px-1 py-1.5 text-sm text-white placeholder-white/25 outline-none text-center"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                                {/* Alternatives — searchable picker, for when a machine is occupied */}
-                                <div className="mt-2.5">
-                                  <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">{t('Alternativen · bei besetztem Gerät')}</p>
-                                  <div className="space-y-1.5">
-                                    {[0, 1].map((ai) => {
-                                      const val = ex.alternatives?.[ai] ?? '';
-                                      return (
-                                        <div key={ai} className="flex items-center gap-2">
-                                          <button
-                                            onClick={() => setAltPicker({ dayIdx: idx, exIdx, slot: ai })}
-                                            className="adlr-tap flex-1 min-w-0 text-left px-3 py-2 rounded-md text-sm border flex items-center gap-2"
-                                            style={val
-                                              ? { background: 'rgb(var(--adlr-gold) / 0.06)', borderColor: 'rgb(var(--adlr-gold) / 0.2)', color: 'rgb(var(--text))' }
-                                              : { background: 'rgb(var(--text) / 0.03)', borderColor: 'rgb(var(--text) / 0.1)', color: 'rgb(var(--text) / 0.4)' }}
-                                          >
-                                            <Search size={13} className="shrink-0 opacity-60" />
-                                            <span className="truncate">{val ? t(val) : t('Alternative {n} wählen…', { n: ai + 1 })}</span>
-                                          </button>
-                                          {val && (
-                                            <button
-                                              onClick={() => { const alts = [...(ex.alternatives ?? ['', ''])]; alts[ai] = ''; updateExercise(idx, exIdx, { alternatives: alts }); }}
-                                              className="adlr-tap p-1.5 rounded-lg shrink-0"
-                                              style={{ color: 'rgba(248,113,113,0.5)' }}
-                                            >
-                                              <X size={14} />
-                                            </button>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-center gap-1 shrink-0">
-                                {libByName?.get(ex.name)?.exercise_id && (
-                                  <button
-                                    onClick={() => setDemoEx(libByName.get(ex.name)!)}
-                                    className="adlr-tap p-1.5 rounded-lg"
-                                    style={{ color: 'rgb(var(--adlr-gold))' }}
-                                    title={t('Vorschau')}
-                                  >
-                                    <Play size={13} />
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => moveExercise(idx, exIdx, -1)}
-                                  disabled={exIdx === 0}
-                                  className="adlr-tap p-1.5 rounded-lg disabled:opacity-20"
-                                  style={{ color: 'rgb(var(--text) / 0.4)' }}
-                                >
-                                  <ArrowUp size={13} />
-                                </button>
-                                <button
-                                  onClick={() => moveExercise(idx, exIdx, 1)}
-                                  disabled={exIdx === (day.exercises ?? []).length - 1}
-                                  className="adlr-tap p-1.5 rounded-lg disabled:opacity-20"
-                                  style={{ color: 'rgb(var(--text) / 0.4)' }}
-                                >
-                                  <ArrowDown size={13} />
-                                </button>
-                                <button
-                                  onClick={() => removeExercise(idx, exIdx)}
-                                  className="adlr-tap p-1.5 rounded-lg"
-                                  style={{ color: 'rgba(248,113,113,0.5)' }}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Exercise library inline — search & add from saved exercises */}
-                      <ExerciseLibrary
-                        onAdd={(ex) => addLibExercise(idx, ex)}
-                        onDemo={(ex) => setDemoEx(ex)}
-                        canAdd={true}
-                      />
-
-                      {showAddEx && expandedDay === idx ? (
-                        <div className="rounded-xl p-3 space-y-2 adlr-fade-in" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgb(var(--text) / 0.1)' }}>
-                          <div className="flex justify-between items-center">
-                            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Eigene Übung')}</p>
-                            <button onClick={() => setShowAddEx(false)}><X size={14} className="text-white/40" /></button>
-                          </div>
-                          <input
-                            value={exForm.name}
-                            onChange={(e) => setExForm({ ...exForm, name: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && exForm.name.trim()) addExercise(idx); if (e.key === 'Escape') setShowAddEx(false); }}
-                            placeholder={t('Übungsname')}
-                            className="w-full bg-inset border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
-                          />
-                          <div className="grid grid-cols-2 gap-2">
-                            {[
-                              { label: 'Sätze', key: 'sets' as const },
-                              { label: 'Wdh', key: 'reps' as const },
-                              { label: 'Gewicht kg', key: 'weight_kg' as const },
-                              { label: 'Pause (s)', key: 'rest_sec' as const },
-                            ].map(({ label, key }) => (
-                              <input
-                                key={key}
-                                type="number"
-                                onFocus={selectOnFocus}
-                                value={exForm[key] ?? ''}
-                                onChange={(e) => setExForm({ ...exForm, [key]: Number(e.target.value) })}
-                                onKeyDown={(e) => { if (e.key === 'Enter' && exForm.name.trim()) addExercise(idx); }}
-                                placeholder={t(label)}
-                                className="bg-inset border border-white/10 rounded-lg px-2 py-2.5 text-sm text-white placeholder-white/25 outline-none text-center"
-                              />
-                            ))}
-                          </div>
-                          <button
-                            onClick={() => addExercise(idx)}
-                            disabled={!exForm.name.trim()}
-                            className="adlr-tap w-full py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40"
-                            style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
-                          >
-                            {t('Zum Tag hinzufügen')}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setShowAddEx(true); setExpandedDay(idx); }}
-                          className="adlr-tap w-full py-2.5 rounded-xl text-sm border border-dashed flex items-center justify-center gap-2"
-                          style={{ borderColor: 'rgb(var(--text) / 0.12)', color: 'rgb(var(--text) / 0.35)' }}
-                        >
-                          <Plus size={14} /> {t('Eigene Übung hinzufügen')}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {!activePlan && (
-          <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
+  const editView = (
+    <div className="adlr-fade-in pb-6">
+      {deleteErr && !isDesktop && <div className="fixed left-1/2 -translate-x-1/2 bottom-28 z-50 px-4 py-2.5 rounded-xl text-sm" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.35)' }}>{deleteErr}</div>}
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={backToList} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.4)' }}>
+          <ChevronDown size={18} className="rotate-90" />
+        </button>
+        <div className="flex-1 min-w-0">
+          {renaming && activePlan ? (
             <input
-              value={newPlanName}
-              onChange={(e) => setNewPlanName(e.target.value)}
-              name="adlr-plan-name"
-              autoComplete="off"
-              autoCorrect="off"
-              data-1p-ignore
-              data-lpignore="true"
-              placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
-              className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
               autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={() => renamePlan(activePlan, renameValue)}
+              onKeyDown={(e) => { if (e.key === 'Enter') renamePlan(activePlan, renameValue); if (e.key === 'Escape') setRenaming(false); }}
+              className="w-full bg-inset border border-white/15 rounded-lg px-2 py-1 text-lg font-bold text-white outline-none"
             />
-            <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
-            <select
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full bg-transparent text-sm outline-none mb-3"
-              style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
-            >
-              <option value="">{t('Klient wählen...')}</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
-              ))}
-            </select>
-            <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => createPlan()}
-                disabled={!newPlanName.trim()}
-                className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
-              >
-                {t('Plan zuweisen')}
-              </button>
-              <button
-                onClick={() => saveAsTemplate()}
-                disabled={!newPlanName.trim()}
-                className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
-                style={{ color: 'rgb(var(--text) / 0.5)' }}
-              >
-                <Copy size={13} /> {t('Als Vorlage')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {days.length > 0 && expandedDay === null && (
-          <div className="mb-4 px-4 py-3 rounded-xl text-center adlr-fade-in" style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px dashed rgb(var(--adlr-gold) / 0.25)' }}>
-            <p className="text-sm" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Tippe oben auf einen Trainingstag (z.B. Montag), um Übungen hinzuzufügen')}</p>
-          </div>
-        )}
-        {days.length === 0 && (
-          <div className="mb-4 px-4 py-3 rounded-xl text-center" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
-            <p className="text-sm text-white/40">{t('Erstelle zuerst einen Plan, um Trainingstage zu sehen.')}</p>
-          </div>
-        )}
-        {activePlan && days.length > 0 && (
-          <>
-            {!activePlan.is_template && (
-              <button
-                onClick={saveCurrentAsTemplate}
-                className="adlr-tap w-full py-3 rounded-xl text-sm font-medium mb-3 flex items-center justify-center gap-2"
-                style={{ background: 'rgb(var(--adlr-gold) / 0.08)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.3)' }}
-              >
-                <Copy size={15} /> {templateMsg ?? t('Als Vorlage speichern')}
-              </button>
+          ) : (
+            <h1 className="text-lg font-bold text-white truncate">{activePlan?.name ?? t('Neuer Plan')}</h1>
+          )}
+          <p className="text-xs flex items-center gap-1">
+            {savingDay !== null ? (
+              <span className="text-adlr-gold/80">{t('Speichern…')}</span>
+            ) : (
+              <span className="text-green-500/70 flex items-center gap-1"><Check size={11} /> {t('Automatisch gespeichert')}</span>
             )}
-            <button
-              onClick={backToList}
-              className="adlr-tap w-full py-3.5 rounded-xl text-sm font-semibold mb-4 flex items-center justify-center gap-2"
-              style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
-            >
-              <Check size={16} /> {t('Fertig — alles gespeichert')}
+          </p>
+        </div>
+        {activePlan && (
+          <>
+            <button onClick={() => { setRenameValue(activePlan.name); setRenaming(true); }} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Umbenennen')}>
+              <Pencil size={16} />
+            </button>
+            <button onClick={() => copyPlan(activePlan)} className="adlr-tap p-1.5 rounded-lg" style={{ color: 'rgb(var(--text) / 0.35)' }} title={t('Duplizieren')}>
+              <Copy size={16} />
+            </button>
+            <button onClick={() => requestDelete(activePlan)} className="adlr-tap p-1.5 rounded-lg flex items-center gap-1 text-[11px] font-semibold"
+              style={pendingDelete === activePlan.id ? { color: '#f87171', background: 'rgb(239 68 68 / 0.12)' } : { color: 'rgba(248,113,113,0.4)' }}
+              title={pendingDelete === activePlan.id ? t('Nochmal tippen zum Löschen') : t('Plan löschen')}>
+              <Trash2 size={16} />{pendingDelete === activePlan.id && t('Nochmal tippen zum Löschen')}
             </button>
           </>
         )}
-        {altPicker && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4" onClick={() => setAltPicker(null)}>
-            <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
-                <p className="text-sm font-semibold text-white">{t('Alternative {n} wählen', { n: altPicker.slot + 1 })}</p>
-                <button onClick={() => setAltPicker(null)} className="adlr-tap p-1 text-white/50"><X size={18} /></button>
+      </div>
+
+      {activePlan && (
+        <div className="rounded-xl px-4 py-3 mb-5 flex items-center gap-3" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.07)' }}>
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            className="flex-1 bg-transparent text-sm outline-none"
+            style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
+          >
+            <option value="">{t('Klient wählen...')}</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
+            ))}
+          </select>
+          <button
+            onClick={assignPlan}
+            disabled={!selectedClientId}
+            className="adlr-tap px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 transition-all flex items-center gap-1.5"
+            style={assignError
+              ? { background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }
+              : assignSuccess
+              ? { background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }
+              : { background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
+          >
+            {assignError ? t('Fehler') : assignSuccess ? <><Check size={12} /> {t('Zugewiesen')}</> : t('Zuweisen')}
+          </button>
+        </div>
+      )}
+
+      {activePlan?.ai_generated && (
+        <div className="rounded-xl px-4 py-3 mb-5 adlr-gold-border" style={{ background: 'rgb(var(--adlr-gold) / 0.06)' }}>
+          <button onClick={() => setShowRationale(!showRationale)} className="adlr-tap w-full flex items-center justify-between text-left">
+            <span className="text-xs font-semibold text-adlr-gold flex items-center gap-1.5"><Sparkles size={13} /> {t('KI-Entwurf — bitte prüfen, dann zuweisen')}</span>
+            {showRationale ? <ChevronUp size={14} className="text-white/40" /> : <ChevronDown size={14} className="text-white/40" />}
+          </button>
+          {showRationale && activePlan.ai_rationale && <p className="text-xs text-white/70 leading-relaxed mt-2">{activePlan.ai_rationale}</p>}
+          {showRationale && aiInfo && aiInfo.unknown.length > 0 && (
+            <p className="text-[11px] text-white/45 mt-2">{t('Nicht in deiner Bibliothek, daher weggelassen: {list}', { list: aiInfo.unknown.join(', ') })}</p>
+          )}
+          {showRationale && aiInfo && <p className="text-[10px] text-white/30 mt-2">{t('KI-Pläne diesen Monat: {u} / {l}', { u: aiInfo.used, l: aiInfo.limit })}</p>}
+        </div>
+      )}
+
+      {activePlan && (
+        <ProgramEditor
+          plan={activePlan}
+          onChange={(p) => { setActivePlan(p); setPlans((prev) => prev.map((x) => (x.id === p.id ? p : x))); }}
+        />
+      )}
+
+      {days.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs uppercase tracking-wider text-white/30 mb-2">{t('Trainingstage · tippe einen Tag an, um Übungen hinzuzufügen')}</p>
+        </div>
+      )}
+      {days.length > 0 && (
+        <div className="space-y-2 mb-6">
+          {days.map((day, idx) => {
+            const isOpen = expandedDay === idx;
+            const exCount = (day.exercises ?? []).length;
+            return (
+              <div
+                key={day.id}
+                className="rounded-2xl overflow-hidden transition-all"
+                style={{ background: 'rgb(var(--text) / 0.04)', border: isOpen ? '1px solid rgb(var(--adlr-gold) / 0.25)' : '1px solid rgb(var(--text) / 0.07)' }}
+              >
+                <button
+                  onClick={() => setExpandedDay(isOpen ? null : idx)}
+                  className="w-full flex items-center justify-between px-4 py-3.5"
+                >
+                  <div className="text-left">
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: isOpen ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.4)' }}>
+                      {day.is_rest_day ? t('Ruhetag') : dayLabels.get(day.id)}
+                    </p>
+                    <p className="text-sm font-semibold text-white mt-0.5">
+                      {day.is_rest_day ? t('Ruhetag') : (day.workout_name || t('Training'))}
+                    </p>
+                    {!day.is_rest_day && (
+                      <p className="text-xs text-white/30 mt-0.5">
+                        {exCount > 0 ? t(exCount === 1 ? '{n} Übung' : '{n} Übungen', { n: exCount }) : t('Tippen zum Hinzufügen')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); updateDay(idx, { is_rest_day: !day.is_rest_day }); }}
+                      className="adlr-tap px-2.5 py-1 rounded-md text-xs border"
+                      style={day.is_rest_day
+                        ? { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.4)', borderColor: 'rgb(var(--text) / 0.1)' }
+                        : { background: 'rgb(var(--adlr-gold) / 0.1)', color: 'rgb(var(--adlr-gold))', borderColor: 'rgb(var(--adlr-gold) / 0.25)' }}
+                    >
+                      {day.is_rest_day ? t('Ruhe') : t('Aktiv')}
+                    </button>
+                    {isOpen ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
+                  </div>
+                </button>
+
+                {isOpen && !day.is_rest_day && (
+                  <div className="px-4 pb-4 space-y-3 adlr-fade-in">
+                    <input
+                      value={day.workout_name ?? ''}
+                      onChange={(e) => updateDay(idx, { workout_name: e.target.value })}
+                      placeholder={t('Workout Name')}
+                      className="w-full bg-inset border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
+                    />
+
+                    {(day.exercises ?? []).length > 0 && (
+                      <div className="space-y-1.5">
+                        {day.exercises.map((ex, exIdx) => (
+                          <div
+                            key={exIdx}
+                            className="flex items-start gap-3 rounded-xl px-3 py-2.5"
+                            style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px solid rgb(var(--adlr-gold) / 0.12)' }}
+                          >
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: 'rgb(var(--adlr-gold) / 0.15)' }}>
+                              <Dumbbell size={14} style={{ color: 'rgb(var(--adlr-gold))' }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <button onClick={() => toggleEx(idx, exIdx)} className="adlr-tap w-full text-left" aria-expanded={openEx.has(exKey(idx, exIdx))}>
+                                <span className="text-sm font-medium text-white flex items-center gap-1.5">
+                                  {ex.group && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{groupLabel(day.exercises, exIdx)}</span>}
+                                  <span className="min-w-0">{t(ex.name)}</span>
+                                  <ChevronDown size={13} className="text-white/30 shrink-0 transition-transform" style={{ transform: openEx.has(exKey(idx, exIdx)) ? 'rotate(180deg)' : 'none' }} />
+                                </span>
+                                {!openEx.has(exKey(idx, exIdx)) && <span className="block text-xs text-white/45 mt-0.5">{exSummary(ex)}</span>}
+                              </button>
+                              {openEx.has(exKey(idx, exIdx)) && (<>
+                              <div className="space-y-2 mt-2 xl:space-y-0 xl:grid xl:grid-cols-2 xl:gap-x-6 xl:gap-y-2 xl:items-start">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Sätze')}</p>
+                                    <input
+                                      type="number"
+                                      onFocus={selectOnFocus}
+                                      value={ex.sets ?? ''}
+                                      onChange={(e) => updateSetsCount(idx, exIdx, Number(e.target.value))}
+                                      className="w-full bg-inset border border-white/10 rounded-md px-1 py-2 text-sm text-white outline-none text-center"
+                                    />
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Pause (s)')}</p>
+                                    <input
+                                      type="number"
+                                      onFocus={selectOnFocus}
+                                      value={ex.rest_sec ?? ''}
+                                      onChange={(e) => updateExercise(idx, exIdx, { rest_sec: Number(e.target.value) })}
+                                      className="w-full bg-inset border border-white/10 rounded-md px-1 py-2 text-sm text-white outline-none text-center"
+                                    />
+                                  </div>
+                                </div>
+                                {/* Superset / circuit group + intensity target (RPE or RIR) */}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Gruppe')}</span>
+                                  {[null, 'A', 'B', 'C', 'D'].map((g) => (
+                                    <button
+                                      key={g ?? '-'}
+                                      onClick={() => setExerciseGroup(idx, exIdx, g)}
+                                      className="adlr-tap min-w-7 h-7 px-1.5 rounded-md text-xs font-semibold"
+                                      style={(ex.group ?? null) === g ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
+                                    >
+                                      {g ?? '–'}
+                                    </button>
+                                  ))}
+                                  {ex.group && (['superset', 'circuit'] as const).map((tp) => (
+                                    <button
+                                      key={tp}
+                                      onClick={() => setGroupType(idx, ex.group!, tp)}
+                                      className="adlr-tap h-7 px-2 rounded-md text-[11px] font-medium"
+                                      style={(ex.group_type ?? 'superset') === tp ? { background: 'rgb(var(--adlr-gold) / 0.2)', color: 'rgb(var(--adlr-gold))' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.45)' }}
+                                    >
+                                      {tp === 'superset' ? t('Supersatz') : t('Zirkel')}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[10px] text-white/40 uppercase tracking-wide w-14 shrink-0">{t('Intensität')}</span>
+                                  {(['none', 'rpe', 'rir'] as const).map((mode) => {
+                                    const cur = ex.rpe != null ? 'rpe' : ex.rir != null ? 'rir' : 'none';
+                                    return (
+                                      <button
+                                        key={mode}
+                                        onClick={() => updateExercise(idx, exIdx, mode === 'rpe' ? { rpe: ex.rpe ?? 8, rir: null } : mode === 'rir' ? { rir: ex.rir ?? 2, rpe: null } : { rpe: null, rir: null })}
+                                        className="adlr-tap h-7 px-2 rounded-md text-[11px] font-semibold"
+                                        style={cur === mode ? { background: 'rgb(var(--adlr-gold))', color: '#000' } : { background: 'rgb(var(--text) / 0.05)', color: 'rgb(var(--text) / 0.5)' }}
+                                      >
+                                        {mode === 'none' ? '–' : mode.toUpperCase()}
+                                      </button>
+                                    );
+                                  })}
+                                  {(ex.rpe != null || ex.rir != null) && (
+                                    <input
+                                      type="number"
+                                      onFocus={selectOnFocus}
+                                      inputMode="decimal"
+                                      step={ex.rpe != null ? 0.5 : 1}
+                                      min={ex.rpe != null ? 5 : 0}
+                                      max={ex.rpe != null ? 10 : 5}
+                                      value={ex.rpe ?? ex.rir ?? ''}
+                                      onChange={(e) => { const v = e.target.value === '' ? null : Number(e.target.value); updateExercise(idx, exIdx, ex.rpe != null ? { rpe: v } : { rir: v }); }}
+                                      className="w-14 h-7 bg-inset border border-white/10 rounded-md px-1 text-sm text-white outline-none text-center"
+                                    />
+                                  )}
+                                </div>
+                                {/* Per-set weight × reps (pyramid etc.) */}
+                                <div className="space-y-1.5 pt-0.5 xl:col-start-2 xl:row-start-1 xl:row-span-4">
+                                  <div className="flex items-center gap-2 px-0.5">
+                                    <span className="w-11 shrink-0" />
+                                    <span className="w-16 text-[9px] text-adlr-gold/60 uppercase tracking-wide text-center">{t('Gewicht')}</span>
+                                    <span className="w-4" />
+                                    <span className="w-16 text-[9px] text-white/40 uppercase tracking-wide text-center">{t('Wdh')}</span>
+                                  </div>
+                                  {setDetailsOf(ex).map((sd, si) => (
+                                    <div key={si} className="flex items-center gap-2">
+                                      <span className="text-[10px] text-white/40 w-11 shrink-0">{t('Satz {n}', { n: si + 1 })}</span>
+                                      <input
+                                        type="number"
+                                        onFocus={selectOnFocus}
+                                        value={sd.weight_kg ?? ''}
+                                        onChange={(e) => updateSetDetail(idx, exIdx, si, { weight_kg: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                        placeholder="kg"
+                                        className="w-16 bg-adlr-gold/5 border border-adlr-gold/25 rounded-md px-1 py-1.5 text-sm text-white placeholder-white/25 outline-none text-center"
+                                      />
+                                      <span className="w-4 text-center text-white/25 text-xs">×</span>
+                                      <input
+                                        type="number"
+                                        onFocus={selectOnFocus}
+                                        value={sd.reps ?? ''}
+                                        onChange={(e) => updateSetDetail(idx, exIdx, si, { reps: e.target.value === '' ? undefined : Number(e.target.value) })}
+                                        placeholder={t('Wdh')}
+                                        className="w-16 bg-inset border border-white/10 rounded-md px-1 py-1.5 text-sm text-white placeholder-white/25 outline-none text-center"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              {/* Alternatives — searchable picker, for when a machine is occupied */}
+                              <div className="mt-2.5">
+                                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1">{t('Alternativen · bei besetztem Gerät')}</p>
+                                <div className="space-y-1.5">
+                                  {[0, 1].map((ai) => {
+                                    const val = ex.alternatives?.[ai] ?? '';
+                                    return (
+                                      <div key={ai} className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => setAltPicker({ dayIdx: idx, exIdx, slot: ai })}
+                                          className="adlr-tap flex-1 min-w-0 text-left px-3 py-2 rounded-md text-sm border flex items-center gap-2"
+                                          style={val
+                                            ? { background: 'rgb(var(--adlr-gold) / 0.06)', borderColor: 'rgb(var(--adlr-gold) / 0.2)', color: 'rgb(var(--text))' }
+                                            : { background: 'rgb(var(--text) / 0.03)', borderColor: 'rgb(var(--text) / 0.1)', color: 'rgb(var(--text) / 0.4)' }}
+                                        >
+                                          <Search size={13} className="shrink-0 opacity-60" />
+                                          <span className="truncate">{val ? t(val) : t('Alternative {n} wählen…', { n: ai + 1 })}</span>
+                                        </button>
+                                        {val && (
+                                          <button
+                                            onClick={() => { const alts = [...(ex.alternatives ?? ['', ''])]; alts[ai] = ''; updateExercise(idx, exIdx, { alternatives: alts }); }}
+                                            className="adlr-tap p-1.5 rounded-lg shrink-0"
+                                            style={{ color: 'rgba(248,113,113,0.5)' }}
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              </>)}
+                            </div>
+                            <div className="flex flex-col items-center gap-1 shrink-0">
+                              {libByName?.get(ex.name)?.exercise_id && (
+                                <button
+                                  onClick={() => setDemoEx(libByName.get(ex.name)!)}
+                                  className="adlr-tap p-1.5 rounded-lg"
+                                  style={{ color: 'rgb(var(--adlr-gold))' }}
+                                  title={t('Vorschau')}
+                                >
+                                  <Play size={13} />
+                                </button>
+                              )}
+                              {openEx.has(exKey(idx, exIdx)) && (<>
+                              <button
+                                onClick={() => moveExercise(idx, exIdx, -1)}
+                                disabled={exIdx === 0}
+                                className="adlr-tap p-1.5 rounded-lg disabled:opacity-20"
+                                style={{ color: 'rgb(var(--text) / 0.4)' }}
+                              >
+                                <ArrowUp size={13} />
+                              </button>
+                              <button
+                                onClick={() => moveExercise(idx, exIdx, 1)}
+                                disabled={exIdx === (day.exercises ?? []).length - 1}
+                                className="adlr-tap p-1.5 rounded-lg disabled:opacity-20"
+                                style={{ color: 'rgb(var(--text) / 0.4)' }}
+                              >
+                                <ArrowDown size={13} />
+                              </button>
+                              <button
+                                onClick={() => { setReplaceErr(null); setReplacePicker({ dayIdx: idx, exIdx }); }}
+                                className="adlr-tap p-1.5 rounded-lg"
+                                style={{ color: 'rgb(var(--adlr-gold))' }}
+                                title={t('Übung ersetzen')}
+                                aria-label={t('Übung ersetzen')}
+                              >
+                                <Shuffle size={13} />
+                              </button>
+                              <button
+                                onClick={() => removeExercise(idx, exIdx)}
+                                className="adlr-tap p-1.5 rounded-lg"
+                                style={{ color: 'rgba(248,113,113,0.5)' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                              </>)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button onClick={() => { setAddedNow(0); setAddPicker(idx); }} className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"
+                      style={{ background: 'rgb(var(--adlr-gold) / 0.12)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}>
+                      <Plus size={15} /> {t('Übung hinzufügen')}
+                    </button>
+
+                    {showAddEx && expandedDay === idx ? (
+                      <div className="rounded-xl p-3 space-y-2 adlr-fade-in" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgb(var(--text) / 0.1)' }}>
+                        <div className="flex justify-between items-center">
+                          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Eigene Übung')}</p>
+                          <button onClick={() => setShowAddEx(false)}><X size={14} className="text-white/40" /></button>
+                        </div>
+                        <input
+                          value={exForm.name}
+                          onChange={(e) => setExForm({ ...exForm, name: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && exForm.name.trim()) addExercise(idx); if (e.key === 'Escape') setShowAddEx(false); }}
+                          placeholder={t('Übungsname')}
+                          className="w-full bg-inset border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { label: 'Sätze', key: 'sets' as const },
+                            { label: 'Wdh', key: 'reps' as const },
+                            { label: 'Gewicht kg', key: 'weight_kg' as const },
+                            { label: 'Pause (s)', key: 'rest_sec' as const },
+                          ].map(({ label, key }) => (
+                            <input
+                              key={key}
+                              type="number"
+                              onFocus={selectOnFocus}
+                              value={exForm[key] ?? ''}
+                              onChange={(e) => setExForm({ ...exForm, [key]: Number(e.target.value) })}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && exForm.name.trim()) addExercise(idx); }}
+                              placeholder={t(label)}
+                              className="bg-inset border border-white/10 rounded-lg px-2 py-2.5 text-sm text-white placeholder-white/25 outline-none text-center"
+                            />
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => addExercise(idx)}
+                          disabled={!exForm.name.trim()}
+                          className="adlr-tap w-full py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40"
+                          style={{ background: 'rgb(var(--adlr-gold) / 0.15)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}
+                        >
+                          {t('Zum Tag hinzufügen')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAddEx(true); setExpandedDay(idx); }}
+                        className="adlr-tap w-full py-2.5 rounded-xl text-sm border border-dashed flex items-center justify-center gap-2"
+                        style={{ borderColor: 'rgb(var(--text) / 0.12)', color: 'rgb(var(--text) / 0.35)' }}
+                      >
+                        <Plus size={14} /> {t('Eigene Übung hinzufügen')}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="overflow-y-auto p-3">
-                <ExerciseLibrary
-                  canAdd={true}
-                  onDemo={(exRow) => setDemoEx(exRow)}
-                  onAdd={(exRow) => {
-                    const target = days[altPicker.dayIdx]?.exercises?.[altPicker.exIdx];
-                    const alts = [...(target?.alternatives ?? ['', ''])];
-                    alts[altPicker.slot] = exRow.name;
-                    updateExercise(altPicker.dayIdx, altPicker.exIdx, { alternatives: alts });
-                    setAltPicker(null);
-                  }}
-                />
+            );
+          })}
+        </div>
+      )}
+
+      {!activePlan && (
+        <div className="rounded-2xl p-4 mb-5" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
+          <input
+            value={newPlanName}
+            onChange={(e) => setNewPlanName(e.target.value)}
+            name="adlr-plan-name"
+            autoComplete="off"
+            autoCorrect="off"
+            data-1p-ignore
+            data-lpignore="true"
+            placeholder={t('Plan Name (z.B. Push/Pull/Legs Woche 1)')}
+            className="w-full bg-transparent text-white text-base placeholder-white/25 outline-none mb-3"
+            autoFocus
+          />
+          <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            className="w-full bg-transparent text-sm outline-none mb-3"
+            style={{ color: selectedClientId ? 'rgb(var(--text))' : 'rgb(var(--text) / 0.35)' }}
+          >
+            <option value="">{t('Klient wählen...')}</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id} className="bg-zinc-900">{c.first_name} {c.last_name}</option>
+            ))}
+          </select>
+          <div className="h-px mb-3" style={{ background: 'rgb(var(--text) / 0.07)' }} />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => createPlan()}
+              disabled={!newPlanName.trim()}
+              className="adlr-tap flex-1 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, rgb(var(--adlr-gold)), rgb(var(--adlr-gold-dim)))', color: '#000' }}
+            >
+              {t('Plan zuweisen')}
+            </button>
+            <button
+              onClick={() => saveAsTemplate()}
+              disabled={!newPlanName.trim()}
+              className="adlr-tap flex items-center gap-1.5 text-sm whitespace-nowrap disabled:opacity-40"
+              style={{ color: 'rgb(var(--text) / 0.5)' }}
+            >
+              <Copy size={13} /> {t('Als Vorlage')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {days.length > 0 && expandedDay === null && (
+        <div className="mb-4 px-4 py-3 rounded-xl text-center adlr-fade-in" style={{ background: 'rgb(var(--adlr-gold) / 0.06)', border: '1px dashed rgb(var(--adlr-gold) / 0.25)' }}>
+          <p className="text-sm" style={{ color: 'rgb(var(--adlr-gold))' }}>{t('Tippe oben auf einen Trainingstag (z.B. Montag), um Übungen hinzuzufügen')}</p>
+        </div>
+      )}
+      {days.length === 0 && (
+        <div className="mb-4 px-4 py-3 rounded-xl text-center" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.08)' }}>
+          <p className="text-sm text-white/40">{t('Erstelle zuerst einen Plan, um Trainingstage zu sehen.')}</p>
+        </div>
+      )}
+      {activePlan && days.length > 0 && (
+        <>
+          {!activePlan.is_template && (
+            <button
+              onClick={saveCurrentAsTemplate}
+              className="adlr-tap w-full py-3 rounded-xl text-sm font-medium mb-3 flex items-center justify-center gap-2"
+              style={{ background: 'rgb(var(--adlr-gold) / 0.08)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.3)' }}
+            >
+              <Copy size={15} /> {templateMsg ?? t('Als Vorlage speichern')}
+            </button>
+          )}
+          <button
+            onClick={backToList}
+            className="adlr-tap w-full py-3.5 rounded-xl text-sm font-semibold mb-4 flex items-center justify-center gap-2"
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
+          >
+            <Check size={16} /> {t('Fertig — alles gespeichert')}
+          </button>
+        </>
+      )}
+      {addPicker !== null && createPortal(
+        <div className="fixed inset-0 z-[70] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">
+            <div className="flex items-center justify-between gap-3 py-4">
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-white truncate">{t('Übung hinzufügen')}</p>
+                <p className="text-xs text-white/45 truncate">{days[addPicker]?.workout_name || t('Trainingstag')}</p>
               </div>
+              <button onClick={() => setAddPicker(null)} className="adlr-tap px-4 py-2 rounded-xl text-sm font-semibold shrink-0" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
+                {t('Fertig')}{addedNow > 0 ? ` (${addedNow})` : ''}
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4">
+              <ExerciseLibrary canAdd onDemo={(ex) => setDemoEx(ex)} onAdd={(ex) => { addLibExercise(addPicker, ex); setAddedNow((n) => n + 1); }} />
             </div>
           </div>
-        )}
-        {demoEx && <ExerciseDemoModal ex={demoEx} onClose={() => setDemoEx(null)} />}
-      </div>
-    );
-  };
-
-  if (!isDesktop) return mode === 'list' ? renderList() : renderEdit();
+        </div>,
+        document.body,
+      )}
+      {replacePicker && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 sm:p-4" onClick={() => setReplacePicker(null)}>
+          <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">{t('Übung ersetzen')}</p>
+                <p className="text-[11px] text-white/45 truncate">{t(days[replacePicker.dayIdx]?.exercises?.[replacePicker.exIdx]?.name ?? '')} → ? · {t('Sätze, Wdh und Pause bleiben')}</p>
+              </div>
+              <button onClick={() => setReplacePicker(null)} className="adlr-tap p-1 text-white/50"><X size={18} /></button>
+            </div>
+            {replaceErr && <p className="text-xs text-red-400 px-4 pt-2">{replaceErr}</p>}
+            {(() => {
+              const alts = (days[replacePicker.dayIdx]?.exercises?.[replacePicker.exIdx]?.alternatives ?? []).filter(Boolean) as string[];
+              const rows = alts.map((a) => libByName?.get(a)).filter(Boolean) as ExerciseRow[];
+              return rows.length > 0 ? (
+                <div className="px-3 pt-3">
+                  <p className="text-[11px] text-white/40 mb-1.5">{t('Deine Alternativen')}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rows.map((r) => (
+                      <button key={r.name} onClick={() => replaceExercise(replacePicker.dayIdx, replacePicker.exIdx, r)} className="adlr-tap px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}>{t(r.name)}</button>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div className="overflow-y-auto p-3">
+              <ExerciseLibrary canAdd={true} onDemo={(exRow) => setDemoEx(exRow)} onAdd={(exRow) => replaceExercise(replacePicker.dayIdx, replacePicker.exIdx, exRow)} />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      {altPicker && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4" onClick={() => setAltPicker(null)}>
+          <div className="w-full max-w-md max-h-[85vh] overflow-hidden bg-[rgb(var(--surface-2))] rounded-t-2xl sm:rounded-2xl border border-white/10 adlr-fade-in flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
+              <p className="text-sm font-semibold text-white">{t('Alternative {n} wählen', { n: altPicker.slot + 1 })}</p>
+              <button onClick={() => setAltPicker(null)} className="adlr-tap p-1 text-white/50"><X size={18} /></button>
+            </div>
+            <div className="overflow-y-auto p-3">
+              <ExerciseLibrary
+                canAdd={true}
+                onDemo={(exRow) => setDemoEx(exRow)}
+                onAdd={(exRow) => {
+                  const target = days[altPicker.dayIdx]?.exercises?.[altPicker.exIdx];
+                  const alts = [...(target?.alternatives ?? ['', ''])];
+                  alts[altPicker.slot] = exRow.name;
+                  updateExercise(altPicker.dayIdx, altPicker.exIdx, { alternatives: alts });
+                  setAltPicker(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      {demoEx && <ExerciseDemoModal ex={demoEx} onClose={() => setDemoEx(null)} />}
+    </div>
+  );
+  if (!isDesktop) return editView;
 
   // Desktop: plan list and editor side by side.
   return (
     <div className="grid grid-cols-[minmax(280px,340px)_minmax(0,1fr)] gap-8 items-start">
       <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">{renderList()}</div>
       <div className="min-w-0">
-        {mode === 'edit' ? renderEdit() : (
+        {mode === 'edit' ? editView : (
           <div className="adlr-card p-10 text-center adlr-fade-in">
             <Dumbbell size={32} className="mx-auto mb-3 text-white/15" />
             <p className="text-sm text-white/40">{t('Wähle links einen Plan oder erstelle einen neuen.')}</p>

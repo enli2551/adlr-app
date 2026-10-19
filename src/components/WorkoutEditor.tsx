@@ -62,7 +62,6 @@ export default function WorkoutEditor({ completion, logs, name, onClose, onChang
   const addExercise = (row: ExerciseRow) => {
     if (exercises.some((x) => x.name === row.name)) return;
     setExercises((xs) => [...xs, { name: row.name, sets: Array.from({ length: row.default_sets || 3 }, () => ({ ...blankSet(), reps: row.default_reps ? String(row.default_reps) : '' })) }]);
-    haptic.light();
   };
 
   const save = async () => {

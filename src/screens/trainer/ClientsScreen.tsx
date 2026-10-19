@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
-import { SectionHeader, Loading, Card, Input } from '@/components/ui';
-import { Search, Users } from 'lucide-react';
+import { SectionHeader, Loading, Input } from '@/components/ui';
+import { Search, ChevronRight, Users } from 'lucide-react';
+import { computeAttention, type AttentionItem } from '@/lib/attention';
 import ClientDetail from './ClientDetail';
 import { useSearchParams } from 'react-router-dom';
-import { t, fmtDate } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
 import { loadWeeklyStreaks } from '@/lib/streak';
 import { InviteClientsButton } from '@/components/CoachLink';
 import { useIsDesktop } from '@/lib/useMediaQuery';
@@ -16,12 +17,14 @@ export default function ClientsScreen() {
   const [clients, setClients] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [streaks, setStreaks] = useState<Map<string, number>>(new Map());
+  // Status per client: the most urgent attention item + the active plan's name
+  const [attention, setAttention] = useState<Map<string, AttentionItem>>(new Map());
+  const [planName, setPlanName] = useState<Map<string, string>>(new Map());
   const [query, setQuery] = useState('');
-  const [goalFilter, setGoalFilter] = useState('Alle');
+  const [filter, setFilter] = useState<'all' | 'attention' | 'noplan'>('all');
   const [params, setParams] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(() => params.get('client'));
-  // Already on this screen when a push is tapped: follow the new ?client=.
-  useEffect(() => { const c = params.get('client'); if (c) setSelected(c); }, [params]);
+  const selected = params.get('client');
+  const setSelected = (id: string | null) => setParams(id ? { client: id } : {}, { replace: !id });
   const isDesktop = useIsDesktop();
 
   // quiet = refresh the list in place (desktop keeps it visible next to the detail pane)
@@ -33,27 +36,40 @@ export default function ClientsScreen() {
     setClients(list);
     setLoading(false);
     loadWeeklyStreaks(list.map((c) => c.id)).then(setStreaks).catch(() => {});
+    computeAttention(list).then((items) => {
+      const m = new Map<string, AttentionItem>();
+      for (const a of [...items].sort((x, y) => y.severity - x.severity)) if (!m.has(a.client.id)) m.set(a.client.id, a);
+      setAttention(m);
+    }).catch(() => {});
+    if (list.length) {
+      const { data: cps } = await supabase.from('client_plans').select('client_id, plan_id').eq('is_active', true).in('client_id', list.map((c) => c.id));
+      const ids = [...new Set(((cps ?? []) as { plan_id: string }[]).map((r) => r.plan_id))];
+      const { data: pls } = ids.length ? await supabase.from('plans').select('id, name').in('id', ids) : { data: [] };
+      const nameById = new Map(((pls ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
+      setPlanName(new Map(((cps ?? []) as { client_id: string; plan_id: string }[]).map((r) => [r.client_id, nameById.get(r.plan_id) ?? ''])));
+    }
   };
 
   useEffect(() => { load(); }, [profile?.id]);
 
-  const closeDetail = () => { setSelected(null); if (params.get('client')) setParams({}, { replace: true }); load(isDesktop); };
-  const openClient = (id: string) => {
-    setSelected(id);
-    // Desktop: keep the selection in the URL so a reload / shared link reopens the same client.
-    if (isDesktop) setParams({ client: id }, { replace: true });
-  };
-
   if (loading) return <Loading />;
-  if (selected && !isDesktop) return <ClientDetail clientId={selected} onBack={closeDetail} />;
+  const detail = selected ? <ClientDetail key={selected} clientId={selected} onBack={() => { setSelected(null); load(isDesktop); }} /> : null;
+  if (detail && !isDesktop) return detail;
 
-  const goals = ['Alle', 'Gewicht reduzieren', 'Muskeln aufbauen', 'Allgemeine Fitness & Energie'];
+  const noPlan = (c: Profile) => c.intake_completed && !planName.has(c.id);
   const filtered = clients.filter((c) => {
     const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.toLowerCase();
-    const matchQuery = name.includes(query.toLowerCase());
-    const matchGoal = goalFilter === 'Alle' || (c.intake?.goals ?? []).includes(goalFilter);
-    return matchQuery && matchGoal;
-  });
+    if (!name.includes(query.toLowerCase())) return false;
+    if (filter === 'attention') return attention.has(c.id);
+    if (filter === 'noplan') return noPlan(c);
+    return true;
+  }).sort((x, y) => (attention.get(y.id)?.severity ?? 0) - (attention.get(x.id)?.severity ?? 0));
+  const counts = { attention: clients.filter((c) => attention.has(c.id)).length, noplan: clients.filter(noPlan).length };
+  const ago = (iso: string | null | undefined) => {
+    if (!iso) return null;
+    const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    return d <= 0 ? t('heute aktiv') : d === 1 ? t('gestern aktiv') : t('vor {n} Tagen aktiv', { n: d });
+  };
 
   const list = (
     <div className="adlr-fade-in">
@@ -68,43 +84,41 @@ export default function ClientsScreen() {
       </div>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-        {goals.map((g) => (
-          <button
-            key={g}
-            onClick={() => setGoalFilter(g)}
-            className={`adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-all ${
-              goalFilter === g ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/50 border-white/10'
-            }`}
-          >
-            {t(g)}
+        {([['all', t('Alle'), clients.length], ['attention', t('Aufmerksamkeit'), counts.attention], ['noplan', t('Ohne Plan'), counts.noplan]] as const).map(([id, label, n]) => (
+          <button key={id} onClick={() => setFilter(id)}
+            className={`adlr-tap px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap border transition-all ${filter === id ? 'bg-adlr-gold text-black border-adlr-gold' : 'bg-white/5 text-white/55 border-white/10'}`}>
+            {label} <span className={filter === id ? 'text-black/60' : 'text-white/35'}>{n}</span>
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-white/30 text-center py-12">{t('Keine Klienten gefunden.')}</p>
+        <p className="text-sm text-white/30 text-center py-12">{filter === 'all' ? t('Keine Klienten gefunden.') : t('Niemand in dieser Liste — gut so.')}</p>
       ) : (
-        <div className="space-y-3 adlr-stagger">
-          {filtered.map((c) => {
-            const lastActive = c.last_active ? fmtDate(c.last_active) : '—';
-            const goal = c.intake?.goals?.[0] ?? '—';
+        <div className="adlr-card overflow-hidden">
+          {filtered.map((c, i) => {
+            const att = attention.get(c.id);
+            const plan = planName.get(c.id);
+            const streak = streaks.get(c.id) ?? 0;
             return (
-              <Card key={c.id} onClick={() => openClient(c.id)} className={isDesktop && selected === c.id ? 'adlr-gold-border' : ''}>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold font-bold overflow-hidden">
+              <button key={c.id} onClick={() => setSelected(c.id)} className="adlr-tap w-full flex items-center gap-3 px-4 py-3 text-left" style={{ ...(i > 0 ? { borderTop: '1px solid rgb(var(--text) / 0.05)' } : {}), ...(isDesktop && selected === c.id ? { background: 'rgb(var(--adlr-gold) / 0.1)' } : {}) }}>
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-sm font-bold overflow-hidden">
                     {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-full h-full object-cover" /> : (c.first_name?.[0] ?? '?').toUpperCase()}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white text-sm">{c.first_name} {c.last_name}</p>
-                    <p className="text-xs text-white/40 truncate">{goal === '—' ? goal : t(goal)}</p>
-                    <p className="text-xs text-white/30">{t('Zuletzt aktiv')}: {lastActive}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-adlr-gold font-bold leading-none">{streaks.get(c.id) ?? '–'}</p>
-                    <p className="text-[10px] text-white/40 mt-1">{(streaks.get(c.id) ?? 0) === 1 ? t('Woche in Folge') : t('Wochen in Folge')}</p>
-                  </div>
+                  {att && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2" style={{ background: att.severity >= 45 ? 'rgb(var(--adlr-gold))' : '#fb923c', borderColor: 'rgb(var(--adlr-anthracite))' }} />}
                 </div>
-              </Card>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{c.first_name} {c.last_name}</p>
+                  {att ? (
+                    <p className="text-xs truncate" style={{ color: att.severity >= 45 ? 'rgb(var(--adlr-gold))' : '#fb923c' }}>{att.text}</p>
+                  ) : (
+                    <p className="text-xs text-white/40 truncate">{[plan || (c.intake_completed ? t('Kein Plan') : t('Onboarding offen')), ago(c.last_active)].filter(Boolean).join(' · ')}</p>
+                  )}
+                </div>
+                {streak > 0 && <span className="text-xs text-white/50 shrink-0">🔥 {streak}</span>}
+                <ChevronRight size={15} className="text-white/25 shrink-0" />
+              </button>
             );
           })}
         </div>
@@ -119,9 +133,7 @@ export default function ClientsScreen() {
     <div className="grid grid-cols-[minmax(300px,380px)_minmax(0,1fr)] gap-8 items-start">
       <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">{list}</div>
       <div className="min-w-0">
-        {selected ? (
-          <ClientDetail key={selected} clientId={selected} onBack={closeDetail} />
-        ) : (
+        {detail ?? (
           <div className="adlr-card p-10 mt-1 text-center adlr-fade-in">
             <Users size={32} className="mx-auto mb-3 text-white/15" />
             <p className="text-sm text-white/40">{t('Wähle links einen Klienten, um Details zu sehen.')}</p>

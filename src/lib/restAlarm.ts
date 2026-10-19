@@ -1,9 +1,11 @@
 import { Haptics, NotificationType } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { nativeBeep } from '@/lib/restChrono';
 
 // End-of-rest alarm while the app is open: three short beeps + vibration.
 // (In the background the native lock-screen flow alerts instead — see restChrono.ts.)
-// The sound follows the phone's silent switch / volume; vibration works either way.
+// In the app the beep is native (restChrono → RestChrono.beep): it plays with the phone on
+// silent and is mixed into the user's music without lowering it. Web Audio is the fallback.
 
 let ctx: AudioContext | null = null;
 
@@ -31,7 +33,7 @@ function beep(at: number, freq: number, dur: number) {
   osc.stop(at + dur + 0.02);
 }
 
-export function playRestAlarm(): void {
+function webBeeps(): void {
   try {
     unlockRestAlarm();
     if (ctx) {
@@ -41,6 +43,11 @@ export function playRestAlarm(): void {
       beep(t0 + 0.48, 1175, 0.32);
     }
   } catch { /* no audio */ }
+}
+
+export function playRestAlarm(): void {
+  if (Capacitor.isNativePlatform()) void nativeBeep().then((ok) => { if (!ok) webBeeps(); });
+  else webBeeps();
   if (Capacitor.isNativePlatform()) {
     Haptics.vibrate({ duration: 500 }).catch(() => {});
     setTimeout(() => Haptics.notification({ type: NotificationType.Warning }).catch(() => {}), 600);

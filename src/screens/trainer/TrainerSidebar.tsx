@@ -9,7 +9,7 @@ const ITEMS: Item[] = [
   { to: '/trainer', label: 'Übersicht', icon: LayoutDashboard, isActive: (p) => p === '/trainer' },
   { to: '/trainer/klienten', label: 'Klienten', icon: Users, isActive: (p, s) => p === '/trainer/klienten' && s.get('view') !== 'kalender' },
   { to: '/trainer/klienten?view=kalender', label: 'Kalender', icon: Calendar, isActive: (p, s) => p === '/trainer/klienten' && s.get('view') === 'kalender' },
-  { to: '/trainer/plan-builder', label: 'Plan Builder', icon: Dumbbell, isActive: (p) => p.startsWith('/trainer/plan-builder') },
+  { to: '/trainer/plan-builder', label: 'Pläne', icon: Dumbbell, isActive: (p) => p.startsWith('/trainer/plan-builder') },
   { to: '/trainer/nachrichten', label: 'Nachrichten', icon: MessageSquare, isActive: (p) => p.startsWith('/trainer/nachrichten') },
   { to: '/trainer/business', label: 'Business', icon: TrendingUp, isActive: (p) => p.startsWith('/trainer/business') },
 ];

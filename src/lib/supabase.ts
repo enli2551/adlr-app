@@ -15,6 +15,8 @@ const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 // fetch. Route every supabase-js request through XMLHttpRequest instead: a separate,
 // reliable code path in WebKit. We return a real Response so supabase-js parses it
 // exactly as it would a fetch Response.
+const REQUEST_TIMEOUT_MS = 20000;
+
 function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   return new Promise((resolve, reject) => {
     const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : String(input);
@@ -28,6 +30,15 @@ function xhrFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
 
     const xhr = new XMLHttpRequest();
     xhr.open(method, finalUrl, true);
+    // Never wait forever: a request that stalls on a flaky mobile connection used to hang
+    // the whole app (supabase-js runs auth requests in a queue — one stuck token request
+    // blocked every later request, e.g. right after logging in, until the app was restarted).
+    xhr.timeout = REQUEST_TIMEOUT_MS;
+    const signal = init?.signal;
+    if (signal) {
+      if (signal.aborted) { reject(new DOMException('Aborted', 'AbortError')); return; }
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    }
 
     const applied: string[] = [];
     const failed: string[] = [];

@@ -1,13 +1,14 @@
 import { useEffect, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { installGlobalTapHaptics } from '@/lib/haptics';
 import AuthScreen from '@/screens/AuthScreen';
 import ClientLayout from '@/screens/client/ClientLayout';
 import TrainerLayout from '@/screens/trainer/TrainerLayout';
 import Logo from '@/components/Logo';
 import { Loading } from '@/components/ui';
 import { useLang } from '@/lib/i18n';
+import PushBridge from '@/components/PushBridge';
+import { needsCoachOnboarding } from '@/lib/coachOnboarding';
 
 // Route screens are code-split so the initial bundle stays small (login paints fast);
 // heavy deps like recharts only load on the screens that actually use them.
@@ -23,6 +24,7 @@ const ClientsHub = lazy(() => import('@/screens/trainer/ClientsHub'));
 const PlanBuilderScreen = lazy(() => import('@/screens/trainer/PlanBuilderScreen'));
 const MessagesScreen = lazy(() => import('@/screens/trainer/MessagesScreen'));
 const BusinessScreen = lazy(() => import('@/screens/trainer/BusinessScreen'));
+const CoachOnboarding = lazy(() => import('@/screens/trainer/CoachOnboarding'));
 
 function ProtectedClient({ children }: { children: React.ReactNode }) {
   const { session, profile, loading } = useAuth();
@@ -39,6 +41,8 @@ function ProtectedTrainer({ children }: { children: React.ReactNode }) {
   if (loading) return <Splash />;
   if (!session) return <Navigate to="/trainer-auth" replace />;
   if (profile?.role !== 'trainer') return <Navigate to="/app" replace />;
+  // A new coach sets up name, branding, offer, plan and invite first (resumable, skippable).
+  if (needsCoachOnboarding(profile)) return <CoachOnboarding />;
   return <TrainerLayout>{children}</TrainerLayout>;
 }
 
@@ -54,12 +58,12 @@ function Splash() {
 }
 
 export default function App() {
-  useEffect(() => { installGlobalTapHaptics(); }, []);
   // Remount the routed tree on language change so every screen re-renders its strings.
   const lang = useLang();
   return (
     <AuthProvider>
       <BrowserRouter>
+        <PushBridge />
         <Fragment key={lang}>
         <Suspense fallback={<Splash />}>
         <Routes>

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile, UpsellRequest } from '@/lib/types';
-import { SectionHeader, Loading, StatCard, Card } from '@/components/ui';
+import { SectionHeader, Loading } from '@/components/ui';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Users, Calendar, TrendingUp, AlertTriangle, MessageCircle, ClipboardX, Moon, Target, BatteryLow, ChevronRight } from 'lucide-react';
+import { Bell, Users, TrendingUp, MessageCircle, ClipboardX, Moon, Target, BatteryLow, ChevronRight, CheckCircle2, Trophy, UserPlus } from 'lucide-react';
+import BottomSheet from '@/components/BottomSheet';
 import WeeklyMessagesCard from '@/components/WeeklyMessagesCard';
 import ChallengeCard from '@/components/ChallengeCard';
 import MasterAssignCard from '@/components/MasterAssignCard';
+import CoachChecklistCard from '@/components/CoachChecklistCard';
 import { computeAttention, type AttentionItem, type AttentionKind } from '@/lib/attention';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -27,6 +29,8 @@ export default function OverviewScreen() {
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sheet, setSheet] = useState<null | 'weekly' | 'challenge' | 'new'>(null);
+  const [weeklyMissing, setWeeklyMissing] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +56,13 @@ export default function OverviewScreen() {
         computeAttention(clientList).catch(() => [] as AttentionItem[]),
       ]);
       setAttention(att);
+      const active = clientList.filter((c) => c.intake_completed);
+      if (active.length) {
+        const monday = new Date(weekStart);
+        const { data: wm } = await supabase.from('weekly_messages').select('client_id, created_at').in('client_id', active.map((c) => c.id)).gte('created_at', monday.toISOString());
+        const fresh = new Set(((wm ?? []) as { client_id: string }[]).map((m) => m.client_id));
+        setWeeklyMissing(active.filter((c) => !fresh.has(c.id)).length);
+      }
 
       setClients(clientList);
       setUpsells((u.data ?? []) as UpsellRequest[]);
@@ -67,135 +78,115 @@ export default function OverviewScreen() {
   }, [profile?.id]);
 
   if (loading) return <Loading />;
+  const todoCount = attention.length + (weeklyMissing > 0 ? 1 : 0) + (upsells.length > 0 ? 1 : 0) + (newClients.some((c) => !c.intake_completed) ? 1 : 0);
 
   return (
     <div className="adlr-fade-in">
       <SectionHeader title={t('Übersicht')} subtitle={(profile?.first_name ? t('Willkommen zurück, {name}.', { name: profile.first_name }) : t('Willkommen zurück.'))} />
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <StatCard label={t('Aktive Klienten')} value={clients.length} accent />
-        <StatCard label={t('Termine diese Woche')} value={sessionsThisWeek} />
-        <StatCard label={t('Absolvierte Trainings · diese Woche')} value={trainingsThisWeek} />
-        <StatCard label={`${t('Absolvierte Trainings')} · ${fmtDate(new Date(), { month: 'long' })}`} value={sessionsThisMonth} />
-      </div>
-
-      {/* Quick access: Klienten + Kalender (moved out of the bottom nav) */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <button
-          onClick={() => nav('/trainer/klienten')}
-          className="adlr-tap flex items-center gap-2.5 rounded-2xl px-4 py-3.5 border transition-all"
-          style={{ background: 'rgb(var(--text) / 0.03)', borderColor: 'rgb(var(--text) / 0.07)' }}
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--adlr-gold) / 0.12)' }}>
-            <Users size={17} className="text-adlr-gold" />
-          </div>
-          <span className="text-sm font-medium text-white/85">{t('Klienten')}</span>
-        </button>
-        <button
-          onClick={() => nav('/trainer/klienten?view=kalender')}
-          className="adlr-tap flex items-center gap-2.5 rounded-2xl px-4 py-3.5 border transition-all"
-          style={{ background: 'rgb(var(--text) / 0.03)', borderColor: 'rgb(var(--text) / 0.07)' }}
-        >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgb(var(--adlr-gold) / 0.12)' }}>
-            <Calendar size={17} className="text-adlr-gold" />
-          </div>
-          <span className="text-sm font-medium text-white/85">{t('Kalender')}</span>
-        </button>
+      <CoachChecklistCard />
+      {/* Three numbers, tappable */}
+      <div className="grid grid-cols-3 gap-2 mb-5">
+        <Kpi value={clients.length} label={t('Klienten')} onClick={() => nav('/trainer/klienten')} accent />
+        <Kpi value={trainingsThisWeek} label={t('Trainings · Woche')} onClick={() => nav('/trainer/klienten')} />
+        <Kpi value={sessionsThisWeek} label={t('Termine · Woche')} onClick={() => nav('/trainer/klienten?view=kalender')} />
       </div>
 
       {/* Master trainer: sign-ups without an invite code */}
       {profile?.is_master && <MasterAssignCard />}
 
-      {/* Needs attention */}
-      <Card className="mb-4">
-        <div className="flex items-center gap-3 mb-3">
-          <AlertTriangle size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">{t('Braucht Aufmerksamkeit')}</p>
-          <span className="ml-auto text-adlr-gold font-bold">{attention.length}</span>
+      {/* To do — only what needs the coach; empty = one calm line */}
+      <div className="adlr-card p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] uppercase tracking-wider text-white/40">{t('Zu erledigen')}</p>
+          {todoCount > 0 && <span className="text-xs font-bold text-adlr-gold">{todoCount}</span>}
         </div>
-        {attention.length === 0 ? (
-          <p className="text-sm text-white/40">{t('Alles im grünen Bereich.')}</p>
+        {todoCount === 0 ? (
+          <p className="text-sm text-white/55 flex items-center gap-2 py-1"><CheckCircle2 size={16} className="text-emerald-400" /> {t('Alles erledigt — deine Klienten sind auf Kurs.')}</p>
         ) : (
-          <div className="space-y-1.5">
-            {(showAllAttention ? attention : attention.slice(0, 5)).map((a, i) => {
+          <div>
+            {(showAllAttention ? attention : attention.slice(0, 4)).map((a, i) => {
               const Icon = ATTENTION_ICON[a.kind];
               return (
-                <button
-                  key={i}
-                  onClick={() => nav(a.kind === 'message' ? '/trainer/nachrichten' : `/trainer/klienten?client=${a.client.id}`)}
-                  className="adlr-tap w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left"
-                  style={{ background: 'rgb(var(--text) / 0.03)' }}
-                >
-                  <Icon size={15} className={a.severity >= 45 ? 'text-adlr-gold shrink-0' : 'text-white/45 shrink-0'} />
-                  <span className="text-sm text-white/80 flex-1 min-w-0">{a.text}</span>
-                  <ChevronRight size={14} className="text-white/25 shrink-0" />
-                </button>
+                <TodoRow key={i} icon={Icon} strong={a.severity >= 45} text={a.text}
+                  onClick={() => nav(a.kind === 'message' ? `/trainer/nachrichten?client=${a.client.id}` : `/trainer/klienten?client=${a.client.id}`)} />
               );
             })}
-            {attention.length > 5 && (
-              <button onClick={() => setShowAllAttention(!showAllAttention)} className="adlr-tap w-full pt-1.5 text-xs font-medium text-adlr-gold">
+            {attention.length > 4 && (
+              <button onClick={() => setShowAllAttention(!showAllAttention)} className="adlr-tap w-full py-2 text-xs font-medium text-adlr-gold">
                 {showAllAttention ? t('Weniger anzeigen') : t('Alle {n} anzeigen', { n: attention.length })}
               </button>
             )}
+            {weeklyMissing > 0 && (
+              <TodoRow icon={MessageCircle} text={t('{n} Klienten ohne persönliche Wochen-Nachricht', { n: weeklyMissing })} onClick={() => setSheet('weekly')} />
+            )}
+            {upsells.length > 0 && (
+              <TodoRow icon={TrendingUp} strong text={t('{n} offene Extra-Anfragen', { n: upsells.length })} onClick={() => nav('/trainer/business')} />
+            )}
+            {newClients.filter((c) => !c.intake_completed).length > 0 && (
+              <TodoRow icon={Users} text={t('{n} neue Klienten im Onboarding', { n: newClients.filter((c) => !c.intake_completed).length })} onClick={() => setSheet('new')} />
+            )}
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Clients still missing this week's personal line for their weekly recap */}
-      <ChallengeCard mode="trainer" />
-      <WeeklyMessagesCard clients={clients} />
+      {/* Less urgent: one tap away */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button onClick={() => setSheet('challenge')} className="adlr-tap adlr-card p-3.5 text-left">
+          <Trophy size={17} className="text-adlr-gold mb-2" />
+          <p className="text-sm font-semibold text-white leading-tight">{t('Monats-Challenge')}</p>
+          <p className="text-[11px] text-white/40 mt-0.5 truncate">{fmtDate(new Date(), { month: 'long' })}</p>
+        </button>
+        <button onClick={() => setSheet('new')} className="adlr-tap adlr-card p-3.5 text-left">
+          <UserPlus size={17} className="text-adlr-gold mb-2" />
+          <p className="text-sm font-semibold text-white leading-tight">{t('Neue Klienten')}</p>
+          <p className="text-[11px] text-white/40 mt-0.5 truncate">{newClients.length ? t('{n} in 14 Tagen', { n: newClients.length }) : t('keine in 14 Tagen')}</p>
+        </button>
+      </div>
 
-      {/* Upsell requests */}
-      <Card className="mb-4 adlr-gold-border" onClick={() => nav('/trainer/business')}>
-        <div className="flex items-center gap-3 mb-3">
-          <TrendingUp size={18} className="text-adlr-gold" />
-          <p className="text-sm font-medium text-white/80">{t('Upsell-Anfragen')}</p>
-          <span className="ml-auto text-adlr-gold font-bold">{upsells.length}</span>
-        </div>
-        {upsells.length > 0 ? (
-          <div className="space-y-2">
-            {upsells.slice(0, 3).map((u) => (
-              <div key={u.id} className="flex justify-between items-center text-sm">
-                <span className="text-white/70">{t('{name} will {what}', { name: (u as unknown as { profiles: { first_name: string; last_name: string } }).profiles?.first_name ?? '', what: u.upgrade_key })}</span>
-                <span className="text-xs text-adlr-gold">{t('Offen')}</span>
-              </div>
-            ))}
-          </div>
-        ) : <p className="text-sm text-white/40">{t('Keine offenen Anfragen.')}</p>}
-      </Card>
-
-      {/* New clients — only those who joined in the last 14 days; hidden otherwise */}
-      {newClients.length > 0 && (
-        <Card>
-          <div className="flex items-center gap-3 mb-3">
-            <Users size={18} className="text-adlr-gold" />
-            <p className="text-sm font-medium text-white/80">{t('Neue Klienten')}</p>
-            <span className="ml-auto text-[11px] text-white/35">{t('letzte 14 Tage')}</span>
-          </div>
-          <div className="space-y-1.5">
-            {newClients.map((c) => {
-              const days = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86400000);
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => nav(`/trainer/klienten?client=${c.id}`)}
-                  className="adlr-tap w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left"
-                >
-                  <div className="w-8 h-8 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-xs font-bold overflow-hidden shrink-0">
-                    {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-full h-full object-cover" /> : (c.first_name?.[0] ?? '?').toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white/80 truncate">{c.first_name} {c.last_name}</p>
-                    <p className="text-xs text-white/40">
-                      {days === 0 ? t('heute') : days === 1 ? t('gestern') : t('vor {n} Tagen', { n: days })} · {c.intake_completed ? t('Onboarding abgeschlossen') : t('Onboarding offen')}
-                    </p>
-                  </div>
-                  {c.intake_completed && <Bell size={14} className="text-adlr-gold shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        </Card>
+      {sheet === 'weekly' && <BottomSheet title={t('Wochen-Nachrichten')} onClose={() => setSheet(null)}><WeeklyMessagesCard clients={clients} /></BottomSheet>}
+      {sheet === 'challenge' && <BottomSheet title={t('Monats-Challenge')} onClose={() => setSheet(null)}><ChallengeCard mode="trainer" /></BottomSheet>}
+      {sheet === 'new' && (
+        <BottomSheet title={t('Neue Klienten')} onClose={() => setSheet(null)}>
+          {newClients.length === 0 ? <p className="text-sm text-white/45 text-center py-8">{t('Keine neuen Klienten in den letzten 14 Tagen.')}</p> : (
+            <div className="space-y-1.5 pb-2">
+              {newClients.map((c) => {
+                const days = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86400000);
+                return (
+                  <button key={c.id} onClick={() => nav(`/trainer/klienten?client=${c.id}`)} className="adlr-tap w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left" style={{ background: 'rgb(var(--text) / 0.04)' }}>
+                    <div className="w-8 h-8 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold text-xs font-bold overflow-hidden shrink-0">
+                      {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-full h-full object-cover" /> : (c.first_name?.[0] ?? '?').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white/85 truncate">{c.first_name} {c.last_name}</p>
+                      <p className="text-xs text-white/40">{days === 0 ? t('heute') : days === 1 ? t('gestern') : t('vor {n} Tagen', { n: days })} · {c.intake_completed ? t('Onboarding abgeschlossen') : t('Onboarding offen')}</p>
+                    </div>
+                    <ChevronRight size={14} className="text-white/25 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </BottomSheet>
       )}
     </div>
+  );
+}
+
+function Kpi({ value, label, onClick, accent }: { value: number; label: string; onClick: () => void; accent?: boolean }) {
+  return (
+    <button onClick={onClick} className="adlr-tap rounded-2xl px-3 py-3 text-left" style={{ background: 'rgb(var(--text) / 0.04)', border: '1px solid rgb(var(--text) / 0.06)' }}>
+      <p className="text-2xl font-bold leading-none" style={{ color: accent ? 'rgb(var(--adlr-gold))' : 'rgb(var(--text) / 0.92)' }}>{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-white/40 mt-1.5 truncate">{label}</p>
+    </button>
+  );
+}
+
+function TodoRow({ icon: Icon, text, onClick, strong }: { icon: typeof Bell; text: string; onClick: () => void; strong?: boolean }) {
+  return (
+    <button onClick={onClick} className="adlr-tap w-full flex items-center gap-2.5 py-2.5 text-left" style={{ borderTop: '1px solid rgb(var(--text) / 0.05)' }}>
+      <Icon size={15} className={strong ? 'text-adlr-gold shrink-0' : 'text-white/45 shrink-0'} />
+      <span className="text-sm text-white/80 flex-1 min-w-0">{text}</span>
+      <ChevronRight size={14} className="text-white/25 shrink-0" />
+    </button>
   );
 }

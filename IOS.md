@@ -40,7 +40,11 @@ de **nem kell saját Mac**: egy felhős macOS-CI (itt **Codemagic**) elkészíti
   no-op**-ol (nem hibázik), és a pihenő az **in-app időzítővel + ütemezett „Pause vorbei"
   értesítéssel** működik. A live lock-screen ketyegéshez iOS-en **Live Activity** (ActivityKit)
   kellene — külön, nagyobb feladat, ha később kell.
-- **Push-értesítés:** csak *local* notification van (nincs szerveres push) — ez iOS-en is jó.
+- **Push-értesítés (2026-10):** szerveres push is van (`@capacitor/push-notifications`, iOS-en
+  közvetlenül APNs, Firebase SDK nélkül). Az `App.entitlements`-ben `aps-environment = production`
+  → **egyszer:** Apple Developer → Identifiers → com.adlr.app → *Push Notifications* bekapcsolása
+  (KÉSZ, 2026-10-18). Profilt nem kell törölni: a Codemagic `fetch-signing-files --create` minden
+  buildnél új, push-os profilt gyárt. Részletek: `PUSH-SETUP.md`.
 
 ## Alternatíva (ha nem Codemagic)
 - **Ionic Appflow** (a Capacitor-csapattól) vagy **GitHub Actions** `macos-latest` runner
