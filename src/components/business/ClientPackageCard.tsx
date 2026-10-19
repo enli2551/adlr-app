@@ -10,7 +10,8 @@ import {
 } from '@/lib/business';
 
 /** Trainer ClientDetail: what the client bought, how much is used/open, record payments. */
-export default function ClientPackageCard({ clientId }: { clientId: string }) {
+export default function ClientPackageCard({ clientId, embedded = false }: { clientId: string; embedded?: boolean }) {
+  const [confirmEnd, setConfirmEnd] = useState<string | null>(null);
   const [packages, setPackages] = useState<Package[]>([]);
   const [cps, setCps] = useState<ClientPackage[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -80,11 +81,15 @@ export default function ClientPackageCard({ clientId }: { clientId: string }) {
   const activePackages = packages.filter((p) => p.active);
 
   return (
-    <div className="adlr-card p-5 mb-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Wallet size={16} className="text-adlr-gold" /> {t('Paket & Zahlungen')}</p>
-        <span className="text-xs text-white/40">{t('gesamt {amount}', { amount: fmtEUR(total) })}</span>
-      </div>
+    <div className={embedded ? 'pb-2' : 'adlr-card p-5 mb-4'}>
+      {embedded ? (
+        <p className="text-xs text-white/40 mb-3 px-1">{t('Bisher bezahlt: {amount}', { amount: fmtEUR(total) })}</p>
+      ) : (
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-medium text-white/80 flex items-center gap-2"><Wallet size={16} className="text-adlr-gold" /> {t('Paket & Zahlungen')}</p>
+          <span className="text-xs text-white/40">{t('gesamt {amount}', { amount: fmtEUR(total) })}</span>
+        </div>
+      )}
 
       {missing ? (
         <p className="text-xs text-white/40">{t('Migration „business_packages“ im Supabase SQL Editor ausführen.')}</p>
@@ -102,7 +107,10 @@ export default function ClientPackageCard({ clientId }: { clientId: string }) {
                     {s.cp.end_date ? ` · ${t('bis {date}', { date: fmtDate(s.cp.end_date, { day: '2-digit', month: '2-digit', year: '2-digit' }) })}` : ''}
                   </p>
                 </div>
-                <button onClick={() => finish(s.cp)} className="adlr-tap text-[11px] text-white/35 underline shrink-0">{t('beenden')}</button>
+                <button onClick={() => { if (confirmEnd === s.cp.id) { setConfirmEnd(null); finish(s.cp); } else { setConfirmEnd(s.cp.id); setTimeout(() => setConfirmEnd((c) => (c === s.cp.id ? null : c)), 3500); } }}
+                  className="adlr-tap text-[11px] shrink-0 px-2 py-1 rounded-md" style={confirmEnd === s.cp.id ? { color: '#f87171', background: 'rgb(239 68 68 / 0.12)' } : { color: 'rgb(var(--text) / 0.4)', background: 'rgb(var(--text) / 0.05)' }}>
+                  {confirmEnd === s.cp.id ? t('Wirklich beenden?') : t('Beenden')}
+                </button>
               </div>
 
               {s.cp.kind === 'pack' && s.cp.sessions_total ? (
@@ -120,10 +128,14 @@ export default function ClientPackageCard({ clientId }: { clientId: string }) {
               ) : null}
 
               <div className="flex items-center justify-between mt-2.5">
-                <span className={`text-xs font-medium ${s.open > 0 ? 'text-orange-400' : 'text-green-500'}`}>
-                  {s.open > 0 ? t('{amount} offen', { amount: fmtEUR(s.open) }) : t('bezahlt')}
-                  <span className="text-white/35 font-normal"> · {t('{paid} von {due}', { paid: fmtEUR(s.paid), due: fmtEUR(s.due) })}</span>
-                </span>
+                {s.due === 0 && s.paid === 0 ? (
+                  <span className="text-xs text-white/45">{s.cp.kind === 'single' ? t('Noch nichts fällig — wird pro Einheit abgerechnet') : t('Noch nichts fällig')}</span>
+                ) : (
+                  <span className={`text-xs font-medium ${s.open > 0 ? 'text-orange-400' : 'text-green-500'}`}>
+                    {s.open > 0 ? t('{amount} offen', { amount: fmtEUR(s.open) }) : t('bezahlt')}
+                    <span className="text-white/35 font-normal"> · {t('{paid} von {due}', { paid: fmtEUR(s.paid), due: fmtEUR(s.due) })}</span>
+                  </span>
+                )}
                 {payFor !== s.cp.id && (
                   <button onClick={() => openPay(s.cp.id, s.open)} className="adlr-tap text-xs font-semibold text-adlr-gold flex items-center gap-1"><Plus size={12} /> {t('Zahlung')}</button>
                 )}

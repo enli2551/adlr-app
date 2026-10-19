@@ -1395,6 +1395,18 @@ const dict: Record<string, string> = {
   "{n} Angebote": "{n} offers",
   "{n} Alt.": "{n} alt.",
   "Trainingstag": "Training day",
+  // ── Master hide, package card ──
+  "Ausblenden braucht die Migration 20261019_master_hide.sql.": "Hiding needs the migration 20261019_master_hide.sql.",
+  "{n} ausgeblendete Anmeldungen ohne Coach": "{n} hidden sign-ups without a coach",
+  "Wieder anzeigen": "Show again",
+  "Ausblenden": "Hide",
+  "Ausgeblendete verbergen": "Hide hidden ones",
+  "{n} ausgeblendet": "{n} hidden",
+  "Bisher bezahlt: {amount}": "Paid so far: {amount}",
+  "Wirklich beenden?": "Really end?",
+  "Beenden": "End",
+  "Noch nichts fällig — wird pro Einheit abgerechnet": "Nothing due yet — billed per session",
+  "Noch nichts fällig": "Nothing due yet",
 };
 
 export default dict;

@@ -1396,6 +1396,18 @@ const dict: Record<string, string> = {
   "{n} Angebote": "{n} ajánlat",
   "{n} Alt.": "{n} alternatíva",
   "Trainingstag": "Edzésnap",
+  // ── Master hide, package card ──
+  "Ausblenden braucht die Migration 20261019_master_hide.sql.": "Az elrejtéshez a 20261019_master_hide.sql migráció kell.",
+  "{n} ausgeblendete Anmeldungen ohne Coach": "{n} elrejtett regisztráció edző nélkül",
+  "Wieder anzeigen": "Megjelenítés",
+  "Ausblenden": "Elrejtés",
+  "Ausgeblendete verbergen": "Elrejtettek elrejtése",
+  "{n} ausgeblendet": "{n} elrejtve",
+  "Bisher bezahlt: {amount}": "Eddig fizetve: {amount}",
+  "Wirklich beenden?": "Biztosan lezárod?",
+  "Beenden": "Lezárás",
+  "Noch nichts fällig — wird pro Einheit abgerechnet": "Még semmi nem esedékes — alkalmanként számolva",
+  "Noch nichts fällig": "Még semmi nem esedékes",
 };
 
 export default dict;

@@ -323,7 +323,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
           {sheet === 'checkins' && (checkinInfo && checkinInfo.total > 0
             ? <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
             : <p className="text-sm text-white/45 text-center py-8">{t('{name} hat noch keinen Check-in ausgefüllt.', { name: client.first_name ?? '' })}</p>)}
-          {sheet === 'package' && <ClientPackageCard clientId={clientId} />}
+          {sheet === 'package' && <ClientPackageCard clientId={clientId} embedded />}
         </BottomSheet>
       )}
       {showProgress && <ProgressReport client={client} trainerMode onClose={() => setShowProgress(false)} />}
