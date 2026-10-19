@@ -10,7 +10,8 @@ mkdirSync(outDir, { recursive: true });
 
 const BASE = 'http://localhost:5173/';
 const EMAIL = 'peter@adlr.at';
-const PASSWORD = 'SteigAuf2026!';
+const PASSWORD = process.env.ADLR_PASSWORD; // only data is mocked, the login is real
+if (!PASSWORD) { console.error('Set ADLR_PASSWORD'); process.exit(1); }
 
 const CLIENT_ID = randomUUID();
 const TRAINER_ID = randomUUID();

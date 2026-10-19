@@ -9,7 +9,8 @@ mkdirSync(outDir, { recursive: true });
 
 const BASE = 'http://localhost:5173/';
 const EMAIL = 'peter@adlr.at';
-const PASSWORD = 'SteigAuf2026!';
+const PASSWORD = process.env.ADLR_PASSWORD; // real login: ADLR_PASSWORD=... node scripts/capture.mjs
+if (!PASSWORD) { console.error('Set ADLR_PASSWORD'); process.exit(1); }
 
 const browser = await chromium.launch();
 const context = await browser.newContext({

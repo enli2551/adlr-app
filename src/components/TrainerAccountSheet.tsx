@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Languages, ListChecks, LogOut, Palette, Sparkles, User, X } from 'lucide-react';
+import { ChevronDown, KeyRound, Languages, ListChecks, LogOut, Palette, Sparkles, User, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
@@ -8,8 +8,9 @@ import ThemeSwitcher from '@/components/ThemeSwitcher';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import BrandingSettings from '@/components/BrandingSettings';
 import HapticsToggle from '@/components/HapticsToggle';
+import PasswordChange from '@/components/PasswordChange';
 
-type Section = 'name' | 'look' | 'brand' | null;
+type Section = 'name' | 'look' | 'brand' | 'password' | null;
 
 function Row({ open, onToggle, icon: Icon, title, hint, children }: { open: boolean; onToggle: () => void; icon: typeof User; title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -91,6 +92,9 @@ export default function TrainerAccountSheet({ onClose, onQuestions, onSignOut }:
               <span className="block text-[11px] text-white/40">{t('Kennenlernen & wöchentlicher Check-in')}</span>
             </span>
           </button>
+          <Row {...sec('password')} icon={KeyRound} title={t('Passwort ändern')}>
+            <PasswordChange onDone={() => setOpen(null)} />
+          </Row>
           {/* Branding last: it changes every client's app */}
           <Row {...sec('brand')} icon={Sparkles} title={t('Branding')} hint={t('Logo & Farbe in der App deiner Klienten')}>
             <BrandingSettings embedded />

@@ -1467,6 +1467,18 @@ const dict: Record<string, string> = {
   "Checkliste ausblenden": "Lista elrejtése",
   "Willkommen": "Üdv",
   "Startplan": "Kezdő terv",
+  // Passwort ändern (logged in)
+  "Passwort ändern": "Jelszó módosítása",
+  "Aktuelles Passwort": "Jelenlegi jelszó",
+  "Neues Passwort wiederholen": "Új jelszó még egyszer",
+  "Gib dein aktuelles Passwort ein.": "Add meg a jelenlegi jelszavad.",
+  "Neues Passwort: mindestens 8 Zeichen.": "Új jelszó: legalább 8 karakter.",
+  "Die neuen Passwörter stimmen nicht überein.": "Az új jelszavak nem egyeznek.",
+  "Das neue Passwort muss sich vom alten unterscheiden.": "Az új jelszó nem lehet ugyanaz, mint a régi.",
+  "Aktuelles Passwort ist falsch.": "A jelenlegi jelszó hibás.",
+  "Keine Verbindung. Bitte später erneut versuchen.": "Nincs kapcsolat. Próbáld újra később.",
+  "Dieses Passwort ist zu schwach. Wähle ein längeres.": "Ez a jelszó túl gyenge. Válassz hosszabbat.",
+  "Passwort konnte nicht geändert werden. Bitte später erneut versuchen.": "Nem sikerült módosítani a jelszót. Próbáld újra később.",
 };
 
 export default dict;

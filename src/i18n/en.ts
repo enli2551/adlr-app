@@ -1466,6 +1466,18 @@ const dict: Record<string, string> = {
   "Checkliste ausblenden": "Hide checklist",
   "Willkommen": "Welcome",
   "Startplan": "Starter plan",
+  // Passwort ändern (logged in)
+  "Passwort ändern": "Change password",
+  "Aktuelles Passwort": "Current password",
+  "Neues Passwort wiederholen": "Repeat new password",
+  "Gib dein aktuelles Passwort ein.": "Enter your current password.",
+  "Neues Passwort: mindestens 8 Zeichen.": "New password: at least 8 characters.",
+  "Die neuen Passwörter stimmen nicht überein.": "The new passwords do not match.",
+  "Das neue Passwort muss sich vom alten unterscheiden.": "The new password must differ from the old one.",
+  "Aktuelles Passwort ist falsch.": "Current password is wrong.",
+  "Keine Verbindung. Bitte später erneut versuchen.": "No connection. Please try again later.",
+  "Dieses Passwort ist zu schwach. Wähle ein längeres.": "This password is too weak. Choose a longer one.",
+  "Passwort konnte nicht geändert werden. Bitte später erneut versuchen.": "Password could not be changed. Please try again later.",
 };
 
 export default dict;
