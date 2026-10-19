@@ -9,9 +9,9 @@ import { AnswerList } from '@/components/QuestionFields';
 import { intakeAnswers } from '@/lib/coachQuestions';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
-import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText, Activity, StickyNote, ClipboardCheck, Wallet, X, TrendingUp, HeartPulse } from 'lucide-react';
-import { createPortal } from 'react-dom';
+import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText, Activity, StickyNote, ClipboardCheck, Wallet, TrendingUp, HeartPulse } from 'lucide-react';
 import ClientPlanCard from '@/components/ClientPlanCard';
+import BottomSheet from '@/components/BottomSheet';
 import MonthlyReport from '@/components/MonthlyReport';
 import TrainingHistory from '@/components/TrainingHistory';
 import ExerciseProgress from '@/components/ExerciseProgress';
@@ -317,14 +317,14 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       )}
       </div>
       {sheet && (
-        <DetailSheet onClose={() => setSheet(null)} title={sheet === 'status' ? t('Status & Ernährung') : sheet === 'notes' ? t('Notizen') : sheet === 'checkins' ? t('Check-ins') : t('Paket & Zahlungen')}>
+        <BottomSheet onClose={() => setSheet(null)} title={sheet === 'status' ? t('Status & Ernährung') : sheet === 'notes' ? t('Notizen') : sheet === 'checkins' ? t('Check-ins') : t('Paket & Zahlungen')}>
           {sheet === 'status' && <ClientSummary part="details" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
           {sheet === 'notes' && <ClientSummary part="notes" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
           {sheet === 'checkins' && (checkinInfo && checkinInfo.total > 0
             ? <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
             : <p className="text-sm text-white/45 text-center py-8">{t('{name} hat noch keinen Check-in ausgefüllt.', { name: client.first_name ?? '' })}</p>)}
           {sheet === 'package' && <ClientPackageCard clientId={clientId} />}
-        </DetailSheet>
+        </BottomSheet>
       )}
       {showProgress && <ProgressReport client={client} trainerMode onClose={() => setShowProgress(false)} />}
       {showReport && <MonthlyReport clientId={clientId} clientName={client.first_name ?? undefined} onClose={() => setShowReport(false)} />}
@@ -348,21 +348,6 @@ function Tile({ icon: Icon, title, hint, onClick, badge }: { icon: typeof Sparkl
       <p className="text-sm font-semibold text-white leading-tight">{title}</p>
       <p className="text-[11px] text-white/40 mt-0.5 truncate">{hint}</p>
     </button>
-  );
-}
-
-function DetailSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return createPortal(
-    <div className="fixed inset-0 z-[70] bg-black/70 flex items-end sm:items-center justify-center adlr-fade-in" onClick={onClose}>
-      <div className="w-full max-w-md max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl bg-adlr-black" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <p className="text-lg font-bold text-white">{title}</p>
-          <button onClick={onClose} aria-label={t('Schließen')} className="adlr-tap p-1.5 text-white/40"><X size={18} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>{children}</div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 

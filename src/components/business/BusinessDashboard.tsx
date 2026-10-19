@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { t, fmtDate } from '@/lib/i18n';
 import type { Profile, Session, BusinessRevenue } from '@/lib/types';
-import { Loading } from '@/components/ui';
+import { Loading, CollapsibleCard } from '@/components/ui';
 import PackageCatalog from '@/components/business/PackageCatalog';
 import {
   computeBusiness, fmtEUR, KIND_LABEL,
@@ -78,7 +78,7 @@ export default function BusinessDashboard() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-3 mb-2">
         <Kpi label={t('Umsatz · {month}', { month: monthName })} value={fmtEUR(b.revenueThisMonth)} accent
           sub={trend != null ? (
             <span className={`flex items-center gap-1 ${trend >= 0 ? 'text-green-500' : 'text-orange-400'}`}>
@@ -86,13 +86,15 @@ export default function BusinessDashboard() {
             </span>
           ) : null} />
         <Kpi label={t('Offene Beträge')} value={fmtEUR(b.openTotal)} sub={b.openTotal > 0 ? <span className="text-orange-400">{t('noch nicht bezahlt')}</span> : <span className="text-green-500">{t('alles bezahlt')}</span>} />
-        <Kpi label={t('Abos pro Monat')} value={fmtEUR(b.recurringMonthly)} sub={<span className="text-white/40">{t('planbarer Umsatz')}</span>} />
-        <Kpi label={t('Ø pro Klient · 90 Tage')} value={fmtEUR(b.avgPerClient90d)} sub={<span className="text-white/40">{t('zahlende Klienten')}</span>} />
       </div>
+      <p className="text-[11px] text-white/40 mb-4 px-1">
+        {t('Abos pro Monat')}: <span className="text-white/70">{fmtEUR(b.recurringMonthly)}</span>
+        {'  ·  '}{t('Ø pro Klient · 90 Tage')}: <span className="text-white/70">{fmtEUR(b.avgPerClient90d)}</span>
+      </p>
 
       {/* To do */}
-      <div className="adlr-card p-5 mb-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="adlr-card p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
           <AlertTriangle size={16} className="text-adlr-gold" />
           <p className="text-sm font-medium text-white/80">{t('Handlungsbedarf')}</p>
           <span className="ml-auto text-adlr-gold font-bold text-sm">{b.actions.length}</span>
@@ -119,9 +121,8 @@ export default function BusinessDashboard() {
       </div>
 
       {/* Revenue trend */}
-      <div className="adlr-card p-5 mb-4">
-        <p className="text-sm font-medium text-white/80 mb-4">{t('Umsatz · letzte 6 Monate')}</p>
-        <div className="flex items-end gap-2 h-32">
+      <CollapsibleCard id="biz_trend" className="mb-4" title={t('Umsatz · letzte 6 Monate')} summary={trend != null ? `${trend >= 0 ? '+' : ''}${trend}%` : undefined}>
+        <div className="flex items-end gap-2 h-32 mt-3">
           {b.months.map((m, i) => (
             <div key={m.key} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
               <span className="text-[10px] text-white/55">{m.amount ? fmtEUR(m.amount) : ''}</span>
@@ -130,11 +131,11 @@ export default function BusinessDashboard() {
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleCard>
 
       {/* Revenue per client */}
-      <div className="adlr-card p-5 mb-4">
-        <p className="text-sm font-medium text-white/80 mb-3">{t('Umsatz pro Klient')}</p>
+      <CollapsibleCard id="biz_clients" className="mb-4" title={t('Umsatz pro Klient')} summary={b.perClient.length ? String(b.perClient.length) : undefined}>
+        <div className="mt-3" />
         {b.perClient.length === 0 ? <p className="text-sm text-white/40">{t('Noch keine Klienten.')}</p> : (
           <div className="space-y-1.5">
             {perClient.map((r) => (
@@ -163,10 +164,11 @@ export default function BusinessDashboard() {
             )}
           </div>
         )}
-      </div>
+      </CollapsibleCard>
 
       {/* Price list */}
-      <div className="adlr-card p-5 mb-4">
+      <CollapsibleCard id="biz_prices" className="mb-4" title={t('Preisliste')} subtitle={t('Deine Angebote und Pakete')} summary={packages.length ? t('{n} Angebote', { n: packages.length }) : undefined}>
+        <div className="mt-3" />
         <PackageCatalog packages={packages} onChange={load} />
         {packages.length > 0 && (
           <p className="text-[11px] text-white/35 mt-3">
@@ -174,7 +176,7 @@ export default function BusinessDashboard() {
             {' · '}{(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((k) => `${t(KIND_LABEL[k])} ${cps.filter((c) => c.status === 'active' && c.kind === k).length}`).join(' · ')}
           </p>
         )}
-      </div>
+      </CollapsibleCard>
     </div>
   );
 }

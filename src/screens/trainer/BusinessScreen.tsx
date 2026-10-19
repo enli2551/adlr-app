@@ -79,8 +79,8 @@ export default function BusinessScreen() {
       <BusinessDashboard />
 
       {/* Sessions chart */}
-      <Card className="mb-5">
-        <p className="text-sm font-medium text-white/80 mb-4">{t('Sessions pro Woche')}</p>
+      <CollapsibleCard id="biz_sessions" className="mb-4" title={t('Sessions pro Woche')} summary={String(weeksData[weeksData.length - 1]?.sessions ?? 0)}>
+        <div className="mt-3" />
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={weeksData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
             <Bar dataKey="sessions" fill="rgb(var(--adlr-gold))" radius={[4, 4, 0, 0]} />
@@ -89,14 +89,12 @@ export default function BusinessScreen() {
             <Tooltip contentStyle={{ background: 'rgb(var(--adlr-anthracite))', border: '1px solid rgb(var(--text) / 0.12)', borderRadius: 8, fontSize: 12 }} cursor={{ fill: 'rgb(var(--text) / 0.06)' }} />
           </BarChart>
         </ResponsiveContainer>
-      </Card>
+      </CollapsibleCard>
 
       {/* Upsell requests */}
-      <Card className="mb-5">
+      {upsells.length > 0 && <Card className="mb-4">
         <p className="text-sm font-medium text-white/80 mb-3">{t('Upsell-Anfragen')}</p>
-        {upsells.length === 0 ? (
-          <p className="text-sm text-white/30">{t('Keine Anfragen.')}</p>
-        ) : (
+        {(
           <div className="space-y-3">
             {upsells.map((u) => {
               const info = UPGRADE_LABELS[u.upgrade_key];
@@ -119,7 +117,7 @@ export default function BusinessScreen() {
             })}
           </div>
         )}
-      </Card>
+      </Card>}
 
       {/* Other income (not tied to a client package) — counted in the monthly revenue above */}
       <CollapsibleCard title={t('Sonstige Einnahmen')} subtitle={t('z. B. Gruppenkurse — ohne Klienten-Paket · {n} Einträge', { n: revenue.length })}>

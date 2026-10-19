@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, MessageSquare, TrendingUp, Users } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { useIncomingMessages } from '@/lib/chat';
@@ -11,7 +11,8 @@ import CoachQuestionsEditor from '@/components/CoachQuestionsEditor';
 
 const TABS = [
   { to: '/trainer', label: 'Übersicht', icon: LayoutDashboard, end: true },
-  { to: '/trainer/plan-builder', label: 'Plan Builder', icon: Dumbbell, end: false },
+  { to: '/trainer/klienten', label: 'Klienten', icon: Users, end: false },
+  { to: '/trainer/plan-builder', label: 'Pläne', icon: Dumbbell, end: false },
   { to: '/trainer/nachrichten', label: 'Nachrichten', icon: MessageSquare, end: false },
   { to: '/trainer/business', label: 'Business', icon: TrendingUp, end: false },
 ];

@@ -1370,6 +1370,31 @@ const dict: Record<string, string> = {
   "tauschen": "swap",
   "nur für dieses Training": "this workout only",
   "{name} ist schon in diesem Training.": "{name} is already in this workout.",
+  // ── Trainer overview inbox ──
+  "Pläne": "Plans",
+  "Trainings · Woche": "Workouts · week",
+  "Termine · Woche": "Sessions · week",
+  "Zu erledigen": "To do",
+  "Alles erledigt — deine Klienten sind auf Kurs.": "All done — your clients are on track.",
+  "{n} Klienten ohne persönliche Wochen-Nachricht": "{n} clients without a personal weekly message",
+  "{n} offene Extra-Anfragen": "{n} open extra requests",
+  "{n} neue Klienten im Onboarding": "{n} new clients in onboarding",
+  "{n} in 14 Tagen": "{n} in 14 days",
+  "keine in 14 Tagen": "none in 14 days",
+  "Wochen-Nachrichten": "Weekly messages",
+  "Keine neuen Klienten in den letzten 14 Tagen.": "No new clients in the last 14 days.",
+  // ── Clients list ──
+  "Aufmerksamkeit": "Attention",
+  "Ohne Plan": "No plan",
+  "Niemand in dieser Liste — gut so.": "Nobody on this list — good.",
+  "heute aktiv": "active today",
+  "gestern aktiv": "active yesterday",
+  "vor {n} Tagen aktiv": "active {n} days ago",
+  "Kein Plan": "No plan",
+  "Deine Angebote und Pakete": "Your offers and packages",
+  "{n} Angebote": "{n} offers",
+  "{n} Alt.": "{n} alt.",
+  "Trainingstag": "Training day",
 };
 
 export default dict;

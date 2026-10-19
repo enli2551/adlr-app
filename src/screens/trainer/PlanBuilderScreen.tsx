@@ -46,6 +46,9 @@ export default function PlanBuilderScreen() {
   // Replace an exercise in place: sets, reps, rest, superset group and intensity stay;
   // loads and the old exercise's alternatives don't carry over to a different movement.
   const [replacePicker, setReplacePicker] = useState<{ dayIdx: number; exIdx: number } | null>(null);
+  // The exercise library opens on demand (it used to sit fully open inside every day)
+  const [addPicker, setAddPicker] = useState<number | null>(null);
+  const [addedNow, setAddedNow] = useState(0);
   const [replaceErr, setReplaceErr] = useState<string | null>(null);
   const replaceExercise = async (dayIdx: number, exIdx: number, row: ExerciseRow) => {
     const day = days[dayIdx];
@@ -338,6 +341,23 @@ export default function PlanBuilderScreen() {
   };
 
   // Per-set weight/reps helpers (pyramid sets etc.)
+  // Exercise cards are compact by default (name + one summary line); tap to edit the details.
+  const [openEx, setOpenEx] = useState<Set<string>>(new Set());
+  const exKey = (dayIdx: number, exIdx: number) => `${days[dayIdx]?.id}:${exIdx}`;
+  const toggleEx = (dayIdx: number, exIdx: number) => setOpenEx((prev) => { const n = new Set(prev); const k = exKey(dayIdx, exIdx); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const exSummary = (ex: Exercise) => {
+    const sd = setDetailsOf(ex);
+    const reps = [...new Set(sd.map((d) => d.reps).filter((r) => r != null))];
+    const kgs = [...new Set(sd.map((d) => d.weight_kg).filter((w) => w != null))];
+    return [
+      `${ex.sets ?? sd.length ?? 0} × ${reps.length ? reps.join('/') : '–'}`,
+      kgs.length ? `${kgs.join('/')} kg` : null,
+      ex.rest_sec ? `${t('Pause')} ${ex.rest_sec}s` : null,
+      ex.rpe != null ? `RPE ${ex.rpe}` : ex.rir != null ? `RIR ${ex.rir}` : null,
+      (ex.alternatives ?? []).filter(Boolean).length ? t('{n} Alt.', { n: (ex.alternatives ?? []).filter(Boolean).length }) : null,
+    ].filter(Boolean).join(' · ');
+  };
+
   const setDetailsOf = (ex: Exercise): { weight_kg?: number; reps?: number }[] => {
     const n = Math.max(1, ex.sets ?? 1);
     const base = ex.set_details ?? [];
@@ -925,11 +945,16 @@ export default function PlanBuilderScreen() {
                               <Dumbbell size={14} style={{ color: 'rgb(var(--adlr-gold))' }} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white mb-2 flex items-center gap-1.5">
-                                {ex.group && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{groupLabel(day.exercises, exIdx)}</span>}
-                                <span className="min-w-0">{t(ex.name)}</span>
-                              </p>
-                              <div className="space-y-2">
+                              <button onClick={() => toggleEx(idx, exIdx)} className="adlr-tap w-full text-left" aria-expanded={openEx.has(exKey(idx, exIdx))}>
+                                <span className="text-sm font-medium text-white flex items-center gap-1.5">
+                                  {ex.group && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>{groupLabel(day.exercises, exIdx)}</span>}
+                                  <span className="min-w-0">{t(ex.name)}</span>
+                                  <ChevronDown size={13} className="text-white/30 shrink-0 transition-transform" style={{ transform: openEx.has(exKey(idx, exIdx)) ? 'rotate(180deg)' : 'none' }} />
+                                </span>
+                                {!openEx.has(exKey(idx, exIdx)) && <span className="block text-xs text-white/45 mt-0.5">{exSummary(ex)}</span>}
+                              </button>
+                              {openEx.has(exKey(idx, exIdx)) && (<>
+                              <div className="space-y-2 mt-2">
                                 <div className="grid grid-cols-2 gap-2">
                                   <div>
                                     <p className="text-[10px] text-white/40 uppercase tracking-wide mb-1 text-center">{t('Sätze')}</p>
@@ -1064,6 +1089,7 @@ export default function PlanBuilderScreen() {
                                   })}
                                 </div>
                               </div>
+                              </>)}
                             </div>
                             <div className="flex flex-col items-center gap-1 shrink-0">
                               {libByName?.get(ex.name)?.exercise_id && (
@@ -1076,6 +1102,7 @@ export default function PlanBuilderScreen() {
                                   <Play size={13} />
                                 </button>
                               )}
+                              {openEx.has(exKey(idx, exIdx)) && (<>
                               <button
                                 onClick={() => moveExercise(idx, exIdx, -1)}
                                 disabled={exIdx === 0}
@@ -1108,18 +1135,17 @@ export default function PlanBuilderScreen() {
                               >
                                 <Trash2 size={13} />
                               </button>
+                              </>)}
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* Exercise library inline — search & add from saved exercises */}
-                    <ExerciseLibrary
-                      onAdd={(ex) => addLibExercise(idx, ex)}
-                      onDemo={(ex) => setDemoEx(ex)}
-                      canAdd={true}
-                    />
+                    <button onClick={() => { setAddedNow(0); setAddPicker(idx); }} className="adlr-tap w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"
+                      style={{ background: 'rgb(var(--adlr-gold) / 0.12)', color: 'rgb(var(--adlr-gold))', border: '1px solid rgb(var(--adlr-gold) / 0.25)' }}>
+                      <Plus size={15} /> {t('Übung hinzufügen')}
+                    </button>
 
                     {showAddEx && expandedDay === idx ? (
                       <div className="rounded-xl p-3 space-y-2 adlr-fade-in" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgb(var(--text) / 0.1)' }}>
@@ -1253,6 +1279,25 @@ export default function PlanBuilderScreen() {
             <Check size={16} /> {t('Fertig — alles gespeichert')}
           </button>
         </>
+      )}
+      {addPicker !== null && createPortal(
+        <div className="fixed inset-0 z-[70] flex flex-col bg-adlr-black adlr-fade-in" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <div className="max-w-md w-full mx-auto flex flex-col flex-1 min-h-0 px-4">
+            <div className="flex items-center justify-between gap-3 py-4">
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-white truncate">{t('Übung hinzufügen')}</p>
+                <p className="text-xs text-white/45 truncate">{days[addPicker]?.workout_name || t('Trainingstag')}</p>
+              </div>
+              <button onClick={() => setAddPicker(null)} className="adlr-tap px-4 py-2 rounded-xl text-sm font-semibold shrink-0" style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>
+                {t('Fertig')}{addedNow > 0 ? ` (${addedNow})` : ''}
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pb-4">
+              <ExerciseLibrary canAdd onDemo={(ex) => setDemoEx(ex)} onAdd={(ex) => { addLibExercise(addPicker, ex); setAddedNow((n) => n + 1); }} />
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
       {replacePicker && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/70 sm:p-4" onClick={() => setReplacePicker(null)}>

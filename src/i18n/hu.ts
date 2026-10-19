@@ -1371,6 +1371,31 @@ const dict: Record<string, string> = {
   "tauschen": "csere",
   "nur für dieses Training": "csak erre az edzésre",
   "{name} ist schon in diesem Training.": "{name} már szerepel ebben az edzésben.",
+  // ── Trainer overview inbox ──
+  "Pläne": "Tervek",
+  "Trainings · Woche": "Edzés · hét",
+  "Termine · Woche": "Időpont · hét",
+  "Zu erledigen": "Teendők",
+  "Alles erledigt — deine Klienten sind auf Kurs.": "Minden kész — az ügyfeleid jó úton vannak.",
+  "{n} Klienten ohne persönliche Wochen-Nachricht": "{n} ügyfél heti üzenet nélkül",
+  "{n} offene Extra-Anfragen": "{n} nyitott extra-igénylés",
+  "{n} neue Klienten im Onboarding": "{n} új ügyfél regisztrál éppen",
+  "{n} in 14 Tagen": "{n} az elmúlt 14 napban",
+  "keine in 14 Tagen": "nincs az elmúlt 14 napban",
+  "Wochen-Nachrichten": "Heti üzenetek",
+  "Keine neuen Klienten in den letzten 14 Tagen.": "Az elmúlt 14 napban nem jött új ügyfél.",
+  // ── Clients list ──
+  "Aufmerksamkeit": "Figyelmet kér",
+  "Ohne Plan": "Terv nélkül",
+  "Niemand in dieser Liste — gut so.": "Senki sincs ebben a listában — így jó.",
+  "heute aktiv": "ma aktív",
+  "gestern aktiv": "tegnap aktív",
+  "vor {n} Tagen aktiv": "{n} napja aktív",
+  "Kein Plan": "Nincs terv",
+  "Deine Angebote und Pakete": "Ajánlataid és csomagjaid",
+  "{n} Angebote": "{n} ajánlat",
+  "{n} Alt.": "{n} alternatíva",
+  "Trainingstag": "Edzésnap",
 };
 
 export default dict;

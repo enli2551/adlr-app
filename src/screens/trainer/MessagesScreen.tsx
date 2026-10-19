@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import type { Profile, UpsellRequest } from '@/lib/types';
 import { SectionHeader, Loading, Card, Button, Input } from '@/components/ui';
 import { ArrowLeft, Star } from 'lucide-react';
-import { t, fmtTime } from '@/lib/i18n';
+import { t, fmtTime, fmtDate } from '@/lib/i18n';
 import { useChatThread } from '@/lib/chat';
 
 const TEMPLATES = [
@@ -24,6 +24,13 @@ export default function MessagesScreen() {
   const { messages, send: sendMessage } = useChatThread(activeClient);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [last, setLast] = useState<Map<string, { body: string; sender: string; sent_at: string }>>(new Map());
+  const seenKey = (id: string) => `adlr_thread_seen_${id}`;
+  const seenAt = (id: string) => { try { return Number(localStorage.getItem(seenKey(id)) || 0); } catch { return 0; } };
+  const openThread = (id: string | null) => {
+    if (id) { try { localStorage.setItem(seenKey(id), String(Date.now())); } catch { /* ignore */ } }
+    setActiveClient(id);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -33,7 +40,14 @@ export default function MessagesScreen() {
       supabase.from('profiles').select('*').eq('role', 'client').eq('trainer_id', profile.id).order('first_name'),
       supabase.from('upsell_requests').select('*, profiles!inner(first_name,last_name)').eq('profiles.trainer_id', profile.id).order('created_at', { ascending: false }),
     ]);
-    setClients((c.data ?? []) as Profile[]);
+    const list = (c.data ?? []) as Profile[];
+    setClients(list);
+    if (list.length) {
+      const { data: ms } = await supabase.from('messages').select('client_id, body, sender, sent_at').in('client_id', list.map((x) => x.id)).order('sent_at', { ascending: false }).limit(400);
+      const m = new Map<string, { body: string; sender: string; sent_at: string }>();
+      for (const r of (ms ?? []) as { client_id: string; body: string; sender: string; sent_at: string }[]) if (!m.has(r.client_id)) m.set(r.client_id, r);
+      setLast(m);
+    }
     setUpsells((u.data ?? []) as UpsellRequest[]);
     setLoading(false);
   };
@@ -53,7 +67,7 @@ export default function MessagesScreen() {
     const client = clients.find((c) => c.id === activeClient);
     return (
       <div className="adlr-fade-in">
-        <button onClick={() => setActiveClient(null)} className="flex items-center gap-2 text-white/50 text-sm mb-4 adlr-tap">
+        <button onClick={() => { openThread(activeClient); setActiveClient(null); load(); }} className="flex items-center gap-2 text-white/50 text-sm mb-4 adlr-tap">
           <ArrowLeft size={16} /> {t('Inbox')}
         </button>
         <div className="flex items-center gap-3 mb-4">
@@ -63,7 +77,7 @@ export default function MessagesScreen() {
           <p className="font-semibold text-white">{client?.first_name} {client?.last_name}</p>
         </div>
         <Card className="p-0 overflow-hidden">
-          <div ref={scrollRef} className="h-72 overflow-y-auto px-5 py-3 space-y-3">
+          <div ref={scrollRef} className="overflow-y-auto px-5 py-3 space-y-3" style={{ height: 'calc(100dvh - 22rem)', minHeight: '16rem' }}>
             {messages.length === 0 && <p className="text-sm text-white/30 text-center py-12">{t('Noch keine Nachrichten.')}</p>}
             {messages.map((m) => (
               <div key={m.id} className={`flex ${m.sender === 'trainer' ? 'justify-end' : 'justify-start'}`}>
@@ -113,25 +127,41 @@ export default function MessagesScreen() {
       {clients.length === 0 ? (
         <p className="text-sm text-white/30 text-center py-12">{t('Noch keine Klienten.')}</p>
       ) : (
-        <div className="space-y-2">
-          {clients.map((c) => {
+        <div className="adlr-card overflow-hidden">
+          {[...clients].sort((x, y) => (last.get(y.id)?.sent_at ?? '').localeCompare(last.get(x.id)?.sent_at ?? '')).map((c, i) => {
             const uCount = clientUpsells(c.id).filter((u) => u.status === 'pending').length;
+            const lm = last.get(c.id);
+            const unread = !!lm && lm.sender === 'client' && new Date(lm.sent_at).getTime() > seenAt(c.id);
             return (
-              <Card key={c.id} onClick={() => setActiveClient(c.id)}>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold font-bold">
-                    {(c.first_name?.[0] ?? '?').toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white">{c.first_name} {c.last_name}</p>
-                    {uCount > 0 && <p className="text-xs text-adlr-gold">{t(uCount > 1 ? '{n} Upsell-Anfragen' : '{n} Upsell-Anfrage', { n: uCount })}</p>}
-                  </div>
+              <button key={c.id} onClick={() => openThread(c.id)} className="adlr-tap w-full flex items-center gap-3 px-4 py-3 text-left" style={i > 0 ? { borderTop: '1px solid rgb(var(--text) / 0.05)' } : undefined}>
+                <div className="w-10 h-10 rounded-full bg-adlr-gold/20 border border-adlr-gold/30 flex items-center justify-center text-adlr-gold font-bold overflow-hidden shrink-0">
+                  {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-full h-full object-cover" /> : (c.first_name?.[0] ?? '?').toUpperCase()}
                 </div>
-              </Card>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <p className={`text-sm truncate flex-1 ${unread ? 'font-bold text-white' : 'font-medium text-white/90'}`}>{c.first_name} {c.last_name}</p>
+                    {lm && <span className={`text-[11px] shrink-0 ${unread ? 'text-adlr-gold' : 'text-white/35'}`}>{when(lm.sent_at)}</span>}
+                  </div>
+                  <p className={`text-xs truncate ${unread ? 'text-white/80' : 'text-white/40'}`}>
+                    {uCount > 0 ? <span className="text-adlr-gold">{t(uCount > 1 ? '{n} Upsell-Anfragen' : '{n} Upsell-Anfrage', { n: uCount })} · </span> : null}
+                    {lm ? `${lm.sender === 'trainer' ? t('Du') + ': ' : ''}${lm.body.replace(/\s+/g, ' ')}` : t('Noch keine Nachrichten.')}
+                  </p>
+                </div>
+                {unread && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: 'rgb(var(--adlr-gold))' }} />}
+              </button>
             );
           })}
         </div>
       )}
     </div>
   );
+}
+
+function when(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return fmtTime(iso);
+  const days = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (days < 7) return fmtDate(iso, { weekday: 'short' });
+  return fmtDate(iso, { day: 'numeric', month: 'short' });
 }
