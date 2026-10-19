@@ -1408,6 +1408,10 @@ const dict: Record<string, string> = {
   "Beenden": "Lezárás",
   "Noch nichts fällig — wird pro Einheit abgerechnet": "Még semmi nem esedékes — alkalmanként számolva",
   "Noch nichts fällig": "Még semmi nem esedékes",
+  // ── Push notifications ──
+  "Nachrichten & Termine": "Üzenetek és időpontok",
+  "Chat, Check-ins und Termine von deinem Coach": "Chat, check-inek és időpontok az edződtől",
+  "Training konnte nicht gestartet werden": "Az edzést nem sikerült elindítani",
 };
 
 export default dict;

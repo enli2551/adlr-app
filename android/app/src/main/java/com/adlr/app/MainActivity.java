@@ -7,6 +7,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(RestChronoPlugin.class);
+        registerPlugin(PushSupportPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -7,6 +7,7 @@ import { SectionHeader, Loading, Card, Button, Input } from '@/components/ui';
 import { ArrowLeft, Star } from 'lucide-react';
 import { t, fmtTime, fmtDate } from '@/lib/i18n';
 import { useChatThread } from '@/lib/chat';
+import { useSearchParams } from 'react-router-dom';
 
 const TEMPLATES = [
   'Alles klar. Wir machen das.',
@@ -20,6 +21,7 @@ export default function MessagesScreen() {
   const [clients, setClients] = useState<Profile[]>([]);
   const [upsells, setUpsells] = useState<UpsellRequest[]>([]);
   const [params] = useSearchParams();
+  // ?client=<id> opens that thread directly (push notification tap).
   const [activeClient, setActiveClient] = useState<string | null>(() => params.get('client'));
   const { messages, send: sendMessage } = useChatThread(activeClient);
   const [text, setText] = useState('');
@@ -53,6 +55,7 @@ export default function MessagesScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
+  useEffect(() => { const c = params.get('client'); if (c) setActiveClient(c); }, [params]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }); }, [messages]);
 
   const send = async () => {

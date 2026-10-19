@@ -1407,6 +1407,10 @@ const dict: Record<string, string> = {
   "Beenden": "End",
   "Noch nichts fällig — wird pro Einheit abgerechnet": "Nothing due yet — billed per session",
   "Noch nichts fällig": "Nothing due yet",
+  // ── Push notifications ──
+  "Nachrichten & Termine": "Messages & sessions",
+  "Chat, Check-ins und Termine von deinem Coach": "Chat, check-ins and sessions from your coach",
+  "Training konnte nicht gestartet werden": "Workout could not be started",
 };
 
 export default dict;
