@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile, UpsellRequest } from '@/lib/types';
@@ -18,7 +19,8 @@ export default function MessagesScreen() {
   const { profile } = useAuth();
   const [clients, setClients] = useState<Profile[]>([]);
   const [upsells, setUpsells] = useState<UpsellRequest[]>([]);
-  const [activeClient, setActiveClient] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [activeClient, setActiveClient] = useState<string | null>(() => params.get('client'));
   const { messages, send: sendMessage } = useChatThread(activeClient);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);

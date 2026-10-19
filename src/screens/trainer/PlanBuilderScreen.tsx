@@ -8,7 +8,7 @@ import { Plus, Trash2, Copy, X, Search, Dumbbell, Play, ChevronDown, ChevronUp, 
 import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary';
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import AiPlanSheet, { type AiPlanResult } from '@/components/AiPlanSheet';
 import ProgramEditor from '@/components/ProgramEditor';
 import { Sparkles } from 'lucide-react';
@@ -32,6 +32,9 @@ export default function PlanBuilderScreen() {
   // Per plan: clients it is active for, whether it was ever assigned, size — for the grouped list.
   const [meta, setMeta] = useState<Map<string, PlanMeta>>(new Map());
   const [selectedClientId, setSelectedClientId] = useState('');
+  const navigate = useNavigate();
+  // Opened from a client's page: preselect them and go back there afterwards.
+  const returnClient = useRef<string | null>(null);
   const [assignSuccess, setAssignSuccess] = useState(false);
   const [assignError, setAssignError] = useState(false);
   const [expandedDay, setExpandedDay] = useState<number | null>(0);
@@ -108,6 +111,15 @@ export default function PlanBuilderScreen() {
     }
     setMeta(m);
     setPlans(planList);
+    // Deep link from the client page ("Plan bearbeiten")
+    const want = params.get('plan');
+    if (want) {
+      const from = params.get('client');
+      if (from) { returnClient.current = from; setSelectedClientId(from); }
+      params.delete('plan'); params.delete('client'); setParams(params, { replace: true });
+      const target = planList.find((p) => p.id === want);
+      if (target) selectPlan(target);
+    }
     setClients((cl ?? []) as Profile[]);
     setLoading(false);
   };
@@ -125,6 +137,12 @@ export default function PlanBuilderScreen() {
   // Leaving the editor: a plan that is still completely empty and was never assigned is
   // dropped right away (tapping "Neuer Plan" and going back used to leave it behind).
   const backToList = async () => {
+    if (returnClient.current) {
+      const c = returnClient.current;
+      returnClient.current = null;
+      navigate(`/trainer/klienten?client=${c}`);
+      return;
+    }
     const p = activePlan;
     setMode('list');
     setActivePlan(null);

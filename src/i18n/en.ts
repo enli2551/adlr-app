@@ -1331,6 +1331,22 @@ const dict: Record<string, string> = {
   "Wiederherstellen": "Restore",
   "{n} leere Pläne löschen?": "Delete {n} empty plans?",
   "Entwürfe, Kopien und Pläne, die gerade niemand hat.": "Drafts, copies and plans nobody has right now.",
+  // ── Client page (tabs, plan card) ──
+  "Überblick": "Overview",
+  "Nachricht": "Message",
+  "Kontakt": "Contact",
+  "Dabei seit": "Member since",
+  "Wechseln": "Switch",
+  "Woche {n} von {total}": "Week {n} of {total}",
+  "Der Plan hat noch keine Übungen.": "The plan has no exercises yet.",
+  "Anderen Plan": "Other plan",
+  "{name} hat noch keinen Plan": "{name} has no plan yet",
+  "Weise einen bestehenden Plan zu oder lass einen Entwurf von der KI erstellen.": "Assign an existing plan or let the AI draft one.",
+  "Mit KI": "With AI",
+  "Wird sofort der aktive Plan von {name}.": "Becomes {name}'s active plan right away.",
+  "Plan suchen": "Search plans",
+  "aktuell aktiv": "currently active",
+  "Training {n}": "Workout {n}",
 };
 
 export default dict;

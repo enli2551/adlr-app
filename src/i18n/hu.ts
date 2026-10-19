@@ -1332,6 +1332,22 @@ const dict: Record<string, string> = {
   "Wiederherstellen": "Visszaállítás",
   "{n} leere Pläne löschen?": "Törlöd a(z) {n} üres tervet?",
   "Entwürfe, Kopien und Pläne, die gerade niemand hat.": "Vázlatok, másolatok és tervek, amelyek most senkinél sincsenek.",
+  // ── Client page (tabs, plan card) ──
+  "Überblick": "Áttekintés",
+  "Nachricht": "Üzenet",
+  "Kontakt": "Elérhetőség",
+  "Dabei seit": "Tag óta",
+  "Wechseln": "Csere",
+  "Woche {n} von {total}": "{n}. hét / {total}",
+  "Der Plan hat noch keine Übungen.": "A tervben még nincs gyakorlat.",
+  "Anderen Plan": "Másik terv",
+  "{name} hat noch keinen Plan": "{name} még nem kapott tervet",
+  "Weise einen bestehenden Plan zu oder lass einen Entwurf von der KI erstellen.": "Ossz ki egy meglévő tervet, vagy készíttess vázlatot az AI-jal.",
+  "Mit KI": "AI-jal",
+  "Wird sofort der aktive Plan von {name}.": "Azonnal ez lesz {name} aktív terve.",
+  "Plan suchen": "Terv keresése",
+  "aktuell aktiv": "jelenleg aktív",
+  "Training {n}": "{n}. edzés",
 };
 
 export default dict;
