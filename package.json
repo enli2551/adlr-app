@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "deploy:web": "node scripts/deploy-web.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {

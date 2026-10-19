@@ -4,30 +4,32 @@ The trainer side works in a desktop browser (≥1024px: sidebar + side-by-side p
 Phones keep the app layout. Clients stay on the mobile app; the client UI is not
 designed for desktop.
 
-**Host: Cloudflare Pages.** Nothing is deployed yet; the domain is still open.
+**Live:** https://adlr-coach.pages.dev (Cloudflare Pages project `adlr-coach`, classic
+Pages, direct upload; first deploy 2026-10-19). No custom domain yet.
 
-## Prerequisite
+## Deploy
 
-`main` must be pushed to GitHub (`enli2551/adlr-app`), because Pages builds from the repo.
+```
+npm run deploy:web
+```
 
-## Cloudflare Pages setup (one time)
+`scripts/deploy-web.mjs` builds with `VITE_INVITE_URL=https://adlr-coach.pages.dev/auth`
+and uploads `dist/` with wrangler. It uses the local `.env` for the Supabase values,
+so nothing is stored in Cloudflare. The invite URL is only set for the web build, and
+the native app build is unchanged.
 
-1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git →
-   pick `enli2551/adlr-app`, production branch `main`.
-2. Build settings:
-   - Framework preset: Vite (or None)
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-3. Environment variables (Production, and Preview if previews should work):
-   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (same values as `.env`)
-   - `NODE_VERSION` = `22`
-   - optional: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_URL` for
-     source-map upload (error tracking itself is built in)
-4. Save and deploy. The first URL is `https://<project>.pages.dev`; test login there.
-5. Custom domain: Pages project → Custom domains → add e.g. `app.<your-domain>`
-   (easiest when the domain's DNS is already on Cloudflare).
+The first time on a machine, run `npx wrangler@4 login`. If the browser opens a
+profile that is not logged in to Cloudflare, copy the printed URL into the right one.
 
-Every push to `main` then redeploys automatically; other branches get preview URLs.
+Notes:
+- The project was created with `wrangler pages project create --force`. Current wrangler
+  versions otherwise redirect "Pages" to Workers, which gives a `workers.dev` address.
+  Deploys to the existing project do not need `--force`.
+- This is a direct-upload project, so it does not deploy on git push. Cloudflare cannot
+  switch a direct-upload project to Git integration later. Automatic deploys from GitHub
+  would need a new Pages project created from the dashboard with "Connect to Git"
+  (build command `npm run build`, output `dist`, env `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY`, `VITE_INVITE_URL`, `NODE_VERSION=22`).
 
 ## SPA routing and caching
 
@@ -36,31 +38,22 @@ Every push to `main` then redeploys automatically; other branches get preview UR
   Do not add a `/* /index.html 200` rule to `_redirects`. Pages treats it as an
   infinite loop and ignores it.
 - `public/_headers` gives the hashed files in `/assets/*` a one-year immutable cache.
+  It also ends up in the native app bundle after `cap sync`, where it is ignored.
 - `vercel.json` is only a fallback in case the host changes later.
-- `public/_headers` also ends up in the native app bundle after `cap sync`, where it is
-  ignored.
-- Limits are fine: ~420 files, the largest ~450 KB (Pages allows 20,000 files of up to
-  25 MiB each).
 
 ## Supabase Auth settings (Dashboard → Authentication → URL Configuration)
 
-- **Site URL**: leave as is if the app relies on it today; otherwise `https://<domain>`.
-  Sign-up confirmation e-mails (if "Confirm email" is on) link to the Site URL.
-- **Redirect URLs**: add `https://<domain>/**` and `https://*.<project>.pages.dev/**`
-  (previews).
+- **Redirect URLs**: add `https://adlr-coach.pages.dev/**` (and later the custom domain).
+- **Site URL**: leave as is if the app relies on it today. Sign-up confirmation e-mails
+  (if "Confirm email" is on) link to the Site URL.
 - Password reset uses the 6-digit code (`{{ .Token }}`), not a link, so it works on the
   web without extra setup.
 - `src/lib/supabase.ts` has `detectSessionInUrl: false` (native app). E-mail links that
   carry a session in the URL (magic link, confirm-and-login) will not log the user in on
-  the web. They land on `/auth` and the trainer logs in with the password. Change this
-  only if magic links are wanted on the web.
+  the web. They land on `/auth` and the trainer logs in with the password.
 
-## After the domain exists
+## Custom domain later
 
-- Set `VITE_INVITE_URL=https://<domain>/auth` in the Pages environment variables
-  (`src/lib/invite.ts`) to turn on invite links, then redeploy.
-
-## Open decisions
-
-1. Domain: e.g. `app.<your-domain>` or `coach.<your-domain>`.
-2. Whether clients may also use the web build (today: trainer side only).
+Pages project → Custom domains → add e.g. `app.<your-domain>`. Then update `SITE` in
+`scripts/deploy-web.mjs` and the Supabase redirect URLs, and redeploy. The
+`pages.dev` address keeps working, so invite links that were already sent stay valid.
