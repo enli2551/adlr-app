@@ -4,6 +4,7 @@ import { UserPlus, Copy, Share2, Check, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
+import { copyText, inviteText, shareInvite } from '@/lib/invite';
 
 function Sheet({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return createPortal(
@@ -33,14 +34,9 @@ export function InviteClientsButton() {
     else setCode(data as string);
   };
 
-  const text = code ? t('Trainiere mit mir in der ADLR-App! Lade die App herunter und gib beim Registrieren meinen Code ein: {code}', { code }) : '';
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
-  };
-  const share = async () => {
-    const nav = navigator as Navigator & { share?: (d: { title?: string; text?: string }) => Promise<void> };
-    if (nav.share) { try { await nav.share({ title: 'ADLR', text }); } catch { /* cancelled */ } } else copy();
-  };
+  const flashCopied = () => { setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const copy = async () => { if (code && await copyText(inviteText(code))) flashCopied(); };
+  const share = async () => { if (code && await shareInvite(code) === 'copied') flashCopied(); };
 
   return (
     <>

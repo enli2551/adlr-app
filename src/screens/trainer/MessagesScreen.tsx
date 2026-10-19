@@ -7,7 +7,6 @@ import { SectionHeader, Loading, Card, Button, Input } from '@/components/ui';
 import { ArrowLeft, Star } from 'lucide-react';
 import { t, fmtTime, fmtDate } from '@/lib/i18n';
 import { useChatThread } from '@/lib/chat';
-import { useSearchParams } from 'react-router-dom';
 
 const TEMPLATES = [
   'Alles klar. Wir machen das.',

@@ -19,6 +19,8 @@ export interface Profile {
   lang?: string | null; // client's app language (de/en/hu), synced by the app
   is_master?: boolean; // trainer: may assign clients who signed up without an invite code
   pro_until?: string | null; // ADLR Pro entitlement (athletes without a coach)
+  coach_onboarded_at?: string | null; // trainer: setup wizard finished/skipped (absent = migration not run)
+  coach_onboarding?: import('@/lib/coachOnboarding').CoachOnboardingState; // trainer: wizard progress
   email: string | null;
   phone: string | null;
   avatar_url: string | null;

@@ -9,6 +9,7 @@ import BottomSheet from '@/components/BottomSheet';
 import WeeklyMessagesCard from '@/components/WeeklyMessagesCard';
 import ChallengeCard from '@/components/ChallengeCard';
 import MasterAssignCard from '@/components/MasterAssignCard';
+import CoachChecklistCard from '@/components/CoachChecklistCard';
 import { computeAttention, type AttentionItem, type AttentionKind } from '@/lib/attention';
 import { t, fmtDate } from '@/lib/i18n';
 
@@ -82,6 +83,7 @@ export default function OverviewScreen() {
   return (
     <div className="adlr-fade-in">
       <SectionHeader title={t('Übersicht')} subtitle={(profile?.first_name ? t('Willkommen zurück, {name}.', { name: profile.first_name }) : t('Willkommen zurück.'))} />
+      <CoachChecklistCard />
       {/* Three numbers, tappable */}
       <div className="grid grid-cols-3 gap-2 mb-5">
         <Kpi value={clients.length} label={t('Klienten')} onClick={() => nav('/trainer/klienten')} accent />

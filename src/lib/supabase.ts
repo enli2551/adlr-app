@@ -95,7 +95,7 @@ export const supabase = createClient(url, anonKey, {
     // Native app: there's no OAuth redirect URL to parse from capacitor://.
     detectSessionInUrl: false,
     // Bypass the Web Locks API (navigator.locks), which misbehaves in the iOS WKWebView.
-    lock: (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
+    lock: <R,>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
   },
 });
 

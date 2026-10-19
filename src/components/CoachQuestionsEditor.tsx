@@ -31,11 +31,11 @@ const SUGGESTIONS: Record<QuestionContext, { label: string; kind: QuestionKind; 
 
 /** Trainer menu → "Eigene Fragen": extra questions for the intake and the weekly check-in.
  *  Rendered outside the account menu (the menu closes on outside clicks, the sheet is a portal). */
-export default function CoachQuestionsEditor({ onClose }: { onClose: () => void }) {
+export default function CoachQuestionsEditor({ onClose, initialContext = 'intake' }: { onClose: () => void; initialContext?: QuestionContext }) {
   const { profile } = useAuth();
   const open = true;
   const setOpen = (v: boolean) => { if (!v) onClose(); };
-  const [ctx, setCtx] = useState<QuestionContext>('intake');
+  const [ctx, setCtx] = useState<QuestionContext>(initialContext);
   const [rows, setRows] = useState<CoachQuestion[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
