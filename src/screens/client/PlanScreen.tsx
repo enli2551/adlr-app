@@ -19,6 +19,7 @@ import { ExerciseDemoModal as LibDemoModal, hasDemo, ExerciseLibrary } from '@/c
 import { fetchExercises, isGymDependent, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { haptic } from '@/lib/haptics';
+import { captureError } from '@/lib/monitoring';
 import { localDateKey } from '@/lib/dates';
 import { syncSessionReminders } from '@/lib/sessionReminders';
 import { requestNotificationPermission } from '@/lib/restTimerNotifications';
@@ -573,12 +574,24 @@ export default function PlanScreen() {
   };
 
   // Several Studios known → ask where today's session happens before it starts.
+  const [startErr, setStartErr] = useState<string | null>(null);
+  const safeRun = (run: (g: string | null) => void, g: string | null) => {
+    try { setStartErr(null); run(g); } catch (e) {
+      captureError(e, { action: 'start_training' });
+      setStartErr(`${t('Training konnte nicht gestartet werden')}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const requestStart = (run: (g: string | null) => void) => {
-    if (activeDayIdx === null && knownGyms.length >= 2) {
-      setGymStart({ run });
-      setGymSheet(true);
-    } else {
-      run(gym);
+    try {
+      if (activeDayIdx === null && knownGyms.length >= 2) {
+        setGymStart({ run });
+        setGymSheet(true);
+      } else {
+        safeRun(run, gym);
+      }
+    } catch (e) {
+      captureError(e, { action: 'request_start' });
+      setStartErr(`${t('Training konnte nicht gestartet werden')}: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -1012,6 +1025,7 @@ export default function PlanScreen() {
             <p className="text-xs text-white/45">{t('Außerhalb des Plans — Übungen selbst wählen')}</p>
           </div>
         </button>
+        {startErr && <p className="text-xs text-red-400 mt-2 break-words">{startErr}</p>}
         {myPlansOpen && <MyPlans onClose={() => setMyPlansOpen(false)} onChanged={load} />}
       </div>
     );
@@ -1066,7 +1080,7 @@ export default function PlanScreen() {
       const { run } = gymStart;
       setGymStart(null);
       setGym(g);
-      run(g);
+      safeRun(run, g);
     } else {
       changeGym(g);
     }
@@ -1309,6 +1323,7 @@ export default function PlanScreen() {
             <span className="flex items-center gap-2 text-white/80"><Shuffle size={15} className="text-adlr-gold" /> {t('Freies Training')}</span>
             <span className="flex items-center gap-1 text-xs text-white/40">{t('außerhalb des Plans')} <ChevronRight size={14} /></span>
           </button>
+          {startErr && <p className="text-xs text-red-400 mt-2 break-words">{startErr}</p>}
           {solo && (
             <button
               onClick={() => setMyPlansOpen(true)}
