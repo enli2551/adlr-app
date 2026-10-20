@@ -1531,6 +1531,8 @@ const dict: Record<string, string> = {
   "1 Messlöffel": "1 scoop",
   "1 Dose": "1 can",
   "1 Krügerl": "1 pint (0.5 l)",
+  "An diesem Tag nichts eingetragen.": "Nothing logged that day.",
+  "Was {name} gegessen hat": "What {name} ate",
 };
 
 export default dict;

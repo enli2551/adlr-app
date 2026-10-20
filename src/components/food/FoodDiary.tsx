@@ -9,7 +9,7 @@ import { haptic } from '@/lib/haptics';
 import { t, fmtNum, fmtDate } from '@/lib/i18n';
 
 /** Client Ernährung: what I ate, per meal — add from search/barcode, tap to change or delete. */
-export default function FoodDiary({ clientId, onChanged }: { clientId: string; onChanged?: () => void }) {
+export default function FoodDiary({ clientId, onChanged, readOnly = false }: { clientId: string; onChanged?: () => void; readOnly?: boolean }) {
   const [day, setDay] = useState(localDateKey(new Date()));
   const [logs, setLogs] = useState<FoodLog[] | null>(null);
   const [missing, setMissing] = useState(false);
@@ -33,9 +33,9 @@ export default function FoodDiary({ clientId, onChanged }: { clientId: string; o
 
   const total = sumLogs(logs ?? []);
   return (
-    <div className="adlr-card p-4 mb-4">
+    <div className={readOnly ? 'pb-2' : 'adlr-card p-4 mb-4'}>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-white/85 flex items-center gap-2"><Utensils size={16} className="text-adlr-gold" /> {t('Ernährungstagebuch')}</p>
+        <p className="text-sm font-medium text-white/85 flex items-center gap-2"><Utensils size={16} className="text-adlr-gold" /> {readOnly ? '' : t('Ernährungstagebuch')}</p>
         <div className="flex items-center gap-1">
           <button onClick={() => shift(-1)} aria-label={t('Vortag')} className="adlr-tap p-1 text-white/45"><ChevronLeft size={16} /></button>
           <span className="text-xs text-white/60 min-w-[4.5rem] text-center">{day === today ? t('Heute') : fmtDate(`${day}T12:00:00`, { weekday: 'short', day: 'numeric', month: 'numeric' })}</span>
@@ -54,12 +54,12 @@ export default function FoodDiary({ clientId, onChanged }: { clientId: string; o
                 <span className="text-sm font-semibold text-white">{t(m.label)}</span>
                 <span className="text-xs text-white/40">{items.length ? `${fmtNum(sum.kcal)} kcal` : ''}</span>
               </button>
-              <button onClick={() => setSearchFor(m.id)} aria-label={t('Hinzufügen')} className="adlr-tap w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}><Plus size={16} /></button>
+              {!readOnly && <button onClick={() => setSearchFor(m.id)} aria-label={t('Hinzufügen')} className="adlr-tap w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgb(var(--adlr-gold) / 0.14)', color: 'rgb(var(--adlr-gold))' }}><Plus size={16} /></button>}
             </div>
             {items.length > 0 && isOpen && (
               <div className="mt-1">
                 {items.map((l) => (
-                  <button key={l.id} onClick={() => setEditing(l)} className="adlr-tap w-full flex items-center gap-2 py-1.5 text-left">
+                  <button key={l.id} onClick={() => { if (!readOnly) setEditing(l); }} className="adlr-tap w-full flex items-center gap-2 py-1.5 text-left">
                     <span className="flex-1 min-w-0 text-[13px] text-white/75 truncate">{l.name}{l.brand ? <span className="text-white/35"> · {l.brand}</span> : null}</span>
                     <span className="text-[11px] text-white/40 shrink-0">{fmtNum(Number(l.amount_g))} g · {fmtNum(Number(l.kcal))} kcal</span>
                   </button>
@@ -73,6 +73,7 @@ export default function FoodDiary({ clientId, onChanged }: { clientId: string; o
         );
       })}
 
+      {readOnly && logs && logs.length === 0 && <p className="text-xs text-white/40 text-center py-3">{t('An diesem Tag nichts eingetragen.')}</p>}
       {logs && logs.length > 0 && (
         <div className="grid grid-cols-4 gap-1.5 pt-3" style={{ borderTop: '1px solid rgb(var(--text) / 0.05)' }}>
           {([['kcal', total.kcal, ''], ['Protein', total.protein_g, ' g'], ['KH', total.carbs_g, ' g'], ['Fett', total.fat_g, ' g']] as const).map(([l, v, u]) => (

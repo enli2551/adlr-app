@@ -1532,6 +1532,8 @@ const dict: Record<string, string> = {
   "1 Messlöffel": "1 adagolókanál",
   "1 Dose": "1 doboz",
   "1 Krügerl": "1 korsó (0,5 l)",
+  "An diesem Tag nichts eingetragen.": "Ezen a napon nincs bejegyzés.",
+  "Was {name} gegessen hat": "Mit evett {name}",
 };
 
 export default dict;
