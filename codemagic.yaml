@@ -55,8 +55,16 @@ workflows:
           if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
             echo "CERTIFICATE_PRIVATE_KEY missing: add it to the ios_signing env group" >&2; exit 1
           fi
+          # Stored as ONE base64 line (pasting a multi-line PEM into the UI loses the
+          # line breaks); a plain PEM still works.
           set +x
-          printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" > /tmp/adlr_cert_key.pem
+          case "$CERTIFICATE_PRIVATE_KEY" in
+            *BEGIN*) printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" > /tmp/adlr_cert_key.pem ;;
+            *) printf '%s' "$CERTIFICATE_PRIVATE_KEY" | tr -d ' \r\n' | base64 --decode > /tmp/adlr_cert_key.pem ;;
+          esac
+          if ! openssl rsa -check -noout -in /tmp/adlr_cert_key.pem >/dev/null 2>&1; then
+            echo "CERTIFICATE_PRIVATE_KEY is not a valid RSA key (paste the one-line base64 value)" >&2; exit 1
+          fi
           set -x
           # Reuse the certificate made from that key (created on the first run only) and
           # create/download the App Store provisioning profile for the bundle id.
