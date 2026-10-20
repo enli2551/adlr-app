@@ -1533,6 +1533,16 @@ const dict: Record<string, string> = {
   "1 Krügerl": "1 pint (0.5 l)",
   "An diesem Tag nichts eingetragen.": "Nothing logged that day.",
   "Was {name} gegessen hat": "What {name} ate",
+  "1 Stück (mittel)": "1 piece (medium)",
+  "1 Stück (groß)": "1 piece (large)",
+  "1 Stück (klein)": "1 piece (small)",
+  "1 Filet": "1 fillet",
+  "1 Portion": "1 serving",
+  "1 Becher": "1 cup (container)",
+  "1 Tasse": "1 cup",
+  "1 Laibchen": "1 patty",
+  "1 Würstchen": "1 sausage",
+  "1 Riegel": "1 bar",
 };
 
 export default dict;

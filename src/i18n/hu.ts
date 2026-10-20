@@ -1534,6 +1534,16 @@ const dict: Record<string, string> = {
   "1 Krügerl": "1 korsó (0,5 l)",
   "An diesem Tag nichts eingetragen.": "Ezen a napon nincs bejegyzés.",
   "Was {name} gegessen hat": "Mit evett {name}",
+  "1 Stück (mittel)": "1 db (közepes)",
+  "1 Stück (groß)": "1 db (nagy)",
+  "1 Stück (klein)": "1 db (kicsi)",
+  "1 Filet": "1 filé",
+  "1 Portion": "1 adag",
+  "1 Becher": "1 pohár",
+  "1 Tasse": "1 bögre",
+  "1 Laibchen": "1 pogácsa (fasírt)",
+  "1 Würstchen": "1 virsli",
+  "1 Riegel": "1 szelet (rúd)",
 };
 
 export default dict;

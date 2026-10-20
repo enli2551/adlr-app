@@ -58,12 +58,40 @@ export function mealNow(d = new Date()): Meal {
 }
 
 // ── Built-in basic foods ─────────────────────────────────────────────────────
-let baseCache: BaseRow[] | null = null;
-async function baseFoods(): Promise<BaseRow[]> {
-  if (!baseCache) baseCache = (await import('@/data/foodsBase')).default;
+// Hand-curated staples (foodsBase) first, then ~4000 USDA SR Legacy foods (foodsUsda).
+type Searchable = BaseRow & { hay: string; curated: boolean };
+let baseCache: Searchable[] | null = null;
+async function baseFoods(): Promise<Searchable[]> {
+  if (!baseCache) {
+    const [base, usda] = await Promise.all([import('@/data/foodsBase'), import('@/data/foodsUsda')]);
+    const mk = (r: BaseRow, curated: boolean): Searchable => ({ ...r, curated, hay: norm(`${r.de} ${r.en} ${r.hu} ${r.tags ?? ''}`) });
+    baseCache = [
+      ...base.default.map((r) => mk(r, true)),
+      ...usda.default.map(([id, de, hu, en, k, p, c, f, s, sl]) => mk({ id, de, en, hu, k, p, c, f, s, sl }, false)),
+    ];
+  }
   return baseCache;
 }
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+// Austrian/German variants: "hähnchenbrust" also finds "Hühnerbrust", "faschiertes" finds "Hack…".
+const SYNONYMS = [
+  ['hahnchen', 'huhner', 'huhn', 'hendl'], ['faschiert', 'hack'], ['topfen', 'quark'], ['paradeiser', 'tomate'],
+  ['erdapfel', 'kartoffel'], ['karfiol', 'blumenkohl'], ['schlagobers', 'schlagsahne'], ['obers', 'sahne'], ['marille', 'aprikose'],
+  ['kren', 'meerrettich'], ['fisolen', 'grune bohnen'], ['schwammerl', 'pilz', 'champignon'], ['kukuruz', 'mais'],
+  ['ribisel', 'johannisbeere'], ['zwetschke', 'pflaume'], ['melanzani', 'aubergine'], ['semmel', 'brotchen'], ['germ', 'hefe'],
+  ['eierschwammerl', 'pfifferling'], ['vogerlsalat', 'feldsalat'], ['kohlsprossen', 'rosenkohl'], ['heidelbeere', 'blaubeere'],
+  ['puten', 'pute', 'truthahn'],
+];
+function variants(w: string): string[] {
+  if (w.length < 3) return [w];
+  let best: { grp: string[]; s: string } | null = null;
+  for (const grp of SYNONYMS) for (const s of grp) {
+    if (w.startsWith(s) && (!best || s.length > best.s.length)) best = { grp, s };
+  }
+  if (best) { const rest = w.slice(best.s.length); return [w, ...best.grp.map((x) => x + rest)]; }
+  const partial = SYNONYMS.find((grp) => grp.some((s) => s.startsWith(w)));
+  return partial ? [w, ...partial] : [w];
+}
 const baseToFood = (r: BaseRow): Food => {
   const lang = getLang();
   return {
@@ -76,12 +104,15 @@ export async function searchBase(q: string, limit = 25): Promise<Food[]> {
   const rows = await baseFoods();
   const words = norm(q).split(/\s+/).filter(Boolean);
   if (!words.length) return [];
+  const groups = words.map(variants);
+  const lang = getLang();
   const scored: { r: BaseRow; score: number }[] = [];
   for (const r of rows) {
-    const hay = norm(`${r.de} ${r.en} ${r.hu} ${r.tags ?? ''}`);
-    if (!words.every((w) => hay.includes(w))) continue;
-    const own = norm(getLang() === 'hu' ? r.hu : getLang() === 'en' ? r.en : r.de);
-    scored.push({ r, score: (own.startsWith(words[0]) ? 0 : 1) + own.length / 100 });
+    if (!groups.every((g) => g.some((w) => r.hay.includes(w)))) continue;
+    const own = norm(lang === 'hu' ? r.hu : lang === 'en' ? r.en : r.de);
+    const starts = groups[0].some((w) => own.startsWith(w));
+    const inOwn = groups.every((g) => g.some((w) => own.includes(w)));
+    scored.push({ r, score: (starts ? 0 : 1) + (inOwn ? 0 : 1) + (r.curated ? 0 : 1) + own.length / 100 });
   }
   return scored.sort((a, b) => a.score - b.score).slice(0, limit).map((x) => baseToFood(x.r));
 }
