@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Dumbbell, Footprints, Clock, Scale, HeartPulse, Trash2, StickyNote, Utensils, Pencil } from 'lucide-react';
 import { suggestKcalTarget, fmtKcal } from '@/lib/nutrition';
 import { supabase } from '@/lib/supabase';
+import { withDiary } from '@/lib/food';
+import MacroTargetsEditor from '@/components/food/MacroTargetsEditor';
 import { localDateKey } from '@/lib/dates';
 import { computeAttention, type AttentionItem } from '@/lib/attention';
 import type { Profile, WorkoutCompletion, ExerciseSetLog, ProgressEntry, ClientPlan } from '@/lib/types';
@@ -75,7 +77,7 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
         computeAttention([client]).catch(() => [] as AttentionItem[]),
       ]);
       setTarget(((pd.data ?? []) as { is_rest_day: boolean }[]).filter((d) => !d.is_rest_day).length);
-      setHealthRows((hd.data ?? []) as { day: string; kcal_in: number | null; updated_at: string }[]);
+      setHealthRows(await withDiary(client.id, (hd.data ?? []) as { day: string; kcal_in: number | null; updated_at: string }[], since, localDateKey(new Date())));
       setTags(att);
     })();
     loadNotes();
@@ -291,6 +293,7 @@ export default function ClientSummary({ client, completions, setLogs, entries, a
           </div>
         </div>
         {kcalErr && <p className="text-xs text-red-400 -mt-1 mb-3">{kcalErr}</p>}
+        <MacroTargetsEditor client={client} kcalTarget={kcalTarget} />
         {kcalDays.length > 0 && kcalTarget ? (
           <div className="flex items-end gap-1.5 h-12 mb-4">
             {Array.from({ length: 7 }, (_, i) => {

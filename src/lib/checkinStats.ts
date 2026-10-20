@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { withDiary } from '@/lib/food';
 import { localDateKey } from '@/lib/dates';
 
 // The week behind a weekly check-in, collected automatically from what the app already
@@ -63,7 +64,7 @@ export async function computeCheckinStats(clientId: string, weekStart: string, k
   }
 
   type H = { steps: number | null; kcal_in: number | null; protein_g?: number | null; carbs_g?: number | null; fat_g?: number | null; sleep_min: number | null; weight_kg: number | null };
-  const health = (hd.data ?? []) as H[];
+  const health = (await withDiary(clientId, (hd.data ?? []) as (H & { day: string })[], dayFrom, dayTo)) as H[];
   const weights = [
     ...health.map((h) => h.weight_kg),
     ...((pe.data ?? []) as { weight_kg: number | null }[]).map((p) => p.weight_kg),

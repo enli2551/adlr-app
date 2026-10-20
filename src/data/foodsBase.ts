@@ -1,0 +1,101 @@
+// Built-in basic foods, values per 100 g (edible part). Source: USDA FoodData Central
+// (SR Legacy / Foundation) — generic, lab-analysed values; packaged products come from
+// Open Food Facts instead. k = kcal, p/c/f = protein/carbs/fat g, s = typical serving g.
+// "roh" = raw weight, "gekocht" = cooked weight — weigh the way it's written.
+
+export interface BaseRow { id: string; de: string; en: string; hu: string; k: number; p: number; c: number; f: number; s?: number; sl?: string; tags?: string }
+
+const rows: BaseRow[] = [
+  // ── Meat & poultry ──
+  { id: 'b001', de: 'Hähnchenbrust, roh', en: 'Chicken breast, raw', hu: 'Csirkemell, nyers', k: 120, p: 22.5, c: 0, f: 2.6, s: 150, tags: 'huhn poulet' },
+  { id: 'b002', de: 'Hähnchenbrust, gebraten', en: 'Chicken breast, cooked', hu: 'Csirkemell, sült', k: 165, p: 31, c: 0, f: 3.6, s: 120, tags: 'huhn' },
+  { id: 'b003', de: 'Hähnchenschenkel ohne Haut, roh', en: 'Chicken thigh, skinless, raw', hu: 'Csirkecomb bőr nélkül, nyers', k: 121, p: 19.7, c: 0, f: 4.1, s: 150, tags: 'huhn keule' },
+  { id: 'b004', de: 'Putenbrust, roh', en: 'Turkey breast, raw', hu: 'Pulykamell, nyers', k: 114, p: 23.7, c: 0, f: 1.5, s: 150, tags: 'truthahn' },
+  { id: 'b005', de: 'Rinderhack 5 % Fett, roh', en: 'Ground beef 5% fat, raw', hu: 'Darált marha 5% zsír, nyers', k: 137, p: 21.4, c: 0, f: 5, s: 125, tags: 'faschiertes hackfleisch' },
+  { id: 'b006', de: 'Rinderhack 20 % Fett, roh', en: 'Ground beef 20% fat, raw', hu: 'Darált marha 20% zsír, nyers', k: 254, p: 17.2, c: 0, f: 20, s: 125, tags: 'faschiertes hackfleisch' },
+  { id: 'b007', de: 'Rindersteak (Hüfte), roh', en: 'Beef sirloin steak, raw', hu: 'Marha bélszín steak, nyers', k: 142, p: 21.9, c: 0, f: 6, s: 200, tags: 'rind steak' },
+  { id: 'b008', de: 'Schweinefilet, roh', en: 'Pork tenderloin, raw', hu: 'Sertés szűzpecsenye, nyers', k: 120, p: 21, c: 0, f: 3.5, s: 150, tags: 'schwein lungenbraten' },
+  { id: 'b009', de: 'Schinken gekocht', en: 'Ham, cooked', hu: 'Főtt sonka', k: 107, p: 17, c: 1.5, f: 3.7, s: 30, tags: 'aufschnitt' },
+  { id: 'b010', de: 'Speck (Bacon), roh', en: 'Bacon, raw', hu: 'Bacon, nyers', k: 417, p: 13, c: 1.4, f: 40, s: 20 },
+  // ── Fish ──
+  { id: 'b020', de: 'Lachs, roh', en: 'Salmon, raw', hu: 'Lazac, nyers', k: 208, p: 20.4, c: 0, f: 13.4, s: 125 },
+  { id: 'b021', de: 'Thunfisch in Wasser, abgetropft', en: 'Tuna in water, drained', hu: 'Tonhal saját levében, lecsepegtetve', k: 116, p: 25.5, c: 0, f: 0.8, s: 120, tags: 'dose' },
+  { id: 'b022', de: 'Kabeljau, roh', en: 'Cod, raw', hu: 'Tőkehal, nyers', k: 82, p: 17.8, c: 0, f: 0.7, s: 150, tags: 'dorsch fisch' },
+  { id: 'b023', de: 'Garnelen, roh', en: 'Shrimp, raw', hu: 'Garnélarák, nyers', k: 85, p: 20.1, c: 0, f: 0.5, s: 100, tags: 'shrimps' },
+  // ── Eggs & dairy ──
+  { id: 'b030', de: 'Ei (Hühnerei)', en: 'Egg, whole', hu: 'Tojás', k: 143, p: 12.6, c: 0.7, f: 9.5, s: 60, sl: '1 Ei (M)', tags: 'eier' },
+  { id: 'b031', de: 'Eiklar', en: 'Egg white', hu: 'Tojásfehérje', k: 52, p: 10.9, c: 0.7, f: 0.2, s: 33, sl: '1 Eiklar', tags: 'eiweiß' },
+  { id: 'b032', de: 'Milch 3,5 %', en: 'Milk 3.5%', hu: 'Tej 3,5%', k: 64, p: 3.3, c: 4.8, f: 3.5, s: 250, sl: '1 Glas' },
+  { id: 'b033', de: 'Milch 1,5 %', en: 'Milk 1.5%', hu: 'Tej 1,5%', k: 47, p: 3.4, c: 4.9, f: 1.5, s: 250, sl: '1 Glas' },
+  { id: 'b034', de: 'Magertopfen / Magerquark', en: 'Low-fat quark', hu: 'Sovány túró (quark)', k: 67, p: 12, c: 4, f: 0.3, s: 250, tags: 'quark topfen' },
+  { id: 'b035', de: 'Griechischer Joghurt 10 %', en: 'Greek yogurt 10%', hu: 'Görög joghurt 10%', k: 133, p: 5, c: 4, f: 10, s: 150 },
+  { id: 'b036', de: 'Skyr natur', en: 'Skyr, plain', hu: 'Skyr natúr', k: 63, p: 11, c: 4, f: 0.2, s: 150 },
+  { id: 'b037', de: 'Naturjoghurt 3,5 %', en: 'Plain yogurt 3.5%', hu: 'Natúr joghurt 3,5%', k: 64, p: 3.6, c: 4.7, f: 3.5, s: 150 },
+  { id: 'b038', de: 'Hüttenkäse', en: 'Cottage cheese', hu: 'Cottage cheese', k: 98, p: 11.1, c: 3.4, f: 4.3, s: 200, tags: 'körniger frischkäse' },
+  { id: 'b039', de: 'Gouda', en: 'Gouda cheese', hu: 'Gouda sajt', k: 356, p: 24.9, c: 2.2, f: 27.4, s: 30, tags: 'käse' },
+  { id: 'b040', de: 'Mozzarella', en: 'Mozzarella', hu: 'Mozzarella', k: 280, p: 27.5, c: 3.1, f: 17.1, s: 125, tags: 'käse' },
+  { id: 'b041', de: 'Butter', en: 'Butter', hu: 'Vaj', k: 717, p: 0.9, c: 0.1, f: 81.1, s: 10 },
+  // ── Grains, bread, pasta ──
+  { id: 'b050', de: 'Haferflocken', en: 'Rolled oats', hu: 'Zabpehely', k: 379, p: 13.2, c: 67.7, f: 6.5, s: 50, tags: 'hafer porridge' },
+  { id: 'b051', de: 'Reis, roh', en: 'Rice, white, raw', hu: 'Rizs, nyers', k: 365, p: 7.1, c: 80, f: 0.7, s: 75 },
+  { id: 'b052', de: 'Reis, gekocht', en: 'Rice, white, cooked', hu: 'Rizs, főtt', k: 130, p: 2.7, c: 28.2, f: 0.3, s: 200 },
+  { id: 'b053', de: 'Basmatireis, roh', en: 'Basmati rice, raw', hu: 'Basmati rizs, nyers', k: 351, p: 8.1, c: 77.7, f: 0.8, s: 75 },
+  { id: 'b054', de: 'Vollkornreis, roh', en: 'Brown rice, raw', hu: 'Barna rizs, nyers', k: 367, p: 7.5, c: 76.2, f: 3.2, s: 75, tags: 'naturreis' },
+  { id: 'b055', de: 'Nudeln, roh', en: 'Pasta, dry', hu: 'Tészta, száraz', k: 371, p: 13, c: 74.7, f: 1.5, s: 100, tags: 'spaghetti penne pasta teigwaren' },
+  { id: 'b056', de: 'Nudeln, gekocht', en: 'Pasta, cooked', hu: 'Tészta, főtt', k: 158, p: 5.8, c: 30.9, f: 0.9, s: 250, tags: 'spaghetti pasta' },
+  { id: 'b057', de: 'Vollkornnudeln, roh', en: 'Whole wheat pasta, dry', hu: 'Teljes kiőrlésű tészta, száraz', k: 352, p: 14.6, c: 70, f: 2.5, s: 100 },
+  { id: 'b058', de: 'Vollkornbrot', en: 'Whole wheat bread', hu: 'Teljes kiőrlésű kenyér', k: 247, p: 13, c: 41, f: 3.4, s: 50, sl: '1 Scheibe' },
+  { id: 'b059', de: 'Weißbrot / Toast', en: 'White bread / toast', hu: 'Fehér kenyér / toast', k: 266, p: 8.9, c: 49, f: 3.3, s: 25, sl: '1 Scheibe' },
+  { id: 'b060', de: 'Semmel / Brötchen', en: 'Bread roll', hu: 'Zsemle', k: 270, p: 9, c: 52, f: 2.2, s: 50, sl: '1 Stück', tags: 'semmel weckerl' },
+  { id: 'b061', de: 'Kartoffeln, roh', en: 'Potatoes, raw', hu: 'Burgonya, nyers', k: 77, p: 2, c: 17.5, f: 0.1, s: 200, tags: 'erdäpfel' },
+  { id: 'b062', de: 'Süßkartoffel, roh', en: 'Sweet potato, raw', hu: 'Édesburgonya, nyers', k: 86, p: 1.6, c: 20.1, f: 0.1, s: 200 },
+  { id: 'b063', de: 'Couscous, roh', en: 'Couscous, dry', hu: 'Kuszkusz, száraz', k: 376, p: 12.8, c: 77.4, f: 0.6, s: 70 },
+  { id: 'b064', de: 'Quinoa, roh', en: 'Quinoa, raw', hu: 'Quinoa, nyers', k: 368, p: 14.1, c: 64.2, f: 6.1, s: 70 },
+  { id: 'b065', de: 'Reiswaffel', en: 'Rice cake', hu: 'Puffasztott rizs szelet', k: 387, p: 8.2, c: 81.5, f: 2.8, s: 9, sl: '1 Stück' },
+  { id: 'b066', de: 'Cornflakes', en: 'Corn flakes', hu: 'Kukoricapehely', k: 357, p: 7.5, c: 84, f: 0.4, s: 40 },
+  // ── Legumes ──
+  { id: 'b070', de: 'Linsen, roh', en: 'Lentils, raw', hu: 'Lencse, nyers', k: 352, p: 24.6, c: 63.4, f: 1.1, s: 70 },
+  { id: 'b071', de: 'Kichererbsen, gekocht', en: 'Chickpeas, cooked', hu: 'Csicseriborsó, főtt', k: 164, p: 8.9, c: 27.4, f: 2.6, s: 150 },
+  { id: 'b072', de: 'Kidneybohnen, gekocht', en: 'Kidney beans, cooked', hu: 'Vörösbab, főtt', k: 127, p: 8.7, c: 22.8, f: 0.5, s: 150, tags: 'bohnen' },
+  { id: 'b073', de: 'Tofu natur', en: 'Tofu, firm', hu: 'Tofu natúr', k: 144, p: 15.8, c: 2.8, f: 8.7, s: 150 },
+  // ── Vegetables ──
+  { id: 'b080', de: 'Brokkoli', en: 'Broccoli', hu: 'Brokkoli', k: 34, p: 2.8, c: 6.6, f: 0.4, s: 150 },
+  { id: 'b081', de: 'Tomate', en: 'Tomato', hu: 'Paradicsom', k: 18, p: 0.9, c: 3.9, f: 0.2, s: 120, sl: '1 Stück', tags: 'paradeiser' },
+  { id: 'b082', de: 'Gurke', en: 'Cucumber', hu: 'Uborka', k: 15, p: 0.7, c: 3.6, f: 0.1, s: 150 },
+  { id: 'b083', de: 'Paprika rot', en: 'Red bell pepper', hu: 'Kaliforniai paprika, piros', k: 31, p: 1, c: 6, f: 0.3, s: 150 },
+  { id: 'b084', de: 'Karotte', en: 'Carrot', hu: 'Sárgarépa', k: 41, p: 0.9, c: 9.6, f: 0.2, s: 80, sl: '1 Stück', tags: 'möhre' },
+  { id: 'b085', de: 'Spinat', en: 'Spinach', hu: 'Spenót', k: 23, p: 2.9, c: 3.6, f: 0.4, s: 100 },
+  { id: 'b086', de: 'Zucchini', en: 'Zucchini', hu: 'Cukkini', k: 17, p: 1.2, c: 3.1, f: 0.3, s: 200 },
+  { id: 'b087', de: 'Blattsalat', en: 'Lettuce', hu: 'Fejes saláta', k: 15, p: 1.4, c: 2.9, f: 0.2, s: 80, tags: 'salat eisberg' },
+  { id: 'b088', de: 'Zwiebel', en: 'Onion', hu: 'Vöröshagyma', k: 40, p: 1.1, c: 9.3, f: 0.1, s: 80 },
+  { id: 'b089', de: 'Champignons', en: 'Mushrooms', hu: 'Csiperkegomba', k: 22, p: 3.1, c: 3.3, f: 0.3, s: 100, tags: 'pilze' },
+  { id: 'b090', de: 'Mais (Dose)', en: 'Sweet corn, canned', hu: 'Csemegekukorica (konzerv)', k: 81, p: 2.6, c: 16.8, f: 1.2, s: 100 },
+  { id: 'b091', de: 'Avocado', en: 'Avocado', hu: 'Avokádó', k: 160, p: 2, c: 8.5, f: 14.7, s: 70, sl: '½ Avocado' },
+  // ── Fruit ──
+  { id: 'b100', de: 'Banane', en: 'Banana', hu: 'Banán', k: 89, p: 1.1, c: 22.8, f: 0.3, s: 120, sl: '1 Stück (ohne Schale)' },
+  { id: 'b101', de: 'Apfel', en: 'Apple', hu: 'Alma', k: 52, p: 0.3, c: 13.8, f: 0.2, s: 180, sl: '1 Stück' },
+  { id: 'b102', de: 'Heidelbeeren', en: 'Blueberries', hu: 'Áfonya', k: 57, p: 0.7, c: 14.5, f: 0.3, s: 125 },
+  { id: 'b103', de: 'Erdbeeren', en: 'Strawberries', hu: 'Eper', k: 32, p: 0.7, c: 7.7, f: 0.3, s: 150 },
+  { id: 'b104', de: 'Orange', en: 'Orange', hu: 'Narancs', k: 47, p: 0.9, c: 11.8, f: 0.1, s: 150, sl: '1 Stück' },
+  { id: 'b105', de: 'Weintrauben', en: 'Grapes', hu: 'Szőlő', k: 69, p: 0.7, c: 18.1, f: 0.2, s: 125 },
+  { id: 'b106', de: 'Kiwi', en: 'Kiwi', hu: 'Kivi', k: 61, p: 1.1, c: 14.7, f: 0.5, s: 75, sl: '1 Stück' },
+  // ── Nuts, seeds, oils ──
+  { id: 'b110', de: 'Mandeln', en: 'Almonds', hu: 'Mandula', k: 579, p: 21.2, c: 21.6, f: 49.9, s: 30 },
+  { id: 'b111', de: 'Walnüsse', en: 'Walnuts', hu: 'Dió', k: 654, p: 15.2, c: 13.7, f: 65.2, s: 30 },
+  { id: 'b112', de: 'Erdnüsse', en: 'Peanuts', hu: 'Földimogyoró', k: 567, p: 25.8, c: 16.1, f: 49.2, s: 30 },
+  { id: 'b113', de: 'Erdnussbutter', en: 'Peanut butter', hu: 'Mogyoróvaj', k: 588, p: 25, c: 20, f: 50, s: 15, sl: '1 EL' },
+  { id: 'b114', de: 'Olivenöl', en: 'Olive oil', hu: 'Olívaolaj', k: 884, p: 0, c: 0, f: 100, s: 10, sl: '1 EL', tags: 'öl' },
+  { id: 'b115', de: 'Rapsöl', en: 'Canola oil', hu: 'Repceolaj', k: 884, p: 0, c: 0, f: 100, s: 10, sl: '1 EL', tags: 'öl' },
+  { id: 'b116', de: 'Chiasamen', en: 'Chia seeds', hu: 'Chia mag', k: 486, p: 16.5, c: 42.1, f: 30.7, s: 15 },
+  // ── Supplements, sweets, drinks ──
+  { id: 'b120', de: 'Whey Protein (Pulver)', en: 'Whey protein powder', hu: 'Tejsavó fehérje (por)', k: 380, p: 78, c: 7, f: 5, s: 30, sl: '1 Messlöffel', tags: 'eiweiß shake protein' },
+  { id: 'b121', de: 'Honig', en: 'Honey', hu: 'Méz', k: 304, p: 0.3, c: 82.4, f: 0, s: 20, sl: '1 TL' },
+  { id: 'b122', de: 'Zucker', en: 'Sugar', hu: 'Cukor', k: 387, p: 0, c: 100, f: 0, s: 5, sl: '1 TL' },
+  { id: 'b123', de: 'Zartbitterschokolade 70 %', en: 'Dark chocolate 70%', hu: 'Étcsokoládé 70%', k: 598, p: 7.8, c: 45.9, f: 42.6, s: 20, tags: 'schokolade' },
+  { id: 'b124', de: 'Orangensaft', en: 'Orange juice', hu: 'Narancslé', k: 45, p: 0.7, c: 10.4, f: 0.2, s: 250, sl: '1 Glas', tags: 'saft' },
+  { id: 'b125', de: 'Cola', en: 'Cola', hu: 'Kóla', k: 42, p: 0, c: 10.6, f: 0, s: 330, sl: '1 Dose' },
+  { id: 'b126', de: 'Bier', en: 'Beer', hu: 'Sör', k: 43, p: 0.5, c: 3.6, f: 0, s: 500, sl: '1 Krügerl' },
+  { id: 'b127', de: 'Wein, rot', en: 'Red wine', hu: 'Vörösbor', k: 85, p: 0.1, c: 2.6, f: 0, s: 125, sl: '1 Glas' },
+];
+
+export default rows;
