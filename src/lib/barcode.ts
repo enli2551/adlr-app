@@ -17,8 +17,11 @@ export const canScan = () => Capacitor.isNativePlatform() && Capacitor.isPluginA
 export async function scanBarcode(): Promise<string | null> {
   if (!canScan()) return null;
   try {
-    const perm = await Scanner.requestPermissions();
-    if (perm.camera !== 'granted' && perm.camera !== 'limited') return null;
+    // Android: the Google code scanner needs no camera permission; iOS uses the camera directly.
+    if (Capacitor.getPlatform() === 'ios') {
+      const perm = await Scanner.requestPermissions();
+      if (perm.camera !== 'granted' && perm.camera !== 'limited') return null;
+    }
     if (Capacitor.getPlatform() === 'android' && Scanner.isGoogleBarcodeScannerModuleAvailable) {
       const { available } = await Scanner.isGoogleBarcodeScannerModuleAvailable();
       if (!available && Scanner.installGoogleBarcodeScannerModule) await Scanner.installGoogleBarcodeScannerModule();
