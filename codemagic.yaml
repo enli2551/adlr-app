@@ -29,8 +29,13 @@ workflows:
         WIDGET_BUNDLE_ID: "com.adlr.app.RestTimer"
       # Set this env group in the Codemagic UI:
       #   - "supabase": VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (Vite inlines them at build time)
+      #   - "ios_signing": CERTIFICATE_PRIVATE_KEY (secure) — ONE fixed RSA key for the
+      #     distribution certificate. A fresh key per build made a new certificate every
+      #     run until Apple's limit was hit (409 "You already have a current Distribution
+      #     certificate", 2026-10-20). With a fixed key the certificate is reused.
       groups:
         - supabase
+        - ios_signing
     scripts:
       - name: Install npm dependencies
         script: npm ci
@@ -46,10 +51,15 @@ workflows:
         script: |
           set -ex
           keychain initialize
-          # Generate an RSA private key for the signing certificate.
-          openssl genrsa -out /tmp/adlr_cert_key.pem 2048
-          # Create (from that key) the distribution certificate AND the App Store
-          # provisioning profile for the bundle id, and download them.
+          # The fixed private key of the distribution certificate (env group "ios_signing").
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "CERTIFICATE_PRIVATE_KEY missing: add it to the ios_signing env group" >&2; exit 1
+          fi
+          set +x
+          printf '%s\n' "$CERTIFICATE_PRIVATE_KEY" > /tmp/adlr_cert_key.pem
+          set -x
+          # Reuse the certificate made from that key (created on the first run only) and
+          # create/download the App Store provisioning profile for the bundle id.
           # PUSH (2026-10): App.entitlements has aps-environment. Enable "Push Notifications"
           # on the com.adlr.app App ID (done 2026-10-18); --create makes a fresh profile on
           # every run, which then contains the push entitlement. See PUSH-SETUP.md.
