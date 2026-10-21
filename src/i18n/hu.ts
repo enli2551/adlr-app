@@ -1544,6 +1544,8 @@ const dict: Record<string, string> = {
   "1 Laibchen": "1 pogácsa (fasírt)",
   "1 Würstchen": "1 virsli",
   "1 Riegel": "1 szelet (rúd)",
+  "1 Pizza": "1 pizza",
+  "1 Teller": "1 tányér",
 };
 
 export default dict;

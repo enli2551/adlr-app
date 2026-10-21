@@ -1543,6 +1543,8 @@ const dict: Record<string, string> = {
   "1 Laibchen": "1 patty",
   "1 Würstchen": "1 sausage",
   "1 Riegel": "1 bar",
+  "1 Pizza": "1 pizza",
+  "1 Teller": "1 plate",
 };
 
 export default dict;
