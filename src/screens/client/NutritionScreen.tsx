@@ -7,6 +7,8 @@ import type { NutritionTip, HydrationLog, ProgressEntry } from '@/lib/types';
 import { Card, SectionHeader, Loading, Button, Input, Field } from '@/components/ui';
 import { Plus, Minus, Droplets, Calculator, Flame, Beef, HeartPulse, ChevronRight, Sparkles } from 'lucide-react';
 import { t, fmtNum, fmtDate } from '@/lib/i18n';
+import FoodDiary from '@/components/food/FoodDiary';
+import { withDiary, type MacroTargets } from '@/lib/food';
 
 const ACTIVITY_LEVELS = [
   { label: 'Sitzend', factor: 1.2 },
@@ -57,7 +59,7 @@ export default function NutritionScreen() {
     ]);
     setTip(tipRes.data as NutritionTip | null);
     setHydration(hydRes.data as HydrationLog | null);
-    setHealth((hd.data ?? []) as HealthRow[]);
+    setHealth(await withDiary(profile.id, (hd.data ?? []) as HealthRow[], since, today));
     const pe = (peRes.data ?? []) as ProgressEntry[];
     const w = pe[0]?.weight_kg ?? profile.weight_kg ?? null;
     setLatestWeight(w);
@@ -115,7 +117,8 @@ export default function NutritionScreen() {
   const todayRow = health.find((h) => h.day === today);
   const eatenToday = todayRow?.kcal_in ?? null;
   const healthConnected = health.some((h) => h.kcal_in != null && h.kcal_in > 0);
-  const proteinG = latestWeight ? Math.round((latestWeight * (PROTEIN_PER_KG[primaryGoal ?? ''] ?? 1.6)) / 5) * 5 : null;
+  const macros = (profile as { macro_targets?: MacroTargets | null } | null)?.macro_targets ?? null;
+  const proteinG = macros?.protein_g ?? (latestWeight ? Math.round((latestWeight * (PROTEIN_PER_KG[primaryGoal ?? ''] ?? 1.6)) / 5) * 5 : null);
 
   // Last 7 days (oldest → today) for the bar chart.
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -174,11 +177,14 @@ export default function NutritionScreen() {
         {!healthConnected && (
           <button onClick={() => nav('/app/profil')} className="adlr-tap w-full mt-4 pt-3 flex items-center gap-2 text-left" style={{ borderTop: '1px solid rgb(var(--text) / 0.07)' }}>
             <HeartPulse size={16} className="text-adlr-gold shrink-0" />
-            <span className="flex-1 text-xs text-white/60">{t('Verbinde Apple Health / Health Connect (z. B. mit YAZIO) — dann erscheinen deine Kalorien hier automatisch.')}</span>
+            <span className="flex-1 text-xs text-white/60">{t('Trag dein Essen unten ins Tagebuch ein — oder verbinde Apple Health / Health Connect (z. B. YAZIO).')}</span>
             <ChevronRight size={16} className="text-white/30 shrink-0" />
           </button>
         )}
       </Card>
+
+      {/* Food diary (built-in calorie counter) */}
+      {profile && <FoodDiary clientId={profile.id} onChanged={load} />}
 
       {/* Last 7 days */}
       {logged.length > 0 && (

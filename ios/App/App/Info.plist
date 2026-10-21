@@ -7,7 +7,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ADLR nutzt das Mikrofon für Sprach- und Videonachrichten an deine Klienten.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>ADLR verwendet die Kamera, um Fortschrittsfotos aufzunehmen.</string>
+	<string>ADLR verwendet die Kamera für Fortschrittsfotos und zum Scannen von Lebensmittel-Barcodes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ADLR benötigt Zugriff auf deine Fotos, um Fortschrittsfotos hochzuladen.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

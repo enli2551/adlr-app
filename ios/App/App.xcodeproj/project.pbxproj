@@ -18,6 +18,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		B2AD00000000000000000B01 /* RestChronoPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F01 /* RestChronoPlugin.swift */; };
+		B2AD00000000000000000B11 /* BarcodeScannerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F11 /* BarcodeScannerPlugin.swift */; };
 		B2AD00000000000000000B02 /* RestTimerShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F02 /* RestTimerShared.swift */; };
 		B2AD00000000000000000B03 /* ADLRBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */; };
 		B2AD00000000000000000B04 /* RestTimerWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2AD00000000000000000F04 /* RestTimerWidget.swift */; };
@@ -65,6 +66,7 @@
 		A1D0C0DE00000000000000A4 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A1D0C0DE00000000000000A5 /* hu */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = hu; path = hu.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		B2AD00000000000000000F01 /* RestChronoPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestChronoPlugin.swift; sourceTree = "<group>"; };
+		B2AD00000000000000000F11 /* BarcodeScannerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerPlugin.swift; sourceTree = "<group>"; };
 		B2AD00000000000000000F02 /* RestTimerShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerShared.swift; sourceTree = "<group>"; };
 		B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADLRBridgeViewController.swift; sourceTree = "<group>"; };
 		B2AD00000000000000000F04 /* RestTimerWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestTimerWidget.swift; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				B2AD00000000000000000F03 /* ADLRBridgeViewController.swift */,
 				B2AD00000000000000000F01 /* RestChronoPlugin.swift */,
+				B2AD00000000000000000F11 /* BarcodeScannerPlugin.swift */,
 				B2AD00000000000000000F02 /* RestTimerShared.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -254,6 +257,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				B2AD00000000000000000B03 /* ADLRBridgeViewController.swift in Sources */,
 				B2AD00000000000000000B01 /* RestChronoPlugin.swift in Sources */,
+				B2AD00000000000000000B11 /* BarcodeScannerPlugin.swift in Sources */,
 				B2AD00000000000000000B02 /* RestTimerShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

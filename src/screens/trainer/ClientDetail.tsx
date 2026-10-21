@@ -9,9 +9,10 @@ import { AnswerList } from '@/components/QuestionFields';
 import { intakeAnswers } from '@/lib/coachQuestions';
 import type { Profile, ProgressEntry, PersonalRecord, ProgressPhoto, Plan, ClientPlan, WorkoutCompletion, ExerciseSetLog } from '@/lib/types';
 import { Card, Loading, CollapsibleCard } from '@/components/ui';
-import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText, Activity, StickyNote, ClipboardCheck, Wallet, TrendingUp, HeartPulse } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Dumbbell, Clock, UserMinus, BarChart3, ChevronRight, Sparkles, MessageSquare, FileText, Activity, StickyNote, ClipboardCheck, Wallet, TrendingUp, Utensils, HeartPulse } from 'lucide-react';
 import ClientPlanCard from '@/components/ClientPlanCard';
 import BottomSheet from '@/components/BottomSheet';
+import FoodDiary from '@/components/food/FoodDiary';
 import MonthlyReport from '@/components/MonthlyReport';
 import TrainingHistory from '@/components/TrainingHistory';
 import ExerciseProgress from '@/components/ExerciseProgress';
@@ -54,7 +55,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
   const [loading, setLoading] = useState(true);
   // Sections as tabs — the page used to be one long scroll with the plan hidden at the bottom.
   const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem('adlr_client_tab') as Tab) || 'overview'; } catch { return 'overview'; } });
-  const [sheet, setSheet] = useState<null | 'status' | 'notes' | 'checkins' | 'package'>(null);
+  const [sheet, setSheet] = useState<null | 'status' | 'notes' | 'checkins' | 'package' | 'food'>(null);
   const [checkinInfo, setCheckinInfo] = useState<{ total: number; open: number } | null>(null);
   useEffect(() => {
     supabase.from('weekly_checkins').select('replied_at').eq('client_id', clientId).order('week_start', { ascending: false }).limit(12)
@@ -193,6 +194,7 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
             <Tile icon={ClipboardCheck} title={t('Check-ins')} onClick={() => setSheet('checkins')}
               hint={!checkinInfo || checkinInfo.total === 0 ? t('Noch keiner') : checkinInfo.open > 0 ? t('{n} unbeantwortet', { n: checkinInfo.open }) : t('Alle beantwortet')}
               badge={!!checkinInfo && checkinInfo.open > 0} />
+            <Tile icon={Utensils} title={t('Ernährungstagebuch')} hint={t('Was {name} gegessen hat', { name: client.first_name ?? '' })} onClick={() => setSheet('food')} />
             <Tile icon={Wallet} title={t('Paket & Zahlungen')} hint={t('Einheiten, offene Beträge')} onClick={() => setSheet('package')} />
           </div>
           {completions.length > 0 && (
@@ -317,13 +319,14 @@ export default function ClientDetail({ clientId, onBack }: { clientId: string; o
       )}
       </div>
       {sheet && (
-        <BottomSheet onClose={() => setSheet(null)} title={sheet === 'status' ? t('Status & Ernährung') : sheet === 'notes' ? t('Notizen') : sheet === 'checkins' ? t('Check-ins') : t('Paket & Zahlungen')}>
+        <BottomSheet onClose={() => setSheet(null)} title={sheet === 'status' ? t('Status & Ernährung') : sheet === 'notes' ? t('Notizen') : sheet === 'checkins' ? t('Check-ins') : sheet === 'food' ? t('Ernährungstagebuch') : t('Paket & Zahlungen')}>
           {sheet === 'status' && <ClientSummary part="details" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
           {sheet === 'notes' && <ClientSummary part="notes" client={client} completions={completions} setLogs={setLogs} entries={entries} activePlan={activePlan} muscleOf={muscleOf} />}
           {sheet === 'checkins' && (checkinInfo && checkinInfo.total > 0
             ? <ClientCheckins clientId={client.id} kcalTarget={client.kcal_target ?? null} />
             : <p className="text-sm text-white/45 text-center py-8">{t('{name} hat noch keinen Check-in ausgefüllt.', { name: client.first_name ?? '' })}</p>)}
           {sheet === 'package' && <ClientPackageCard clientId={clientId} embedded />}
+          {sheet === 'food' && <FoodDiary clientId={clientId} readOnly />}
         </BottomSheet>
       )}
       {showProgress && <ProgressReport client={client} trainerMode onClose={() => setShowProgress(false)} />}

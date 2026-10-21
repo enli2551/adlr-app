@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Footprints, Utensils, Moon, Scale, HeartPulse, Beef } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { withDiary } from '@/lib/food';
 import { localDateKey } from '@/lib/dates';
 import type { HealthDay } from '@/lib/health';
 import { t, fmtNum } from '@/lib/i18n';
@@ -22,7 +23,7 @@ export default function HealthSummary({ clientId, refreshKey = 0, emptyText }: P
   useEffect(() => {
     const since = new Date(); since.setDate(since.getDate() - 7);
     supabase.from('health_daily').select('*').eq('client_id', clientId).gte('day', localDateKey(since)).order('day', { ascending: true })
-      .then(({ data }) => setRows((data ?? []) as HealthDay[]));
+      .then(async ({ data }) => setRows(await withDiary(clientId, (data ?? []) as HealthDay[], localDateKey(since), localDateKey(new Date()))));
   }, [clientId, refreshKey]);
 
   if (rows === null) return null;
