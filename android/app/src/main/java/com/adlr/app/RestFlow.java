@@ -7,10 +7,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
-import android.media.RingtoneManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -42,7 +40,9 @@ final class RestFlow {
     // with HIGH importance, sound and vibration on every device (channel settings are frozen
     // at first creation — see the old "rest-timer" mixup).
     private static final String LIVE_CHANNEL = "rest-timer-live";
-    private static final String ALERT_CHANNEL = "rest-alert-v2";
+    // v3: no channel sound — a notification sound ducks the user's music; the beep plays on the
+    // media stream instead (see beep()). Channel settings are fixed once created, hence the new id.
+    private static final String ALERT_CHANNEL = "rest-alert-v3";
     private static final int LIVE_ID = 8002;
     private static final int ALERT_ID = 8003;
 
@@ -191,13 +191,10 @@ final class RestFlow {
             NotificationChannel ch = new NotificationChannel(ALERT_CHANNEL, name, NotificationManager.IMPORTANCE_HIGH);
             ch.enableVibration(true);
             ch.setVibrationPattern(new long[]{0, 450, 200, 450, 200, 700});
-            ch.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                    new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build());
+            ch.setSound(null, null);
             ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(ch);
+            nm.deleteNotificationChannel("rest-alert-v2");
         }
     }
 
@@ -274,9 +271,8 @@ final class RestFlow {
 
     /** Heads-up with sound + vibration when a rest is over and the app isn't open. */
     private static void alert(Context c, JSONObject s) {
-        // The notification sound is muted on silent/vibrate — then beep on the media stream.
-        AudioManager audio = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
-        if (audio != null && audio.getRingerMode() != AudioManager.RINGER_MODE_NORMAL) beep();
+        // The channel is silent: the beep goes to the media stream, mixed into the music.
+        beep();
         JSONArray steps = s.optJSONArray("steps");
         JSONObject step = steps != null && steps.length() > 0 ? steps.optJSONObject(0) : null;
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, ALERT_CHANNEL)
@@ -285,7 +281,7 @@ final class RestFlow {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setDefaults(NotificationCompat.DEFAULT_LIGHTS)
                 .setVibrate(new long[]{0, 450, 200, 450, 200, 700})
                 .setAutoCancel(true)
                 .setTimeoutAfter(2 * 60 * 1000);

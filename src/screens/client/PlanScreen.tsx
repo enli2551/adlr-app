@@ -520,21 +520,32 @@ export default function PlanScreen() {
   // Get last session's logs for a specific exercise on a specific plan day
   // Last logged sets for an exercise — preferably from the SAME Studio (machine weights
   // differ between gyms), from any plan day. Falls back to the latest session anywhere.
-  const getLastSessionLogs = useCallback((exerciseName: string, inGym: string | null = gym): { logs: ExerciseSetLog[]; gym: string | null; otherGym: boolean } => {
+  // `work` = the sets to prefill from: warm-ups skipped (the plan's sets are working sets — a
+  // logged warm-up used to shift every weight by one set), each set number once (a workout
+  // that's both in the outbox and on the server must not show its sets twice).
+  const getLastSessionLogs = useCallback((exerciseName: string, inGym: string | null = gym): { logs: ExerciseSetLog[]; work: ExerciseSetLog[]; gym: string | null; otherGym: boolean } => {
     const byTime = [...completions].sort((x, y) => new Date(y.completed_at).getTime() - new Date(x.completed_at).getTime());
-    const logsFor = (cId: string) => setLogs
-      .filter((l) => l.workout_completion_id === cId && l.exercise_name === exerciseName)
-      .sort((x, y) => x.set_number - y.set_number);
+    const logsFor = (cId: string) => {
+      const seen = new Set<number>();
+      return setLogs
+        .filter((l) => l.workout_completion_id === cId && l.exercise_name === exerciseName)
+        .sort((x, y) => x.set_number - y.set_number)
+        .filter((l) => (seen.has(l.set_number) ? false : (seen.add(l.set_number), true)));
+    };
+    const pack = (ls: ExerciseSetLog[], g: string | null, otherGym: boolean) => {
+      const work = ls.filter((l) => l.set_type !== 'warmup');
+      return { logs: ls, work: work.length > 0 ? work : ls, gym: g, otherGym };
+    };
     for (const c of byTime) {
       if ((c.gym ?? null) !== inGym) continue;
       const ls = logsFor(c.id);
-      if (ls.length > 0) return { logs: ls, gym: c.gym ?? null, otherGym: false };
+      if (ls.length > 0) return pack(ls, c.gym ?? null, false);
     }
     for (const c of byTime) {
       const ls = logsFor(c.id);
-      if (ls.length > 0) return { logs: ls, gym: c.gym ?? null, otherGym: true };
+      if (ls.length > 0) return pack(ls, c.gym ?? null, true);
     }
-    return { logs: [], gym: null, otherGym: false };
+    return { logs: [], work: [], gym: null, otherGym: false };
   }, [completions, setLogs, gym]);
 
   // Latest note written for an exercise — same Studio first (seat/pin settings differ per gym).
@@ -554,16 +565,16 @@ export default function PlanScreen() {
         const next = { ...prev };
         for (const ex of day?.exercises ?? []) {
           const fresh = getLastSessionLogs(ex.name, g);
-          if (fresh.otherGym || fresh.logs.length === 0) continue;
-          const old = getLastSessionLogs(ex.name, gym).logs;
+          if (fresh.otherGym || fresh.work.length === 0) continue;
+          const old = getLastSessionLogs(ex.name, gym).work;
           next[ex.name] = (prev[ex.name] ?? []).map((s, i) => {
-            if (checkedSets.has(setKey(ex.name, i)) || !fresh.logs[i]) return s;
+            if (checkedSets.has(setKey(ex.name, i)) || !fresh.work[i]) return s;
             const w = s.weight === '' || s.weight === (old[i]?.weight_kg?.toString() ?? '');
             const r = s.reps === '' || s.reps === (old[i]?.reps?.toString() ?? '');
             return {
               ...s,
-              weight: w ? fresh.logs[i].weight_kg?.toString() ?? s.weight : s.weight,
-              reps: r ? fresh.logs[i].reps?.toString() ?? s.reps : s.reps,
+              weight: w ? fresh.work[i].weight_kg?.toString() ?? s.weight : s.weight,
+              reps: r ? fresh.work[i].reps?.toString() ?? s.reps : s.reps,
             };
           });
         }
@@ -635,7 +646,8 @@ export default function PlanScreen() {
   // Session editing (free workout AND a started plan day): only this session changes, never the plan.
   const sessionDayId = activeDayIdx !== null ? days[activeDayIdx]?.id ?? null : null;
   // The written plan is the default: only clients the coach unlocked (can_edit_plan) may change
-  // a plan day's exercises/sets mid-session. A free workout is always theirs to build.
+  // a plan day's exercises mid-session. Sets (an extra set, a drop set) are always the athlete's
+  // call — they change this session only. A free workout is always theirs to build.
   const canEditSession = (d: PlanDay) => !!d.is_free || !!profile?.can_edit_plan;
   const isSessionDay = (d: PlanDay) => d.id === sessionDayId;
   const addFreeExercise = (row: ExerciseRow) => {
@@ -645,7 +657,7 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d)
       ? { ...d, exercises: [...(d.exercises ?? []), { name: row.name, sets, reps: row.default_reps || undefined, rest_sec: row.default_rest_sec || 90 }] }
       : d)));
-    const lastLogs = getLastSessionLogs(row.name).logs;
+    const lastLogs = getLastSessionLogs(row.name).work;
     setSetInputs((prev) => ({
       ...prev,
       [row.name]: Array.from({ length: sets }, (_, i) => ({
@@ -696,7 +708,7 @@ export default function PlanScreen() {
     setDays((prev) => prev.map((d) => (isSessionDay(d)
       ? { ...d, exercises: d.exercises.map((e, i) => (i === idx ? { ...e, name, weight_kg: undefined, set_details: e.set_details?.map((x) => ({ reps: x.reps })), alternatives: undefined, notes: undefined } : e)) }
       : d)));
-    const lastLogs = getLastSessionLogs(name).logs;
+    const lastLogs = getLastSessionLogs(name).work;
     setSetInputs((prev) => {
       const next = { ...prev };
       delete next[old.name];
@@ -742,7 +754,7 @@ export default function PlanScreen() {
     if (!day || !day.exercises) return;
     const inputs: Record<string, SetInput[]> = {};
     for (const ex of day.exercises) {
-      const lastLogs = getLastSessionLogs(ex.name, inGym).logs;
+      const lastLogs = getLastSessionLogs(ex.name, inGym).work;
       const presc = effectiveSets(ex);
       inputs[ex.name] = Array.from({ length: ex.sets ?? 1 }, (_, i) => ({
         weight: lastLogs[i]?.weight_kg?.toString() ?? presc[i]?.weight_kg?.toString() ?? '',
@@ -1688,7 +1700,7 @@ export default function PlanScreen() {
                                                 )}
                                               </>
                                             )}
-                                            {isTraining && canEditSession(day) && (
+                                            {isTraining && (canEditSession(day) || exSets > 1) && (
                                               <button onClick={() => removeFreeSet(ex.name, setIdx)} className="adlr-tap ml-auto p-1 shrink-0 rounded-md text-white/30 hover:text-red-400" aria-label={t('Satz entfernen')}>
                                                 <X size={14} />
                                               </button>
@@ -1696,7 +1708,7 @@ export default function PlanScreen() {
                                           </div>
                                         );
                                       })}
-                                      {isTraining && canEditSession(day) && (
+                                      {isTraining && (
                                         <button onClick={() => addFreeSet(ex.name)} className="adlr-tap text-xs font-medium text-adlr-gold flex items-center gap-1 pt-1">
                                           <Plus size={13} /> {t('Satz hinzufügen')}
                                         </button>

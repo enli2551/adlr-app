@@ -169,7 +169,7 @@ export const LOCAL_DEMO_IMAGES: Record<string, string> = {
   '0739': 'beinpresse.webp',          // Beinpresse
   '0585': 'beinstrecker.webp',        // Beinstrecker
   '0496': 'beinbeuger.webp',          // Beinbeuger
-  '0088': 'wadenheben.webp',          // Wadenheben
+  // '0088' Wadenheben is the MACHINE standing calf raise — the bodyweight picture was wrong; no clip yet
   '0417': 'wadenheben.webp',          // Stehendes Wadenheben
   '0178': 'seitheben.webp',           // Seitheben
   '0188': 'kabel-fliegende.webp',     // Cable Fly

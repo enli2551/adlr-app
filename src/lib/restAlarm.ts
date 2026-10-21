@@ -9,8 +9,15 @@ import { nativeBeep } from '@/lib/restChrono';
 
 let ctx: AudioContext | null = null;
 
-/** Call from a tap (e.g. ticking a set): browsers only allow audio after a user gesture. */
+/** Call from a tap (e.g. ticking a set): browsers only allow audio after a user gesture.
+ *  Not in the app: a running Web Audio context makes WebKit/Android claim the audio session,
+ *  which lowers or pauses the user's music — the native beep needs no unlocking. */
 export function unlockRestAlarm(): void {
+  if (Capacitor.isNativePlatform()) return;
+  openContext();
+}
+
+function openContext(): void {
   try {
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AC) return;
@@ -35,7 +42,7 @@ function beep(at: number, freq: number, dur: number) {
 
 function webBeeps(): void {
   try {
-    unlockRestAlarm();
+    openContext();
     if (ctx) {
       const t0 = ctx.currentTime + 0.02;
       beep(t0, 880, 0.16);
