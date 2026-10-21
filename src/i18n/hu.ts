@@ -1549,6 +1549,9 @@ const dict: Record<string, string> = {
   "3 Stück": "3 db",
   "6 Stück": "6 db",
   "9 Stück": "9 db",
+  "4 Stück": "4 db",
+  "5 Stück": "5 db",
+  "20 Stück": "20 db",
 };
 
 export default dict;
