@@ -81,5 +81,9 @@
 	<string>ADLR liest Schritte, Schlaf, Gewicht, Ruhepuls, gegessene Kalorien und Makronährstoffe (Eiweiß, Kohlenhydrate, Fett), damit du und dein Coach deinen Fortschritt sehen.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>ADLR schreibt keine Daten in Apple Health.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>

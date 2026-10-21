@@ -3,9 +3,11 @@
 // Same JS API as the Android plugin: start({ endTime, steps, labels }), stop(), drain(),
 // setForeground({ value }) and the `restAction` event.
 import Foundation
+import UIKit
 import Capacitor
 import ActivityKit
 import AVFoundation
+import AudioToolbox
 
 @objc(RestChronoPlugin)
 public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -20,9 +22,24 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private var observer: NSObjectProtocol?
+    private var lifecycle: [NSObjectProtocol] = []
     private var player: AVAudioPlayer?
 
     override public func load() {
+        RestFlow.backgroundBeep = { RestAudio.shared.schedule($0) }
+        // Native app state as well — the WebView may already be paused when its
+        // visibilitychange would report the switch to the background.
+        let nc = NotificationCenter.default
+        lifecycle = [
+            nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+                RestFlow.foreground = false
+                RestFlow.scheduleAlert(RestFlow.load())
+            },
+            nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { _ in
+                RestFlow.foreground = true
+                RestFlow.scheduleAlert(RestFlow.load())
+            },
+        ]
         observer = NotificationCenter.default.addObserver(forName: .adlrRestTimerAction, object: nil, queue: .main) { [weak self] note in
             let action = (note.userInfo?["action"] as? String) ?? "done"
             self?.notifyListeners("restAction", data: ["action": action])
@@ -31,6 +48,7 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     deinit {
         if let observer = observer { NotificationCenter.default.removeObserver(observer) }
+        lifecycle.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     private func number(_ value: JSValue?) -> Double {
@@ -139,21 +157,98 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
                 samples[s0 + i] = Int16(max(-1.0, min(1.0, v)) * 32767)
             }
         }
+        return wav(samples)
+    }()
+
+    /// One second of silence (keeps the background audio session alive during a rest).
+    static let silenceWav: Data = wav([Int16](repeating: 0, count: 44100))
+
+    static func wav(_ samples: [Int16]) -> Data {
         var d = Data()
         func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
         func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
-        let dataBytes = UInt32(total * 2)
+        let dataBytes = UInt32(samples.count * 2)
         d.append(contentsOf: Array("RIFF".utf8)); u32(36 + dataBytes)
         d.append(contentsOf: Array("WAVE".utf8))
         d.append(contentsOf: Array("fmt ".utf8)); u32(16); u16(1); u16(1); u32(44100); u32(44100 * 2); u16(2); u16(16)
         d.append(contentsOf: Array("data".utf8)); u32(dataBytes)
         for s in samples { withUnsafeBytes(of: s.littleEndian) { d.append(contentsOf: $0) } }
         return d
-    }()
+    }
 
     @objc func setForeground(_ call: CAPPluginCall) {
         RestFlow.foreground = call.getBool("value") ?? false
         RestFlow.scheduleAlert(RestFlow.load())
         call.resolve()
+    }
+}
+
+/// End-of-rest beep while the app is in the background / the phone is locked (needs
+/// UIBackgroundModes "audio"). During a rest a mixable audio session plays silence so iOS
+/// keeps the app running; at the end the beep plays on top of the user's music without
+/// lowering it (a notification sound would duck it) and the phone vibrates. The session is
+/// released right after — nothing runs between rests or after the workout.
+final class RestAudio {
+    static let shared = RestAudio()
+    private var silence: AVAudioPlayer?
+    private var beep: AVAudioPlayer?
+    private var timer: Timer?
+    private var active = false
+
+    /// true = the beep is scheduled (the notification then stays silent).
+    func schedule(_ s: RestFlowState?) -> Bool {
+        if !Thread.isMainThread { return DispatchQueue.main.sync { schedule(s) } }
+        // A rescheduled rest (±15 s, next set) keeps the session active — re-activating audio
+        // from the background is not guaranteed.
+        stopPlayers()
+        guard let s = s, !RestFlow.foreground, s.phase == "rest", !s.steps.isEmpty else { release(); return false }
+        let interval = s.endTime / 1000 - Date().timeIntervalSince1970
+        guard interval > 0.5, interval < 20 * 60 else { release(); return false }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+            active = true
+            let quiet = try AVAudioPlayer(data: RestChronoPlugin.silenceWav)
+            quiet.numberOfLoops = -1
+            let b = try AVAudioPlayer(data: RestChronoPlugin.beepWav)
+            b.volume = 1.0
+            guard quiet.play(), b.prepareToPlay(), b.play(atTime: b.deviceCurrentTime + interval) else {
+                quiet.stop()
+                release()
+                return false
+            }
+            silence = quiet
+            beep = b
+            timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+                AudioServicesPlayAlertSound(SystemSoundID(kSystemSoundID_Vibrate))
+                self?.timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { _ in self?.cancel() }
+            }
+            return true
+        } catch {
+            cancel()
+            return false
+        }
+    }
+
+    func cancel() {
+        stopPlayers()
+        release()
+    }
+
+    private func stopPlayers() {
+        timer?.invalidate()
+        timer = nil
+        silence?.stop()
+        beep?.stop()
+        silence = nil
+        beep = nil
+    }
+
+    /// Hands the audio back (only if this class activated it — the foreground beep manages its own).
+    private func release() {
+        guard active else { return }
+        active = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

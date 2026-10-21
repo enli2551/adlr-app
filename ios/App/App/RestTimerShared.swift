@@ -136,18 +136,26 @@ enum RestFlow {
         }
     }
 
-    /// Sound + vibration when a rest is over and the app isn't open (follows the silent switch).
+    /// Set by the app (RestChronoPlugin → RestAudio, not in the widget): schedules the
+    /// end-of-rest beep on a mixable background audio session; true = it will beep and vibrate.
+    /// Called with every state change (nil / foreground / not resting → cancel).
+    static var backgroundBeep: ((RestFlowState?) -> Bool)?
+
+    /// Banner when a rest is over and the app isn't open. The sound comes from the app itself
+    /// (backgroundBeep) — a notification sound makes iOS lower the user's music; the
+    /// notification only sounds when that isn't possible (app not running).
     static func scheduleAlert(_ s: RestFlowState?) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [alertId])
         center.removeDeliveredNotifications(withIdentifiers: [alertId])
+        let selfBeep = backgroundBeep?(s) ?? false
         guard let s = s, !foreground, s.phase == "rest", let step = s.steps.first else { return }
         let interval = s.endTime / 1000 - Date().timeIntervalSince1970
         guard interval > 0.5 else { return }
         let content = UNMutableNotificationContent()
         content.title = label(s, "alert", "Pause vorbei!")
         content.body = "\(step.title) · \(step.body)"
-        content.sound = .default
+        content.sound = selfBeep ? nil : .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
         center.add(UNNotificationRequest(identifier: alertId, content: content, trigger: trigger))
     }
