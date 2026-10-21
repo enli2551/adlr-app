@@ -188,6 +188,8 @@ Account deletion: Profil > Einstellungen > Konto löschen.
 
 Exercise animations are licensed for commercial in-app use (Vital Animations).
 
+Background audio (UIBackgroundModes "audio"): only during a running rest timer of an active workout. When the rest ends, the app plays an audible beep mixed into the user's music (so the music is not lowered, as a notification sound would do) — also with the phone locked. The audio session is released right after the beep; nothing plays between rests or after the workout. To test: start a workout, tick a set, lock the phone, wait for the rest to end.
+
 The app UI language follows the device (German, English, Hungarian) and can be changed in Profil > Einstellungen > Sprache.
 ```
 
