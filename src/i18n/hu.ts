@@ -1546,6 +1546,9 @@ const dict: Record<string, string> = {
   "1 Riegel": "1 szelet (rúd)",
   "1 Pizza": "1 pizza",
   "1 Teller": "1 tányér",
+  "3 Stück": "3 db",
+  "6 Stück": "6 db",
+  "9 Stück": "9 db",
 };
 
 export default dict;

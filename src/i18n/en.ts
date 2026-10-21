@@ -1545,6 +1545,9 @@ const dict: Record<string, string> = {
   "1 Riegel": "1 bar",
   "1 Pizza": "1 pizza",
   "1 Teller": "1 plate",
+  "3 Stück": "3 pieces",
+  "6 Stück": "6 pieces",
+  "9 Stück": "9 pieces",
 };
 
 export default dict;
