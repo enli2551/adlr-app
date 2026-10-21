@@ -126,7 +126,7 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
             do {
                 try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
                 try session.setActive(true)
-                let p = try AVAudioPlayer(data: RestChronoPlugin.beepWav)
+                let p = try AVAudioPlayer(data: RestChronoPlugin.chimeData)
                 p.volume = 1.0
                 p.play()
                 self.player = p
@@ -141,7 +141,15 @@ public class RestChronoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    /// Three short beeps (880, 880, 1175 Hz) as a 16-bit mono WAV, generated once.
+    /// End-of-rest sound: public/sounds/rest-chime.wav from the bundled web assets (the same
+    /// file Android and the web app play); the generated beeps only if it is missing.
+    static let chimeData: Data = {
+        if let url = Bundle.main.url(forResource: "rest-chime", withExtension: "wav", subdirectory: "public/sounds"),
+           let d = try? Data(contentsOf: url) { return d }
+        return beepWav
+    }()
+
+    /// Three short beeps (880, 880, 1175 Hz) as a 16-bit mono WAV, generated once (fallback).
     static let beepWav: Data = {
         let rate = 44100.0
         let tones: [(start: Double, freq: Double, dur: Double)] = [(0, 880, 0.16), (0.24, 880, 0.16), (0.48, 1175, 0.32)]
@@ -211,7 +219,7 @@ final class RestAudio {
             active = true
             let quiet = try AVAudioPlayer(data: RestChronoPlugin.silenceWav)
             quiet.numberOfLoops = -1
-            let b = try AVAudioPlayer(data: RestChronoPlugin.beepWav)
+            let b = try AVAudioPlayer(data: RestChronoPlugin.chimeData)
             b.volume = 1.0
             guard quiet.play(), b.prepareToPlay(), b.play(atTime: b.deviceCurrentTime + interval) else {
                 quiet.stop()

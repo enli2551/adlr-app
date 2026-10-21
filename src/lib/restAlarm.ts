@@ -40,6 +40,16 @@ function beep(at: number, freq: number, dur: number) {
   osc.stop(at + dur + 0.02);
 }
 
+// Same chime as the native apps (public/sounds/rest-chime.wav); oscillator beeps if it can't play.
+let chime: HTMLAudioElement | null = null;
+function webChime(): void {
+  try {
+    chime ??= new Audio('/sounds/rest-chime.wav');
+    chime.currentTime = 0;
+    void chime.play().catch(() => webBeeps());
+  } catch { webBeeps(); }
+}
+
 function webBeeps(): void {
   try {
     openContext();
@@ -53,8 +63,8 @@ function webBeeps(): void {
 }
 
 export function playRestAlarm(): void {
-  if (Capacitor.isNativePlatform()) void nativeBeep().then((ok) => { if (!ok) webBeeps(); });
-  else webBeeps();
+  if (Capacitor.isNativePlatform()) void nativeBeep().then((ok) => { if (!ok) webChime(); });
+  else webChime();
   if (Capacitor.isNativePlatform()) {
     Haptics.vibrate({ duration: 500 }).catch(() => {});
     setTimeout(() => Haptics.notification({ type: NotificationType.Warning }).catch(() => {}), 600);

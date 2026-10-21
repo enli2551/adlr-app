@@ -76,7 +76,7 @@ public class RestChronoPlugin extends Plugin {
     /** End-of-rest beep while the app is open (works on silent, doesn't lower the music). */
     @PluginMethod
     public void beep(PluginCall call) {
-        RestFlow.beep();
+        RestFlow.beep(getContext());
         call.resolve();
     }
 

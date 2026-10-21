@@ -7,7 +7,10 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.media.ToneGenerator;
 import android.os.Build;
 import android.os.Handler;
@@ -255,11 +258,28 @@ final class RestFlow {
     }
 
     /**
-     * End-of-rest beep on the MEDIA stream: plays with the phone on silent/vibrate (only the
+     * End-of-rest chime on the MEDIA stream: plays with the phone on silent/vibrate (only the
      * media volume counts), goes to the headphones when music is playing there, and takes no
-     * audio focus — the music keeps playing at full volume, the beep is mixed in.
+     * audio focus — the music keeps playing at full volume, the chime is mixed in.
+     * Sound: public/sounds/rest-chime.wav (web assets); a tone if it can't be played.
      */
-    static void beep() {
+    static void beep(Context c) {
+        try {
+            AssetFileDescriptor fd = c.getAssets().openFd("public/sounds/rest-chime.wav");
+            MediaPlayer mp = new MediaPlayer();
+            mp.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            mp.setDataSource(fd.getFileDescriptor(), fd.getStartOffset(), fd.getLength());
+            fd.close();
+            mp.setOnCompletionListener(MediaPlayer::release);
+            mp.prepare();
+            mp.start();
+            return;
+        } catch (Exception ignored) {
+            // asset missing / compressed / no audio — fall back to the tone
+        }
         try {
             final ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_MUSIC, 90);
             tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 700);
@@ -272,7 +292,7 @@ final class RestFlow {
     /** Heads-up with sound + vibration when a rest is over and the app isn't open. */
     private static void alert(Context c, JSONObject s) {
         // The channel is silent: the beep goes to the media stream, mixed into the music.
-        beep();
+        beep(c);
         JSONArray steps = s.optJSONArray("steps");
         JSONObject step = steps != null && steps.length() > 0 ? steps.optJSONObject(0) : null;
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, ALERT_CHANNEL)
