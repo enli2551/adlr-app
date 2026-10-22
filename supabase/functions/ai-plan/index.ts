@@ -7,6 +7,8 @@
 // Deploy:  npx supabase functions deploy ai-plan   (or Dashboard → Edge Functions → "Via Editor")
 // Secret (Dashboard → Edge Functions → Secrets): ANTHROPIC_API_KEY
 // Optional secret: AI_PLAN_MONTHLY_LIMIT (default 60 drafts per trainer and month)
+// Optional secret: AI_GLOBAL_MONTHLY_LIMIT (default 1000 AI calls per month for ALL trainers —
+// cost ceiling, because anyone can sign up as a trainer)
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Anthropic from 'npm:@anthropic-ai/sdk';
@@ -97,7 +99,12 @@ Deno.serve(async (req) => {
     const { data: me } = await admin.from('profiles').select('id, role, first_name').eq('id', userData.user.id).maybeSingle();
     if (me?.role !== 'trainer') return json({ error: 'Trainer only' }, 403);
 
-    const { client_id, instructions = '', days_per_week = null } = await req.json();
+    const body = await req.json();
+    const client_id = body.client_id;
+    // Bounded input: the instructions go into the prompt (cost) — 2,000 characters is plenty.
+    const instructions = String(body.instructions ?? '').slice(0, 2000);
+    const dpw = Number(body.days_per_week);
+    const days_per_week = Number.isInteger(dpw) && dpw >= 1 && dpw <= 7 ? dpw : null;
     if (!client_id) return json({ error: 'client_id required' }, 400);
     const { data: client } = await admin.from('profiles')
       .select('id, trainer_id, first_name, gender, age, height_cm, weight_kg, intake, lang').eq('id', client_id).maybeSingle();
@@ -109,11 +116,15 @@ Deno.serve(async (req) => {
     const { count } = await admin.from('ai_usage').select('id', { count: 'exact', head: true })
       .eq('trainer_id', me.id).eq('kind', 'plan').gte('created_at', monthStart.toISOString());
     if ((count ?? 0) >= limit) return json({ error: 'quota', limit }, 429);
+    const globalLimit = Number(Deno.env.get('AI_GLOBAL_MONTHLY_LIMIT') ?? 1000);
+    const { count: all } = await admin.from('ai_usage').select('id', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString());
+    if ((all ?? 0) >= globalLimit) return json({ error: 'quota', limit: globalLimit }, 429);
 
     // Library, history, records, style examples.
     const since = new Date(); since.setDate(since.getDate() - 70);
     const [lib, logs, prs, templates] = await Promise.all([
-      admin.from('exercises').select('*').order('muscle_group').order('name'),
+      // the shared library + this coach's own exercises (never another coach's private ones)
+      admin.from('exercises').select('*').or(`trainer_id.is.null,trainer_id.eq.${me.id}`).order('muscle_group').order('name'),
       admin.from('exercise_set_logs').select('exercise_name, weight_kg, reps, set_type, created_at')
         .eq('client_id', client_id).gte('created_at', since.toISOString()).order('created_at', { ascending: false }).limit(1500),
       admin.from('personal_records').select('exercise_name, weight_kg, reps').eq('client_id', client_id),

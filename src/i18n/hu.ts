@@ -1552,6 +1552,7 @@ const dict: Record<string, string> = {
   "4 Stück": "4 db",
   "5 Stück": "5 db",
   "20 Stück": "20 db",
+  "Mindestens 8 Zeichen": "Legalább 8 karakter",
 };
 
 export default dict;

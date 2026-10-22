@@ -100,7 +100,7 @@ export default function AuthScreen() {
     setError(null);
     const code = otpCode.replace(/\s/g, '');
     if (code.length < 6) { setError(t('Gib den 6-stelligen Code aus der E-Mail ein.')); return; }
-    if (newPw.length < 6) { setError(t('Neues Passwort: mindestens 6 Zeichen.')); return; }
+    if (newPw.length < 8) { setError(t('Neues Passwort: mindestens 8 Zeichen.')); return; }
     setNewPwBusy(true);
     const { error: vErr } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type: 'recovery' });
     if (vErr) { setNewPwBusy(false); setError(t('Code ungültig oder abgelaufen. Bitte neu anfordern.')); return; }
@@ -142,7 +142,7 @@ export default function AuthScreen() {
               </Field>
               <Field label={t('Neues Passwort')}>
                 <div className="relative">
-                  <Input type={showPw ? 'text' : 'password'} required minLength={6} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('Mindestens 6 Zeichen')} className="pr-11" />
+                  <Input type={showPw ? 'text' : 'password'} required minLength={8} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder={t('Mindestens 8 Zeichen')} className="pr-11" />
                   {pwToggle(showPw, setShowPw)}
                 </div>
               </Field>
@@ -190,7 +190,7 @@ export default function AuthScreen() {
           </Field>
           <Field label={t('Passwort')}>
             <div className="relative">
-              <Input type={showPw ? 'text' : 'password'} required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('Mindestens 6 Zeichen')} className="pr-11" />
+              <Input type={showPw ? 'text' : 'password'} required minLength={mode === 'signup' ? 8 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === 'signup' ? t('Mindestens 8 Zeichen') : t('Passwort')} className="pr-11" />
               {pwToggle(showPw, setShowPw)}
             </div>
           </Field>

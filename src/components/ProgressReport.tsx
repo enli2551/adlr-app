@@ -70,7 +70,12 @@ export default function ProgressReport({ client, onClose, trainerMode = false }:
       body: { client_id: client.id, stats: statsForAI(stats), lang, first_name: client.first_name ?? '' },
     });
     setBusy(null);
-    if (error || !data?.draft) { setAiErr(t('KI-Entwurf fehlgeschlagen. Ist die Funktion „coach-report“ deployt?')); return; }
+    if (error || !data?.draft) {
+      let code = '';
+      try { code = (await (error as { context?: Response })?.context?.json())?.error ?? ''; } catch { /* not JSON */ }
+      setAiErr(code === 'quota' ? t('Monatliches KI-Kontingent erreicht.') : t('KI-Entwurf fehlgeschlagen. Ist die Funktion „coach-report“ deployt?'));
+      return;
+    }
     setDraft({ id: data.id, draft: data.draft, body: null, status: 'draft', lang, created_at: new Date().toISOString(), approved_at: null });
     setText(data.draft);
   };

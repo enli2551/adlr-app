@@ -1551,6 +1551,7 @@ const dict: Record<string, string> = {
   "4 Stück": "4 pieces",
   "5 Stück": "5 pieces",
   "20 Stück": "20 pieces",
+  "Mindestens 8 Zeichen": "At least 8 characters",
 };
 
 export default dict;

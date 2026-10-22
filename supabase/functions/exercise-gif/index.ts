@@ -48,6 +48,18 @@ serve(async (req: Request) => {
 
     const path = `${exerciseId}_${resolution}.gif`;
 
+    // Only ids from our own exercise library: the function is reachable with the public anon
+    // key, and every unknown id would cost a paid RapidAPI call (quota drain / bill).
+    if (resolution !== '180' && resolution !== '360') {
+      return new Response(JSON.stringify({ error: 'Invalid resolution' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (supabase) {
+      const { data: known } = await supabase.from('exercises').select('exercise_id').eq('exercise_id', exerciseId).limit(1);
+      if (!known || known.length === 0) {
+        return new Response(JSON.stringify({ error: 'Unknown exercise' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // 1) Cache hit — serve from our own Storage, no ExerciseDB call.
     if (supabase) {
       const { data: cached } = await supabase.storage.from(BUCKET).download(path);
