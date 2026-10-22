@@ -249,9 +249,9 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
   };
   const localVid = coachUrl ?? demoVideoFor(ex.name);
   const localImg = LOCAL_DEMO_IMAGES[ex.exercise_id];
-  const gifUrl = localImg
-    ? `/exercises/${localImg}`
-    : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/exercise-gif?id=${ex.exercise_id}&res=180`;
+  // Only our own bundled demos (Vital animations, own images). The old RapidAPI GIF fallback
+  // (edge function exercise-gif) is gone — no demo means "Demo nicht verfügbar".
+  const imgUrl = localImg ? `/exercises/${localImg}` : null;
 
   return createPortal((
     <div className="fixed inset-0 z-[80] overflow-y-auto adlr-fade-in" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
@@ -265,7 +265,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
           <button onClick={onClose} className="adlr-tap text-white/40 hover:text-white/80"><X size={20} /></button>
         </div>
         <div className="rounded-xl flex items-center justify-center mb-4 overflow-hidden relative" style={{ background: (localVid || localImg) ? '#ffffff' : 'linear-gradient(180deg, rgb(var(--adlr-gold) / 0.06) 0%, rgba(0,0,0,0.3) 100%)', border: '1px solid rgb(var(--text) / 0.06)', minHeight: '280px' }}>
-          {gifError ? (
+          {gifError || (!localVid && !imgUrl) ? (
             <div className="flex flex-col items-center gap-2 py-12">
               <Activity size={32} style={{ color: 'rgb(var(--adlr-gold))' }} />
               <p className="text-sm text-white/40">{t('Demo nicht verfügbar')}</p>
@@ -303,7 +303,7 @@ export function ExerciseDemoModal({ ex, onClose }: { ex: ExerciseRow; onClose: (
                   )}
                 </>
               ) : (
-                <img src={gifUrl} alt={t(ex.name)} className="w-full h-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} onLoad={() => setGifLoading(false)} onError={() => { setGifLoading(false); setGifError(true); }} />
+                <img src={imgUrl ?? undefined} alt={t(ex.name)} className="w-full h-auto" style={{ maxHeight: '320px', objectFit: 'contain' }} onLoad={() => setGifLoading(false)} onError={() => { setGifLoading(false); setGifError(true); }} />
               )}
             </>
           )}
