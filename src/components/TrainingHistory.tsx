@@ -31,7 +31,7 @@ export default function TrainingHistory({ completions, setLogs, dayNameById, mus
     const byComp = logsByCompletion(setLogs);
     return [...completions]
       .sort((a, b) => b.completed_at.localeCompare(a.completed_at))
-      .map((c) => summarizeSession(c, byComp.get(c.id) ?? [], (() => { const dn = c.plan_day_id ? dayNameById.get(c.plan_day_id) : undefined; return dn ? t(dn) : tUserTitle(c.title); })(), muscleOf));
+      .map((c) => summarizeSession(c, byComp.get(c.id) ?? [], (() => { const dn = c.plan_day_id ? dayNameById.get(c.plan_day_id) : undefined; return dn ? tUserTitle(dn) : tUserTitle(c.title); })(), muscleOf));
   }, [completions, setLogs, dayNameById, muscleOf]);
 
   const visible = limit && !showAll ? summaries.slice(0, limit) : summaries;

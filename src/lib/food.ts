@@ -59,12 +59,17 @@ export function mealNow(d = new Date()): Meal {
 
 // ── Built-in basic foods ─────────────────────────────────────────────────────
 // Hand-curated staples (foodsBase) first, then ~4000 USDA SR Legacy foods (foodsUsda).
-type Searchable = BaseRow & { hay: string; curated: boolean };
+// hay: searchable text per app language — a German search only looks at German/English names
+// (Hungarian names used to match, e.g. "tej"), Hungarian also finds German names (Austria).
+type Searchable = BaseRow & { hay: { de: string; en: string; hu: string }; curated: boolean };
 let baseCache: Searchable[] | null = null;
 async function baseFoods(): Promise<Searchable[]> {
   if (!baseCache) {
     const [base, usda] = await Promise.all([import('@/data/foodsBase'), import('@/data/foodsUsda')]);
-    const mk = (r: BaseRow, curated: boolean): Searchable => ({ ...r, curated, hay: norm(`${r.de} ${r.en} ${r.hu} ${r.tags ?? ''}`) });
+    const mk = (r: BaseRow, curated: boolean): Searchable => {
+      const tags = r.tags ?? '';
+      return { ...r, curated, hay: { de: norm(`${r.de} ${r.en} ${tags}`), en: norm(`${r.en} ${r.de} ${tags}`), hu: norm(`${r.hu} ${r.de} ${r.en} ${tags}`) } };
+    };
     baseCache = [
       ...base.default.map((r) => mk(r, true)),
       ...usda.default.map(([id, de, hu, en, k, p, c, f, s, sl]) => mk({ id, de, en, hu, k, p, c, f, s, sl }, false)),
@@ -108,7 +113,8 @@ export async function searchBase(q: string, limit = 25): Promise<Food[]> {
   const lang = getLang();
   const scored: { r: BaseRow; score: number }[] = [];
   for (const r of rows) {
-    if (!groups.every((g) => g.some((w) => r.hay.includes(w)))) continue;
+    const hay = r.hay[lang === 'hu' || lang === 'en' ? lang : 'de'];
+    if (!groups.every((g) => g.some((w) => hay.includes(w)))) continue;
     const own = norm(lang === 'hu' ? r.hu : lang === 'en' ? r.en : r.de);
     const starts = groups[0].some((w) => own.startsWith(w));
     const inOwn = groups.every((g) => g.some((w) => own.includes(w)));

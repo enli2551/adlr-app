@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowUp, ArrowDown, Trash2, Shuffle, Plus, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { t } from '@/lib/i18n';
+import { t, tUserTitle } from '@/lib/i18n';
 import { haptic } from '@/lib/haptics';
 import type { Exercise, PlanDay } from '@/lib/types';
 import type { ExerciseRow } from '@/lib/exercises';
@@ -88,7 +88,7 @@ export default function ClientDayEditor({ day, onClose, onSaved, saveExercises }
             <p className="text-lg font-semibold text-white truncate">
               {picking === null ? t('Tag bearbeiten') : picking === -1 ? t('Übung hinzufügen') : t('Übung tauschen')}
             </p>
-            <p className="text-xs text-white/45 truncate">{t(day.workout_name ?? 'Training')}</p>
+            <p className="text-xs text-white/45 truncate">{tUserTitle(day.workout_name)}</p>
           </div>
           <button
             onClick={() => (picking === null ? onClose() : setPicking(null))}

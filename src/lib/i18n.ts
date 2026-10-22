@@ -85,11 +85,14 @@ export function t(de: string, vars?: Record<string, string | number>): string {
 }
 
 /**
- * A workout name the user typed (free workout title, own plan): shown exactly as written —
- * "Pull" must not become "Húzó". Only the app's own defaults are translated.
+ * Workout / plan-day names are typed by people (free workout title, own plan, the coach's
+ * plan): shown exactly as written — "Push" must not become "Nyomó". Only the app's own
+ * placeholders ("Training", "Freies Training", "Tag 3") follow the app language.
  */
 export function tUserTitle(name: string | null | undefined): string {
   if (!name || name === 'Freies Training' || name === 'Training') return t(name || 'Training');
+  const day = /^Tag (\d+)$/.exec(name);
+  if (day) return `${t('Tag')} ${day[1]}`;
   return name;
 }
 

@@ -7,7 +7,7 @@ import { ExerciseLibrary, ExerciseDemoModal } from '@/components/ExerciseLibrary
 import { fetchExercises, type ExerciseRow } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { haptic } from '@/lib/haptics';
-import { t } from '@/lib/i18n';
+import { t, tUserTitle } from '@/lib/i18n';
 
 interface Props {
   completion: WorkoutCompletion;
@@ -100,7 +100,7 @@ export default function WorkoutEditor({ completion, logs, name, onClose, onChang
         <div className="flex items-center justify-between px-5 py-4">
           <div className="min-w-0">
             <p className="text-lg font-bold text-white">{t('Training bearbeiten')}</p>
-            {!isFree && <p className="text-xs text-white/45 truncate">{t(name)}</p>}
+            {!isFree && <p className="text-xs text-white/45 truncate">{tUserTitle(name)}</p>}
           </div>
           <button onClick={onClose} aria-label={t('Schließen')} className="adlr-tap p-2 rounded-full bg-white/5 text-white/60"><X size={18} /></button>
         </div>

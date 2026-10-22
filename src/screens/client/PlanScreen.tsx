@@ -123,6 +123,9 @@ export default function PlanScreen() {
   const [days, setDays] = useState<PlanDay[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [completions, setCompletions] = useState<WorkoutCompletion[]>([]);
+  // Names of plan days that are not in the current plan (an earlier plan, or the plan before the
+  // athlete saved changes to it — that makes new day ids). Used to match old workouts by name.
+  const [foreignDayNames, setForeignDayNames] = useState<Map<string, string>>(new Map());
   const [setLogs, setSetLogs] = useState<ExerciseSetLog[]>([]);
   const [prs, setPrs] = useState<PersonalRecord[]>([]);
   const [celebrate, setCelebrate] = useState(false);
@@ -146,7 +149,7 @@ export default function PlanScreen() {
   const [replaceIdx, setReplaceIdx] = useState<number | null>(null);
   // the client's own plan (built by themselves): its day names are theirs, never translated
   const [ownPlan, setOwnPlan] = useState(false);
-  const dayTitle = (d: PlanDay) => (d.is_free || ownPlan ? tUserTitle(d.workout_name) : t(d.workout_name ?? 'Training'));
+  const dayTitle = (d: PlanDay) => tUserTitle(d.workout_name);
   const [editingDay, setEditingDay] = useState<PlanDay | null>(null);
   // Athletes without a coach build their own plans ("Meine Pläne")
   const [myPlansOpen, setMyPlansOpen] = useState(false);
@@ -336,6 +339,12 @@ export default function PlanScreen() {
     // Also without a plan: a running free workout has to be restored.
     applyPlanDays(planDays);
     const merged = withPending((wc ?? []) as WorkoutCompletion[], (sl ?? []) as ExerciseSetLog[]);
+    const knownDays = new Set(planDays.map((d) => d.id));
+    const foreign = [...new Set(merged.completions.map((c) => c.plan_day_id).filter((id): id is string => !!id && !knownDays.has(id)))];
+    if (foreign.length > 0) {
+      supabase.from('plan_days').select('id, workout_name').in('id', foreign.slice(0, 200))
+        .then(({ data }) => setForeignDayNames(new Map((data ?? []).map((d) => [d.id as string, (d.workout_name as string | null) ?? '']))));
+    }
     setCompletions(merged.completions);
     setSetLogs(merged.logs);
     setPrs((pr ?? []) as PersonalRecord[]);
@@ -1054,9 +1063,19 @@ export default function PlanScreen() {
   const weekEndKey = weekDateForDay(6);
   // A plan day counts as done this week if it was completed on ANY day within the
   // current week — so doing Monday's plan on Tuesday still counts Monday's slot.
+  // Which plan day a workout counts as: its own plan day, or — when it was logged on a plan day
+  // that isn't in the current plan any more, or as a free workout — the current plan day with
+  // the same name ("Push" done yesterday is Push, even after the plan was edited).
+  const nameKey = (n: string | null | undefined) => (n ?? '').trim().toLowerCase();
+  const planDayOf = (c: WorkoutCompletion): string | null => {
+    if (c.plan_day_id && days.some((d) => d.id === c.plan_day_id)) return c.plan_day_id;
+    const name = nameKey(c.plan_day_id ? foreignDayNames.get(c.plan_day_id) : c.title);
+    if (!name) return null;
+    return days.find((d) => !d.is_free && !d.is_rest_day && nameKey(d.workout_name) === name)?.id ?? null;
+  };
   const planDayDoneThisWeek = (dayId: string) =>
     completions.some((c) => {
-      if (c.plan_day_id !== dayId) return false;
+      if (planDayOf(c) !== dayId) return false;
       const k = localDateKey(c.completed_at);
       return k >= weekStartKey && k <= weekEndKey;
     });
@@ -1119,9 +1138,9 @@ export default function PlanScreen() {
   // Rotation: recommend the plan day after the most recently completed one (wraps
   // around), so a 3-day plan simply continues 1→2→3→1… regardless of the calendar.
   const lastDone = completions
-    .filter((c) => plannedDays.some((d) => d.id === c.plan_day_id))
+    .filter((c) => planDayOf(c) !== null)
     .reduce<typeof completions[number] | null>((a, c) => (!a || c.completed_at > a.completed_at ? c : a), null);
-  const lastIdx = lastDone ? plannedDays.findIndex((d) => d.id === lastDone.plan_day_id) : -1;
+  const lastIdx = lastDone ? plannedDays.findIndex((d) => d.id === planDayOf(lastDone)) : -1;
   const nextRecommendedDayId = plannedDays.length > 0 ? plannedDays[(lastIdx + 1) % plannedDays.length].id : null;
 
   return (
@@ -1157,7 +1176,7 @@ export default function PlanScreen() {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-adlr-gold" />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{t(days[activeDayIdx]?.workout_name ?? 'Training')}</p>
+                <p className="text-sm font-semibold text-white truncate">{tUserTitle(days[activeDayIdx]?.workout_name)}</p>
                 <button
                   onClick={() => { setGymStart(null); setGymSheet(true); }}
                   className="adlr-tap flex items-center gap-1 text-xs max-w-full"

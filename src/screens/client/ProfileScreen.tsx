@@ -101,11 +101,22 @@ export default function ProfileScreen() {
       supabase.from('progress_entries').select('*').eq('client_id', profile.id).order('logged_at', { ascending: true }),
       fetchAll((a, b) => supabase.from('exercise_set_logs').select('*').eq('client_id', profile.id).order('created_at', { ascending: true }).order('id').range(a, b)),
     ]);
+    let current: PlanDay[] = [];
     if (cpRes.data) {
       const { data: pd } = await supabase.from('plan_days').select('*').eq('plan_id', cpRes.data.plan_id).order('day_of_week');
-      setPlanDays((pd ?? []) as PlanDay[]);
+      current = (pd ?? []) as PlanDay[];
+      setPlanDays(current);
     }
-    setCompletions((wc.data ?? []) as WorkoutCompletion[]);
+    // Workouts from an earlier or edited plan point to plan days that aren't in the current
+    // plan — fetch their names too, so the calendar shows "Push" instead of just "Training".
+    const comps = (wc.data ?? []) as WorkoutCompletion[];
+    const known = new Set(current.map((d) => d.id));
+    const missing = [...new Set(comps.map((c) => c.plan_day_id).filter((id): id is string => !!id && !known.has(id)))];
+    if (missing.length > 0) {
+      const { data: od } = await supabase.from('plan_days').select('id, workout_name').in('id', missing);
+      setOtherDayNames(new Map((od ?? []).map((d) => [d.id as string, (d.workout_name as string | null) ?? 'Training'])));
+    }
+    setCompletions(comps);
     setCheckins((ck.data ?? []) as DailyCheckin[]);
     setEntries((pe.data ?? []) as ProgressEntry[]);
     setSetLogs((sl.data ?? []) as ExerciseSetLog[]);
@@ -113,9 +124,11 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => { load(); }, [profile?.id]);
-  const workoutNameOf = (c: WorkoutCompletion) => (c.plan_day_id && planDays.find((d) => d.id === c.plan_day_id)?.workout_name) || c.title || 'Training';
+  const [otherDayNames, setOtherDayNames] = useState<Map<string, string>>(new Map());
+  const dayNameOf = (id: string | null) => (id ? planDays.find((d) => d.id === id)?.workout_name ?? otherDayNames.get(id) ?? null : null);
+  const workoutNameOf = (c: WorkoutCompletion) => dayNameOf(c.plan_day_id) || c.title || 'Training';
   // plan day names are translated, a title the user typed (free workout) is shown as written
-  const workoutDisplayOf = (c: WorkoutCompletion) => { const pd = c.plan_day_id ? planDays.find((d) => d.id === c.plan_day_id)?.workout_name : null; return pd ? t(pd) : tUserTitle(c.title); };
+  const workoutDisplayOf = (c: WorkoutCompletion) => tUserTitle(dayNameOf(c.plan_day_id) ?? c.title);
 
   // ---- Week helpers ----
   // Plans are a flexible rotation ("Trainingstag N"), NOT bound to weekdays: the plan
@@ -145,7 +158,6 @@ export default function ProfileScreen() {
     const lastDay = new Date(year, month + 1, 0);
     const startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     const todayStr = localDateKey(new Date());
-    const nameById = new Map(planDays.map((pd) => [pd.id, pd.workout_name ?? t('Training')]));
 
     const days: DayInfo[] = [];
     // Previous month padding
@@ -159,7 +171,7 @@ export default function ProfileScreen() {
       const dayCompletions = completions.filter((c) => localDateKey(c.completed_at) === dateStr);
       const completion = dayCompletions[0];
       const workoutName = dayCompletions.length > 0
-        ? dayCompletions.map((c) => (c.plan_day_id && nameById.get(c.plan_day_id)) || tUserTitle(c.title)).join(' + ')
+        ? dayCompletions.map(workoutDisplayOf).join(' + ')
         : undefined;
       days.push({
         date: dateStr, dayInMonth: d, isCurrentMonth: true,
@@ -168,7 +180,7 @@ export default function ProfileScreen() {
       });
     }
     return days;
-  }, [calMonth, planDays, completions]);
+  }, [calMonth, planDays, completions, otherDayNames]);
 
   // ---- Streak: consecutive weeks where the weekly target was reached ----
   // The current week never breaks the streak (it's still in progress).
@@ -578,10 +590,10 @@ export default function ProfileScreen() {
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto adlr-card rounded-t-2xl sm:rounded-2xl p-5 adlr-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm font-medium text-white">
+                <p className="text-base font-semibold text-white">{selectedDayInfo.workoutName ?? t('Kein Training geplant')}</p>
+                <p className="text-xs text-white/45 mt-0.5">
                   {fmtDate(selectedDay, { weekday: 'long', day: '2-digit', month: 'long' })}
                 </p>
-                <p className="text-xs text-white/40 mt-0.5">{selectedDayInfo.workoutName ?? t('Kein Training geplant')}</p>
               </div>
               <button onClick={() => setSelectedDay(null)} className="adlr-tap p-1.5 rounded-lg bg-white/5 text-white/50">
                 <X size={18} />
