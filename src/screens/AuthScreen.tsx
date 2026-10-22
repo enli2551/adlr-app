@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useCaptcha } from '@/lib/captcha';
 import Logo from '@/components/Logo';
 import { Button, Field, Input } from '@/components/ui';
 import { Eye, EyeOff } from 'lucide-react';
@@ -24,6 +25,7 @@ const authError = (msg: string) => {
 
 export default function AuthScreen() {
   const { signIn, signUp, session, profile, loading, refreshProfile } = useAuth();
+  const captcha = useCaptcha();
   const nav = useNavigate();
   const loc = useLocation();
   const isTrainer = loc.pathname === '/trainer-auth';
@@ -61,10 +63,12 @@ export default function AuthScreen() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!captcha.ready) { setError(t('Bitte bestätige kurz, dass du kein Roboter bist.')); return; }
     setBusy(true);
     try {
       const role = isTrainer ? 'trainer' : 'client';
-      const res = mode === 'signup' ? await signUp(email, password, role) : await signIn(email, password);
+      const res = mode === 'signup' ? await signUp(email, password, role, captcha.token) : await signIn(email, password, captcha.token);
+      captcha.reset();
       if (res.error) { setError(authError(res.error)); return; }
       if (mode === 'signup' && !isTrainer && inviteCode.trim()) {
         const { data: coachName } = await supabase.rpc('join_trainer', { p_code: inviteCode.trim() });
@@ -86,8 +90,10 @@ export default function AuthScreen() {
     setError(null);
     setResetMsg(null);
     if (!email.trim()) { setError(t('Gib zuerst deine E-Mail-Adresse ein.')); return; }
+    if (!captcha.ready) { setError(t('Bitte bestätige kurz, dass du kein Roboter bist.')); return; }
     setResetBusy(true);
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim());
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { captchaToken: captcha.token });
+    captcha.reset();
     setResetBusy(false);
     if (err) { setError(authError(err.message)); return; }
     setRecovery(true);
@@ -199,6 +205,8 @@ export default function AuthScreen() {
               <Input value={inviteCode} onChange={(e) => setInviteCode(e.target.value.toUpperCase())} placeholder="ABC123" maxLength={12} autoCapitalize="characters" className="tracking-[0.25em]" />
             </Field>
           )}
+          {captcha.element}
+          {captcha.failed && <p className="text-xs text-white/50">{t('Die Sicherheitsprüfung konnte nicht geladen werden. Prüfe deine Internetverbindung.')}</p>}
           {error && <p className="text-sm text-red-400 break-words">{error}</p>}
           {resetMsg && <p className="text-sm" style={{ color: '#22c55e' }}>{resetMsg}</p>}
           <Button type="submit" disabled={busy} className="w-full">

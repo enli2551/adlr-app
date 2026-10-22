@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Check, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useCaptcha } from '@/lib/captcha';
 import { t } from '@/lib/i18n';
 
 /** Change the password while logged in. Works without access to the account's e-mail:
@@ -16,6 +17,7 @@ export default function PasswordChange({ onDone }: { onDone?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const captcha = useCaptcha();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,8 +26,10 @@ export default function PasswordChange({ onDone }: { onDone?: () => void }) {
     if (next.length < 8) { setError(t('Neues Passwort: mindestens 8 Zeichen.')); return; }
     if (next !== repeat) { setError(t('Die neuen Passwörter stimmen nicht überein.')); return; }
     if (next === current) { setError(t('Das neue Passwort muss sich vom alten unterscheiden.')); return; }
+    if (!captcha.ready) { setError(t('Bitte bestätige kurz, dass du kein Roboter bist.')); return; }
     setBusy(true);
-    const { error: sErr } = await supabase.auth.signInWithPassword({ email, password: current });
+    const { error: sErr } = await supabase.auth.signInWithPassword({ email, password: current, options: { captchaToken: captcha.token } });
+    captcha.reset();
     if (sErr) {
       setBusy(false);
       setError(/invalid login credentials/i.test(sErr.message) ? t('Aktuelles Passwort ist falsch.') : t('Keine Verbindung. Bitte später erneut versuchen.'));
@@ -70,6 +74,7 @@ export default function PasswordChange({ onDone }: { onDone?: () => void }) {
         placeholder={t('Neues Passwort')} className={input} />
       <input type={show ? 'text' : 'password'} autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)}
         placeholder={t('Neues Passwort wiederholen')} className={input} />
+      {captcha.element}
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button type="submit" disabled={busy} className="adlr-tap w-full py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
         style={{ background: 'rgb(var(--adlr-gold))', color: '#000' }}>

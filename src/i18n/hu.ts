@@ -1553,6 +1553,14 @@ const dict: Record<string, string> = {
   "5 Stück": "5 db",
   "20 Stück": "20 db",
   "Mindestens 8 Zeichen": "Legalább 8 karakter",
+  "Meine Daten exportieren": "Adataim exportálása",
+  "Daten exportieren": "Adatok exportálása",
+  "Wird erstellt …": "Készül …",
+  "Export erstellt.": "Az export elkészült.",
+  "Export fehlgeschlagen. Bitte später erneut versuchen.": "Az export nem sikerült. Próbáld újra később.",
+  "Lade alle deine gespeicherten Daten (Profil, Trainings, Fortschritt, Ernährung, Nachrichten …) als JSON-Datei herunter.": "Töltsd le az összes tárolt adatodat (profil, edzések, fejlődés, étkezés, üzenetek …) JSON-fájlként.",
+  "Bitte bestätige kurz, dass du kein Roboter bist.": "Kérlek, igazold, hogy nem vagy robot.",
+  "Die Sicherheitsprüfung konnte nicht geladen werden. Prüfe deine Internetverbindung.": "A biztonsági ellenőrzés nem töltődött be. Ellenőrizd az internetkapcsolatot.",
 };
 
 export default dict;

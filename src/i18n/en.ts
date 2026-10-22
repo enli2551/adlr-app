@@ -1552,6 +1552,14 @@ const dict: Record<string, string> = {
   "5 Stück": "5 pieces",
   "20 Stück": "20 pieces",
   "Mindestens 8 Zeichen": "At least 8 characters",
+  "Meine Daten exportieren": "Export my data",
+  "Daten exportieren": "Export data",
+  "Wird erstellt …": "Creating …",
+  "Export erstellt.": "Export created.",
+  "Export fehlgeschlagen. Bitte später erneut versuchen.": "Export failed. Please try again later.",
+  "Lade alle deine gespeicherten Daten (Profil, Trainings, Fortschritt, Ernährung, Nachrichten …) als JSON-Datei herunter.": "Download all your stored data (profile, workouts, progress, nutrition, messages …) as a JSON file.",
+  "Bitte bestätige kurz, dass du kein Roboter bist.": "Please confirm quickly that you are not a robot.",
+  "Die Sicherheitsprüfung konnte nicht geladen werden. Prüfe deine Internetverbindung.": "The security check could not be loaded. Check your internet connection.",
 };
 
 export default dict;

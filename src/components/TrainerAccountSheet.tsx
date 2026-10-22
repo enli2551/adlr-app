@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, KeyRound, Languages, ListChecks, LogOut, Palette, Sparkles, User, X } from 'lucide-react';
+import { ChevronDown, Download, KeyRound, Languages, ListChecks, LogOut, Palette, Sparkles, User, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
@@ -9,8 +9,9 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import BrandingSettings from '@/components/BrandingSettings';
 import HapticsToggle from '@/components/HapticsToggle';
 import PasswordChange from '@/components/PasswordChange';
+import DataExport from '@/components/DataExport';
 
-type Section = 'name' | 'look' | 'brand' | 'password' | null;
+type Section = 'name' | 'look' | 'brand' | 'password' | 'export' | null;
 
 function Row({ open, onToggle, icon: Icon, title, hint, children }: { open: boolean; onToggle: () => void; icon: typeof User; title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -94,6 +95,9 @@ export default function TrainerAccountSheet({ onClose, onQuestions, onSignOut }:
           </button>
           <Row {...sec('password')} icon={KeyRound} title={t('Passwort ändern')}>
             <PasswordChange onDone={() => setOpen(null)} />
+          </Row>
+          <Row {...sec('export')} icon={Download} title={t('Meine Daten exportieren')}>
+            <DataExport />
           </Row>
           {/* Branding last: it changes every client's app */}
           <Row {...sec('brand')} icon={Sparkles} title={t('Branding')} hint={t('Logo & Farbe in der App deiner Klienten')}>

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAll } from '@/lib/fetchAll';
 import type { WorkoutCompletion, PlanDay, DailyCheckin, ProgressEntry, ExerciseSetLog } from '@/lib/types';
 import { Card, CollapsibleCard, Loading } from '@/components/ui';
-import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut, Pencil, KeyRound } from 'lucide-react';
+import { Flame, Calendar, Trophy, TrendingUp, AlertCircle, ChevronLeft, ChevronRight, X, Target, Palette, Trash2, History, Languages, UserPlus, Repeat, LogOut, Pencil, KeyRound, Download } from 'lucide-react';
 import { fetchExercises } from '@/lib/exercises';
 import { useAsyncData } from '@/lib/useAsyncData';
 import { localDateKey } from '@/lib/dates';
@@ -25,6 +25,7 @@ import { requestRepeat } from '@/lib/repeatWorkout';
 import { guessMuscle } from '@/lib/muscleGuess';
 import WorkoutEditor from '@/components/WorkoutEditor';
 import PasswordChange from '@/components/PasswordChange';
+import DataExport from '@/components/DataExport';
 
 const DAY_NAMES = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -51,7 +52,7 @@ export default function ProfileScreen() {
   const coachName = useCoachName();
   const nav = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'password' | 'logout' | 'delete' | null>(null);
+  const [sheet, setSheet] = useState<'coach' | 'theme' | 'lang' | 'password' | 'export' | 'logout' | 'delete' | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [themeId, setThemeId] = useState(getTheme());
   const lang = useLang();
@@ -494,6 +495,7 @@ export default function ProfileScreen() {
           { key: 'theme' as const, icon: Palette, label: t('Erscheinungsbild'), value: THEMES.find((x) => x.id === themeId)?.label ?? '', danger: false },
           { key: 'lang' as const, icon: Languages, label: t('Sprache'), value: LANGS.find((l) => l.id === lang)?.label ?? '', danger: false },
           { key: 'password' as const, icon: KeyRound, label: t('Passwort ändern'), value: '', danger: false },
+          { key: 'export' as const, icon: Download, label: t('Meine Daten exportieren'), value: '', danger: false },
           { key: 'logout' as const, icon: LogOut, label: t('Abmelden'), value: '', danger: false },
           { key: 'delete' as const, icon: Trash2, label: t('Konto löschen'), value: '', danger: true },
         ].map((row, i) => (
@@ -532,6 +534,12 @@ export default function ProfileScreen() {
               <>
                 <p className="text-base font-semibold text-white mb-3 flex items-center gap-2"><KeyRound size={16} className="text-adlr-gold" /> {t('Passwort ändern')}</p>
                 <PasswordChange onDone={() => setSheet(null)} />
+              </>
+            )}
+            {sheet === 'export' && (
+              <>
+                <p className="text-base font-semibold text-white mb-2 flex items-center gap-2"><Download size={16} className="text-adlr-gold" /> {t('Meine Daten exportieren')}</p>
+                <DataExport />
               </>
             )}
             {sheet === 'logout' && (

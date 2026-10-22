@@ -16,8 +16,8 @@ interface AuthContextValue {
   profile: Profile | null;
   coach: CoachInfo | null;
   loading: boolean;
-  signUp: (email: string, password: string, role: 'trainer' | 'client') => Promise<{ error: string | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, role: 'trainer' | 'client', captchaToken?: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -118,12 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, role: 'trainer' | 'client') => {
+  const signUp = async (email: string, password: string, role: 'trainer' | 'client', captchaToken?: string) => {
     signupRole.current = role;
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
     if (error) {
-      // Account already exists — fall back to sign-in so the user isn't stuck.
-      if (error.message.includes('already') || error.message.includes('registered')) {
+      // Account already exists — fall back to sign-in so the user isn't stuck (without CAPTCHA
+      // only: a CAPTCHA token is single-use, so then the user has to tap "Einloggen").
+      if (!captchaToken && (error.message.includes('already') || error.message.includes('registered'))) {
         return signIn(email, password);
       }
       return { error: error.message };
@@ -147,8 +148,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (email: string, password: string, captchaToken?: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
     if (error) return { error: error.message };
     if (data.user) await loadProfile(data.user.id);
     return { error: null };
